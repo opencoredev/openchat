@@ -570,16 +570,14 @@ export function ModelSelector({
                         }
                       }}
                       className={cn(
-                        "flex h-9 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-medium transition-all duration-200",
+                        "flex size-9 shrink-0 items-center justify-center rounded-full transition-all duration-200",
                         selectedProvider === provider.id
                           ? "bg-accent text-foreground"
                           : "bg-muted/50 text-muted-foreground active:bg-accent active:text-foreground",
                       )}
+                      title={filterStyle === "company" ? provider.name : provider.modelName}
                     >
-                      <ProviderLogo providerId={provider.logoId} className="size-4" />
-                      <span className="max-w-[80px] truncate">
-                        {filterStyle === "company" ? provider.name : provider.modelName}
-                      </span>
+                      <ProviderLogo providerId={provider.logoId} className="size-5" />
                     </button>
                   ))}
                 </div>
