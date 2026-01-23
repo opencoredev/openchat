@@ -38,7 +38,8 @@ interface OpenRouterModel {
 export interface Model {
   id: string;
   name: string;
-  provider: string; // Provider display name (e.g., "Anthropic")
+  provider: string; // Provider/company name (e.g., "Anthropic", "Meta Llama")
+  modelName: string; // Model/product name for filters (e.g., "Claude", "Llama")
   providerId: string; // Provider slug from model ID (e.g., "meta-llama", "qwen")
   logoId: string; // Logo slug for models.dev (e.g., "llama", "alibaba")
   family?: string; // Model family (e.g., "claude-3.5")
@@ -57,20 +58,20 @@ export interface Model {
 // Provider mapping for display names and logo IDs
 // ============================================================================
 
-const PROVIDER_INFO: Partial<Record<string, { name: string; logoId: string }>> = {
-  openai: { name: "OpenAI", logoId: "openai" },
-  anthropic: { name: "Anthropic", logoId: "anthropic" },
-  google: { name: "Google", logoId: "google" },
-  "meta-llama": { name: "Meta Llama", logoId: "llama" },
+const PROVIDER_INFO: Partial<Record<string, { name: string; modelName?: string; logoId: string }>> = {
+  openai: { name: "OpenAI", modelName: "GPT", logoId: "openai" },
+  anthropic: { name: "Anthropic", modelName: "Claude", logoId: "anthropic" },
+  google: { name: "Google", modelName: "Gemini", logoId: "google" },
+  "meta-llama": { name: "Meta Llama", modelName: "Llama", logoId: "llama" },
   mistralai: { name: "Mistral", logoId: "mistral" },
   deepseek: { name: "DeepSeek", logoId: "deepseek" },
-  "x-ai": { name: "xAI", logoId: "xai" },
+  "x-ai": { name: "xAI", modelName: "Grok", logoId: "xai" },
   cohere: { name: "Cohere", logoId: "cohere" },
   perplexity: { name: "Perplexity", logoId: "perplexity" },
   qwen: { name: "Qwen", logoId: "alibaba" },
   nvidia: { name: "NVIDIA", logoId: "nvidia" },
-  microsoft: { name: "Microsoft", logoId: "azure" },
-  amazon: { name: "Amazon", logoId: "amazon-bedrock" },
+  microsoft: { name: "Microsoft", modelName: "Phi", logoId: "azure" },
+  amazon: { name: "Amazon", modelName: "Nova", logoId: "amazon-bedrock" },
   ai21: { name: "AI21", logoId: "ai21" },
   together: { name: "Together", logoId: "togetherai" },
   "fireworks-ai": { name: "Fireworks", logoId: "fireworks-ai" },
@@ -292,6 +293,7 @@ function transformModel(raw: OpenRouterModel): Model {
     id,
     name: raw.name || id,
     provider: info.name,
+    modelName: info.modelName || info.name,
     providerId: providerSlug,
     logoId: info.logoId,
     family: extractFamily(id, raw.name || ""),
@@ -413,6 +415,7 @@ function getFallbackModels(): Array<Model> {
       id: "anthropic/claude-3.5-sonnet",
       name: "Claude 3.5 Sonnet",
       provider: "Anthropic",
+      modelName: "Claude",
       providerId: "anthropic",
       logoId: "anthropic",
       family: "Claude 3.5",
@@ -422,6 +425,7 @@ function getFallbackModels(): Array<Model> {
       id: "openai/gpt-4o",
       name: "GPT-4o",
       provider: "OpenAI",
+      modelName: "GPT",
       providerId: "openai",
       logoId: "openai",
       family: "GPT-4o",
@@ -431,6 +435,7 @@ function getFallbackModels(): Array<Model> {
       id: "openai/gpt-4o-mini",
       name: "GPT-4o Mini",
       provider: "OpenAI",
+      modelName: "GPT",
       providerId: "openai",
       logoId: "openai",
       family: "GPT-4o",
@@ -440,6 +445,7 @@ function getFallbackModels(): Array<Model> {
       id: "google/gemini-2.5-flash",
       name: "Gemini 2.5 Flash",
       provider: "Google",
+      modelName: "Gemini",
       providerId: "google",
       logoId: "google",
       family: "Gemini 2.5",
@@ -449,6 +455,7 @@ function getFallbackModels(): Array<Model> {
       id: "deepseek/deepseek-chat",
       name: "DeepSeek Chat",
       provider: "DeepSeek",
+      modelName: "DeepSeek",
       providerId: "deepseek",
       logoId: "deepseek",
       family: "DeepSeek",
@@ -458,6 +465,7 @@ function getFallbackModels(): Array<Model> {
       id: "meta-llama/llama-3.3-70b-instruct",
       name: "Llama 3.3 70B",
       provider: "Meta Llama",
+      modelName: "Llama",
       providerId: "meta-llama",
       logoId: "llama",
       family: "Llama 3.3",

@@ -757,33 +757,33 @@ function ModelsSection() {
         <div className="rounded-xl border bg-card p-4 space-y-3">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium">Provider filters</p>
+              <p className="text-sm font-medium">Provider filter labels</p>
               <p className="text-sm text-muted-foreground">
-                Show provider names or icons in the model selector filters.
+                Show company names (OpenAI, Meta Llama) or model names (GPT, Llama) in filters.
               </p>
             </div>
             <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
               <button
-                onClick={() => setFilterStyle("names")}
+                onClick={() => setFilterStyle("model")}
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-medium transition-all",
-                  filterStyle === "names"
+                  filterStyle === "model"
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                Names
+                Model
               </button>
               <button
-                onClick={() => setFilterStyle("icons")}
+                onClick={() => setFilterStyle("company")}
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-medium transition-all",
-                  filterStyle === "icons"
+                  filterStyle === "company"
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                Icons
+                Company
               </button>
             </div>
           </div>

@@ -5,7 +5,7 @@
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 
-export type FilterStyle = "names" | "icons";
+export type FilterStyle = "company" | "model";
 
 interface UIState {
   // Sidebar
@@ -34,7 +34,7 @@ export const useUIStore = create<UIState>()(
         sidebarOpen: true,
         sidebarCollapsed: false,
         commandPaletteOpen: false,
-        filterStyle: "names" as FilterStyle,
+        filterStyle: "model" as FilterStyle,
 
         toggleSidebar: () =>
           set((s) => ({ sidebarOpen: !s.sidebarOpen }), false, "ui/toggleSidebar"),

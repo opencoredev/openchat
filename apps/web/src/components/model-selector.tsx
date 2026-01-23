@@ -252,7 +252,7 @@ export function ModelSelector({
   const selectedModel = useMemo(() => getModelById(models, value), [models, value]);
 
   const uniqueProviders = useMemo(() => {
-    const providerMap = new Map<string, { id: string; name: string; logoId: string; count: number }>();
+    const providerMap = new Map<string, { id: string; name: string; modelName: string; logoId: string; count: number }>();
     for (const model of models) {
       const existing = providerMap.get(model.providerId);
       if (existing) {
@@ -261,6 +261,7 @@ export function ModelSelector({
         providerMap.set(model.providerId, {
           id: model.providerId,
           name: model.provider,
+          modelName: model.modelName,
           logoId: model.logoId,
           count: 1,
         });
@@ -575,10 +576,10 @@ export function ModelSelector({
                           : "bg-muted/50 text-muted-foreground active:bg-accent active:text-foreground",
                       )}
                     >
-                      {filterStyle === "icons" ? (
-                        <ProviderLogo providerId={provider.logoId} className="size-4" />
-                      ) : null}
-                      <span className="max-w-[80px] truncate">{provider.name}</span>
+                      <ProviderLogo providerId={provider.logoId} className="size-4" />
+                      <span className="max-w-[80px] truncate">
+                        {filterStyle === "company" ? provider.name : provider.modelName}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -712,19 +713,14 @@ export function ModelSelector({
                         }
                       }}
                       className={cn(
-                        "flex items-center justify-center rounded-xl transition-all duration-200",
-                        filterStyle === "icons" ? "size-9" : "h-9 w-full px-2",
+                        "flex size-9 items-center justify-center rounded-xl transition-all duration-200",
                         selectedProvider === provider.id
                           ? "bg-accent text-foreground shadow-sm"
                           : "text-muted-foreground hover:bg-accent/60 hover:text-foreground hover:scale-105",
                       )}
-                      title={provider.name}
+                      title={filterStyle === "company" ? provider.name : provider.modelName}
                     >
-                      {filterStyle === "icons" ? (
-                        <ProviderLogo providerId={provider.logoId} className="size-5" />
-                      ) : (
-                        <span className="text-[11px] font-medium truncate">{provider.name}</span>
-                      )}
+                      <ProviderLogo providerId={provider.logoId} className="size-5" />
                     </button>
                   ))}
                 </div>
