@@ -1339,9 +1339,10 @@ function ChatInterfaceContent({
   // Wrap handleSubmit to clear the draft after successful submission
   const handleSubmitWithDraftClear = useCallback(
     async (message: PromptInputMessage) => {
-      await handleSubmit(message);
-      // Clear the draft after successful submission
-      clearDraft();
+      // Use .then() to only clear draft on success, preserving draft on errors for retry
+      await handleSubmit(message).then(() => {
+        clearDraft();
+      });
     },
     [handleSubmit, clearDraft],
   );

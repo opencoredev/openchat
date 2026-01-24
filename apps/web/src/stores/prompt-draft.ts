@@ -66,10 +66,14 @@ export const usePromptDraftStore = create<PromptDraftState>()(
 
 				getDraft: (chatId) => {
 					const key = chatId ?? GLOBAL_DRAFT_KEY;
-					const draft = get().drafts[key];
+					const draft = get().drafts[key] as PromptDraft | undefined;
+
+					if (!draft) {
+						return "";
+					}
 
 					// Don't return expired drafts
-					if (draft && Date.now() - draft.updatedAt < DRAFT_EXPIRY_MS) {
+					if (Date.now() - draft.updatedAt < DRAFT_EXPIRY_MS) {
 						return draft.text;
 					}
 

@@ -12,7 +12,7 @@ import { usePromptDraftStore } from "@/stores/prompt-draft";
  *
  * Usage:
  * ```tsx
- * const { onTextChange, clearDraft } = usePromptDraft({
+ * const { clearDraft } = usePromptDraft({
  *   chatId,
  *   textInputController,
  * });
@@ -46,7 +46,7 @@ export function usePromptDraft({ chatId, textInputController }: UsePromptDraftOp
 		hasRestoredRef.current = false;
 
 		const savedDraft = getDraft(chatId);
-		if (savedDraft && !hasRestoredRef.current) {
+		if (savedDraft) {
 			hasRestoredRef.current = true;
 			textInputController.setInput(savedDraft);
 		}
@@ -57,7 +57,7 @@ export function usePromptDraft({ chatId, textInputController }: UsePromptDraftOp
 				clearTimeout(debounceTimeoutRef.current);
 			}
 		};
-	}, [chatId, getDraft, textInputController]);
+	}, [chatId, getDraft, textInputController.setInput]);
 
 	// Debounced save function
 	const saveDraft = useCallback(
@@ -85,12 +85,21 @@ export function usePromptDraft({ chatId, textInputController }: UsePromptDraftOp
 	}, [chatId, clearStoredDraft]);
 
 	// Sync text changes to localStorage (debounced)
+	// Using chatId and setDraft directly to avoid re-running on saveDraft recreation
 	useEffect(() => {
 		// Only save after initial restoration
 		if (hasRestoredRef.current) {
-			saveDraft(textInputController.value);
+			// Clear any existing timeout
+			if (debounceTimeoutRef.current) {
+				clearTimeout(debounceTimeoutRef.current);
+			}
+
+			// Schedule a new save
+			debounceTimeoutRef.current = setTimeout(() => {
+				setDraft(chatId, textInputController.value);
+			}, DEBOUNCE_MS);
 		}
-	}, [textInputController.value, saveDraft]);
+	}, [textInputController.value, chatId, setDraft]);
 
 	return {
 		clearDraft,
