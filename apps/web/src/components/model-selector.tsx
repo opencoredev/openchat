@@ -4,6 +4,7 @@ import type { Model } from "@/stores/model";
 import { cn } from "@/lib/utils";
 import { getModelById, useModelStore, useModels } from "@/stores/model";
 import { useFavoriteModels } from "@/hooks/use-favorite-models";
+import { useUIStore } from "@/stores/ui";
 import { CheckIcon, ChevronDownIcon, SearchIcon } from "@/components/icons";
 
 function useIsMobile() {
@@ -243,6 +244,7 @@ export function ModelSelector({
 
   const { models, isLoading } = useModels();
   const { favorites, toggleFavorite, isFavorite, addDefaults, missingDefaultsCount } = useFavoriteModels();
+  const filterStyle = useUIStore((s) => s.filterStyle);
 
   const deferredQuery = useDeferredValue(query);
   const isSearching = deferredQuery.trim().length > 0;
@@ -250,7 +252,7 @@ export function ModelSelector({
   const selectedModel = useMemo(() => getModelById(models, value), [models, value]);
 
   const uniqueProviders = useMemo(() => {
-    const providerMap = new Map<string, { id: string; name: string; logoId: string; count: number }>();
+    const providerMap = new Map<string, { id: string; name: string; modelName: string; logoId: string; count: number }>();
     for (const model of models) {
       const existing = providerMap.get(model.providerId);
       if (existing) {
@@ -259,6 +261,7 @@ export function ModelSelector({
         providerMap.set(model.providerId, {
           id: model.providerId,
           name: model.provider,
+          modelName: model.modelName,
           logoId: model.logoId,
           count: 1,
         });
@@ -567,14 +570,14 @@ export function ModelSelector({
                         }
                       }}
                       className={cn(
-                        "flex h-9 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-medium transition-all duration-200",
+                        "flex size-9 shrink-0 items-center justify-center rounded-full transition-all duration-200",
                         selectedProvider === provider.id
                           ? "bg-accent text-foreground"
                           : "bg-muted/50 text-muted-foreground active:bg-accent active:text-foreground",
                       )}
+                      title={filterStyle === "company" ? provider.name : provider.modelName}
                     >
-                      <ProviderLogo providerId={provider.logoId} className="size-4" />
-                      <span className="max-w-[80px] truncate">{provider.name}</span>
+                      <ProviderLogo providerId={provider.logoId} className="size-5" />
                     </button>
                   ))}
                 </div>
@@ -713,7 +716,7 @@ export function ModelSelector({
                           ? "bg-accent text-foreground shadow-sm"
                           : "text-muted-foreground hover:bg-accent/60 hover:text-foreground hover:scale-105",
                       )}
-                      title={provider.name}
+                      title={filterStyle === "company" ? provider.name : provider.modelName}
                     >
                       <ProviderLogo providerId={provider.logoId} className="size-5" />
                     </button>
