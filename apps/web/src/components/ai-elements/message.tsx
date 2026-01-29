@@ -109,7 +109,7 @@ export const MessageResponse = ({ children, className, isStreaming, ...props }: 
     );
   }
 
-  const displayText = isStreaming ? smoothText : (children || "");
+  const displayText = smoothText;
 
   return (
     <div
