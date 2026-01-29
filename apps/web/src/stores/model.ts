@@ -475,58 +475,26 @@ export const fallbackModels = getFallbackModels();
 
 export type ReasoningEffort = "none" | "low" | "medium" | "high";
 
-// Models that support reasoning with effort control
-// Based on OpenRouter API supported_parameters and model capabilities
-// See: https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
-const REASONING_CAPABLE_MODELS = new Set([
-  // OpenAI o-series (reasoning models)
-  "openai/o1",
-  "openai/o1-mini",
-  "openai/o1-preview",
-  "openai/o3",
-  "openai/o3-mini",
-  "openai/o4-mini",
-  // GPT-5 series (all GPT-5 models are reasoning models)
-  "openai/gpt-5",
-  "openai/gpt-5-mini",
-  "openai/gpt-5-nano",
-  "openai/gpt-5-turbo",
-  // DeepSeek R1 (native reasoning)
-  "deepseek/deepseek-r1",
-  "deepseek/deepseek-r1-distill-llama-70b",
-  "deepseek/deepseek-r1-distill-qwen-32b",
-  "deepseek/deepseek-r1-distill-qwen-14b",
-  "deepseek/deepseek-r1-0528",
-  "deepseek/deepseek-r1:free",
-  // Anthropic Claude with extended thinking
-  "anthropic/claude-3.7-sonnet",
-  "anthropic/claude-3.7-sonnet:thinking",
-  "anthropic/claude-sonnet-4",
-  "anthropic/claude-sonnet-4:thinking",
-  // xAI Grok with reasoning
-  "x-ai/grok-3-mini-beta",
-  "x-ai/grok-3-mini",
-  // Google Gemini with thinking
-  "google/gemini-2.5-flash-preview-05-20",
-  "google/gemini-2.5-pro-preview-05-06",
-]);
+// ============================================================================
+// Dynamic Model Capabilities (API-driven, no hardcoded model lists)
+// ============================================================================
 
-// Check if a model supports reasoning effort control
-export function supportsReasoningEffort(modelId: string): boolean {
-  // Direct match
-  if (REASONING_CAPABLE_MODELS.has(modelId)) return true;
+export interface ModelCapabilities {
+  supportsReasoning: boolean;
+  supportsEffortLevels: boolean;
+  alwaysReasons: boolean;
+}
 
-  // Pattern matching for variants
-  const patterns = [
-    /^openai\/o[134]-/,
-    /^openai\/gpt-5/,
-    /deepseek.*r1/i,
-    /:thinking$/,
-    /-r1$/,
-    /-r1-/,
-  ];
+export function getModelCapabilities(modelId: string, model?: Model | null): ModelCapabilities {
+  const supportsReasoning = model?.reasoning === true;
+  const alwaysReasons = /deepseek.*r1/i.test(modelId);
+  const supportsEffort = supportsReasoning && !alwaysReasons;
 
-  return patterns.some((pattern) => pattern.test(modelId));
+  return {
+    supportsReasoning,
+    supportsEffortLevels: supportsEffort,
+    alwaysReasons,
+  };
 }
 
 // ============================================================================

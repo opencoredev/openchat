@@ -23,3 +23,4 @@ ISSUES_COMPREHENSIVE.txt
 /.playwright-mcp/
 *.bak
 preflight.yml
+.sisyphus/

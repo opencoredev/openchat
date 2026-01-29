@@ -164,10 +164,30 @@ export function usePersistentChat({
 	}, [messagesResult, status]);
 
 	useEffect(() => {
-		// getActiveStreamJob only returns "running"/"pending" jobs - null means completed
 		if (!activeStreamJob) {
 			if (status === "streaming" || status === "submitted") {
-				console.log("[BackgroundStream] Stream job completed, resetting UI state");
+				if (streamingRef.current) {
+					const streamId = streamingRef.current.id;
+					setMessages((prev) => {
+						const idx = prev.findIndex((m) => m.id === streamId);
+						if (idx < 0) return prev;
+						const msg = prev[idx];
+						const hasStreamingReasoning = msg.parts?.some(
+							(p) => p.type === "reasoning" && (p as any).state === "streaming"
+						);
+						if (!hasStreamingReasoning) return prev;
+						const parts = msg.parts
+							.map((p) =>
+								p.type === "reasoning"
+									? { ...p, state: "done" as const }
+									: p
+							)
+							.filter((p) => !(p.type === "reasoning" && !(p as any).text));
+						const updated = [...prev];
+						updated[idx] = { ...updated[idx], parts };
+						return updated;
+					});
+				}
 				setStatus("ready");
 				streamingRef.current = null;
 				useStreamStore.getState().completeStream();
@@ -196,34 +216,45 @@ export function usePersistentChat({
 
 		if (!streamingRef.current || streamingRef.current.id !== streamId) {
 			streamingRef.current = { id: streamId, content: jobContent, reasoning: jobReasoning };
-			
+
 			setMessages((prev) => {
 				if (prev.find(m => m.id === streamId)) return prev;
+				const parts: UIMessage["parts"] = [];
+				if (jobReasoning) {
+					parts.push({ type: "reasoning", text: jobReasoning, state: "streaming" } as any);
+				}
+				parts.push({ type: "text" as const, text: jobContent });
 				return [
 					...prev,
-					{ id: streamId, role: "assistant" as const, parts: [{ type: "text" as const, text: jobContent }] },
+					{ id: streamId, role: "assistant" as const, parts },
 				];
 			});
 		} else if (
-			streamingRef.current.content !== jobContent || 
+			streamingRef.current.content !== jobContent ||
 			streamingRef.current.reasoning !== jobReasoning
 		) {
 			streamingRef.current.content = jobContent;
 			streamingRef.current.reasoning = jobReasoning;
-			
+
 			setMessages((prev) => {
 				const idx = prev.findIndex((m) => m.id === streamId);
 				if (idx < 0) return prev;
-				
-				const currentText = prev[idx].parts.find(p => p.type === "text");
-				if (currentText && "text" in currentText && currentText.text === jobContent) {
+
+				const currentText = prev[idx].parts?.find(p => p.type === "text");
+				const currentReasoning = prev[idx].parts?.find(p => p.type === "reasoning");
+				const textSame = currentText && "text" in currentText && currentText.text === jobContent;
+				const reasoningSame = currentReasoning && "text" in currentReasoning && (currentReasoning as any).text === jobReasoning;
+				if (textSame && (reasoningSame || (!jobReasoning && !currentReasoning))) {
 					return prev;
 				}
-				
+
+				const isJobRunning = activeStreamJob.status === "running";
 				const parts: UIMessage["parts"] = [];
-				if (jobReasoning) parts.push({ type: "reasoning", text: jobReasoning });
+				if (jobReasoning) {
+					parts.push({ type: "reasoning", text: jobReasoning, state: isJobRunning ? "streaming" : "done" } as any);
+				}
 				parts.push({ type: "text", text: jobContent });
-				
+
 				const updated = [...prev];
 				updated[idx] = { ...updated[idx], parts };
 				return updated;
@@ -316,9 +347,15 @@ export function usePersistentChat({
 				setStatus("streaming");
 				streamingRef.current = { id: assistantMsgId, content: "", reasoning: "" };
 
+				const initialParts: UIMessage["parts"] = [];
+				if (reasoningEffort && reasoningEffort !== "none") {
+					initialParts.push({ type: "reasoning", text: "", state: "streaming" } as any);
+				}
+				initialParts.push({ type: "text", text: "" });
+
 				setMessages((prev) => [
 					...prev,
-					{ id: assistantMsgId, role: "assistant", parts: [{ type: "text", text: "" }] },
+					{ id: assistantMsgId, role: "assistant", parts: initialParts },
 				]);
 
 				if (!chatId) {

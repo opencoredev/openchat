@@ -52,7 +52,7 @@ import type { UIDataTypes, UIMessagePart, UITools } from "ai";
 import type {PromptInputMessage} from "./ai-elements/prompt-input";
 import type {ReasoningEffort} from "@/stores/model";
 import { cn } from "@/lib/utils";
-import {  useModelStore } from "@/stores/model";
+import {  useModelStore, useModels, getModelById, getModelCapabilities } from "@/stores/model";
 import { useWebSearch } from "@/stores/provider";
 import {
   DropdownMenu,
@@ -660,6 +660,7 @@ function SearchResultsDisplay({ results, isExpanded }: { results: unknown; isExp
 interface ReasoningSliderProps {
   value: ReasoningEffort;
   onChange: (value: ReasoningEffort) => void;
+  disabled?: boolean;
 }
 
 const EFFORT_OPTIONS: Array<ReasoningEffort> = ["none", "low", "medium", "high"];
@@ -670,15 +671,17 @@ const EFFORT_LABELS: Record<ReasoningEffort, string> = {
   high: "High",
 };
 
-function ReasoningSlider({ value, onChange }: ReasoningSliderProps) {
+function ReasoningSlider({ value, onChange, disabled }: ReasoningSliderProps) {
   const currentIndex = EFFORT_OPTIONS.indexOf(value);
   const percentage = (currentIndex / (EFFORT_OPTIONS.length - 1)) * 100;
 
   const handleClick = (index: number) => {
+    if (disabled) return;
     onChange(EFFORT_OPTIONS[index]);
   };
 
   const handleTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (disabled) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const clickPercentage = x / rect.width;
@@ -687,7 +690,7 @@ function ReasoningSlider({ value, onChange }: ReasoningSliderProps) {
   };
 
   return (
-    <div className="space-y-2">
+    <div className={cn("space-y-2", disabled && "opacity-40 pointer-events-none")}>
       {/* Slider Track */}
       <div className="relative h-2 cursor-pointer" onClick={handleTrackClick}>
         {/* Background track */}
@@ -758,9 +761,13 @@ function ModelConfigPopover({ disabled }: ModelConfigPopoverProps) {
   const [isClosing, setIsClosing] = useState(false);
   const isMobile = useIsMobile();
 
+  const { models } = useModels();
+  const currentModel = getModelById(models, selectedModelId);
+  const capabilities = getModelCapabilities(selectedModelId, currentModel);
+
   const getBadgeText = () => {
     const parts: Array<string> = [];
-    if (reasoningEffort !== "none") {
+    if (reasoningEffort !== "none" && capabilities.supportsReasoning) {
       parts.push(reasoningEffort.toUpperCase());
     }
     if (webSearchEnabled) {
@@ -801,20 +808,27 @@ function ModelConfigPopover({ disabled }: ModelConfigPopoverProps) {
 
   const configContent = (
     <>
-      {selectedModelId.startsWith("openai/") && (
-        <div className={cn("pb-4", isMobile ? "border-b border-border/50" : "")}>
-          <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
-            <BrainIcon className="size-4" />
-            <span className="font-medium">Reasoning effort</span>
-          </div>
-          <div className="py-2">
-            <ReasoningSlider value={reasoningEffort} onChange={handleReasoningChange} />
-          </div>
+      <div className={cn("pb-4", isMobile ? "border-b border-border/50" : "")}>
+        <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
+          <BrainIcon className="size-4" />
+          <span className="font-medium">Reasoning effort</span>
         </div>
-      )}
+        <div className="py-2">
+          <ReasoningSlider
+            value={capabilities.supportsReasoning ? reasoningEffort : "none"}
+            onChange={handleReasoningChange}
+            disabled={!capabilities.supportsReasoning}
+          />
+        </div>
+        {!capabilities.supportsReasoning && (
+          <p className="text-xs text-muted-foreground/60 mt-1">
+            This model doesn't support reasoning
+          </p>
+        )}
+      </div>
 
       <div className={cn(
-        selectedModelId.startsWith("openai/") ? "pt-4" : "",
+        "pt-4",
         webSearchEnabled && !isMobile ? "pb-4" : "",
         webSearchEnabled && isMobile ? "pb-4 border-b border-border/50" : ""
       )}>

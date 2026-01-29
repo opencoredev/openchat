@@ -2,7 +2,7 @@ import {  useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
-import { PencilIcon, SparklesIcon, Trash2Icon, XIcon } from "lucide-react";
+import { CheckIcon, CheckSquareIcon, PencilIcon, SparklesIcon, Trash2Icon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import {
@@ -23,6 +23,7 @@ import { convexClient } from "@/lib/convex";
 import { useOpenRouterKey } from "@/stores/openrouter";
 import { useProviderStore } from "@/stores/provider";
 import { useChatTitleStore } from "@/stores/chat-title";
+import { useBulkSelectionStore } from "@/stores/bulk-selection";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -96,6 +97,10 @@ interface ChatGroupProps {
   onStartEdit: (chatId: string, title: string, event: React.MouseEvent) => void;
   onEditSubmit: () => void;
   onEditCancel: () => void;
+  // Bulk selection props
+  isSelectionMode: boolean;
+  selectedChatIds: Set<string>;
+  onToggleSelection: (chatId: string) => void;
 }
 
 function ChatGroup({
@@ -112,6 +117,9 @@ function ChatGroup({
   onStartEdit,
   onEditSubmit,
   onEditCancel,
+  isSelectionMode,
+  selectedChatIds,
+  onToggleSelection,
 }: ChatGroupProps) {
   if (chats.length === 0) return null;
 
@@ -119,60 +127,101 @@ function ChatGroup({
     <SidebarGroup>
       <SidebarGroupLabel>{label}</SidebarGroupLabel>
       <SidebarMenu>
-        {chats.map((chat) => (
-          <SidebarMenuItem key={chat._id} className="group relative">
-            <SidebarMenuButton
-              isActive={currentChatId === chat._id}
-              onClick={() => {
-                if (editingChatId === chat._id) return;
-                onChatClick(chat._id);
-              }}
-              onContextMenu={(event) => onChatContextMenu(chat._id, event)}
-              className="pr-8"
-            >
-              <ChatIcon />
-              {generatingChatIds[chat._id] ? (
-                <span className="block h-5 flex-1 rounded bg-sidebar-foreground/10 animate-pulse" />
-              ) : editingChatId === chat._id ? (
-                <input
-                  className="h-5 w-full bg-transparent text-sm text-sidebar-foreground outline-none"
-                  value={editValue}
-                  onChange={(event) => onEditChange(event.target.value)}
-                  onClick={(event) => event.stopPropagation()}
-                  onFocus={(event) => event.currentTarget.select()}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      onEditSubmit();
-                    }
-                    if (event.key === "Escape") {
-                      event.preventDefault();
-                      onEditCancel();
-                    }
+        {chats.map((chat) => {
+          const isSelected = selectedChatIds.has(chat._id);
+          return (
+            <SidebarMenuItem key={chat._id} className="group relative">
+              {isSelectionMode && (
+                <button
+                  type="button"
+                  className={cn(
+                    "absolute left-1 top-1/2 -translate-y-1/2 z-10 flex size-5 items-center justify-center rounded border transition-colors",
+                    isSelected
+                      ? "border-sidebar-primary bg-sidebar-primary text-sidebar-primary-foreground"
+                      : "border-sidebar-foreground/30 bg-transparent hover:border-sidebar-foreground/50"
+                  )}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onToggleSelection(chat._id);
                   }}
-                  onBlur={onEditCancel}
-                  autoFocus
-                />
-              ) : (
-                <span
-                  className="truncate"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => onStartEdit(chat._id, chat.title, event)}
+                  aria-label={isSelected ? "Deselect chat" : "Select chat"}
                 >
-                  {chat.title}
-                </span>
+                  {isSelected && <CheckIcon className="size-3" />}
+                </button>
               )}
-            </SidebarMenuButton>
-            <button
-              type="button"
-              className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex size-6 items-center justify-center opacity-0 transition-opacity group-hover:opacity-70 text-sidebar-foreground/60 hover:text-sidebar-foreground/85 z-10"
-              onClick={(event) => onQuickDelete(chat._id, event)}
-              aria-label="Delete chat"
-            >
-              <XIcon className="size-3.5" />
-            </button>
-          </SidebarMenuItem>
-        ))}
+              <SidebarMenuButton
+                isActive={!isSelectionMode && currentChatId === chat._id}
+                onClick={() => {
+                  if (isSelectionMode) {
+                    onToggleSelection(chat._id);
+                    return;
+                  }
+                  if (editingChatId === chat._id) return;
+                  onChatClick(chat._id);
+                }}
+                onContextMenu={(event) => {
+                  if (isSelectionMode) {
+                    event.preventDefault();
+                    return;
+                  }
+                  onChatContextMenu(chat._id, event);
+                }}
+                className={cn(
+                  "pr-8",
+                  isSelectionMode && "pl-8",
+                  isSelectionMode && isSelected && "bg-sidebar-accent/50"
+                )}
+              >
+                {!isSelectionMode && <ChatIcon />}
+                {generatingChatIds[chat._id] ? (
+                  <span className="block h-5 flex-1 rounded bg-sidebar-foreground/10 animate-pulse" />
+                ) : editingChatId === chat._id ? (
+                  <input
+                    className="h-5 w-full bg-transparent text-sm text-sidebar-foreground outline-none"
+                    value={editValue}
+                    onChange={(event) => onEditChange(event.target.value)}
+                    onClick={(event) => event.stopPropagation()}
+                    onFocus={(event) => event.currentTarget.select()}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        onEditSubmit();
+                      }
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        onEditCancel();
+                      }
+                    }}
+                    onBlur={onEditCancel}
+                    autoFocus
+                  />
+                ) : (
+                  <span
+                    className="truncate"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => {
+                      if (isSelectionMode) return;
+                      onStartEdit(chat._id, chat.title, event);
+                    }}
+                  >
+                    {chat.title}
+                  </span>
+                )}
+              </SidebarMenuButton>
+              {!isSelectionMode && (
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex size-6 items-center justify-center opacity-0 transition-opacity group-hover:opacity-70 text-sidebar-foreground/60 hover:text-sidebar-foreground/85 z-10"
+                  onClick={(event) => onQuickDelete(chat._id, event)}
+                  aria-label="Delete chat"
+                >
+                  <XIcon className="size-3.5" />
+                </button>
+              )}
+            </SidebarMenuItem>
+          );
+        })}
       </SidebarMenu>
     </SidebarGroup>
   );
@@ -194,12 +243,24 @@ export function AppSidebar() {
     y: number;
   } | null>(null);
   const [deleteChatId, setDeleteChatId] = useState<string | null>(null);
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [editOriginal, setEditOriginal] = useState("");
   const contextMenuRef = useRef(contextMenu);
   const contextMenuElementRef = useRef<HTMLDivElement | null>(null);
   const isMountedRef = useRef(true);
+
+  // Bulk selection state
+  const isSelectionMode = useBulkSelectionStore((s) => s.isSelectionMode);
+  const selectedChatIds = useBulkSelectionStore((s) => s.selectedChatIds);
+  const toggleSelectionMode = useBulkSelectionStore((s) => s.toggleSelectionMode);
+  const exitSelectionMode = useBulkSelectionStore((s) => s.exitSelectionMode);
+  const toggleChatSelection = useBulkSelectionStore((s) => s.toggleChatSelection);
+  const selectAll = useBulkSelectionStore((s) => s.selectAll);
+  const deselectAll = useBulkSelectionStore((s) => s.deselectAll);
+  const getSelectedChatIds = useBulkSelectionStore((s) => s.getSelectedChatIds);
 
   // Get current chat ID from URL if we're on a chat page
   let currentChatId: string | undefined;
@@ -409,6 +470,62 @@ export function AppSidebar() {
     [convexClient, convexUser?._id, currentChatId, navigate],
   );
 
+  const handleBulkDelete = useCallback(
+    async () => {
+      if (!convexClient || !convexUser?._id) return;
+
+      const chatIdsToDelete = getSelectedChatIds();
+      if (chatIdsToDelete.length === 0) return;
+
+      setIsBulkDeleting(true);
+      setShowBulkDeleteDialog(false);
+
+      try {
+        const result = await convexClient.mutation(api.chats.removeBulk, {
+          chatIds: chatIdsToDelete,
+          userId: convexUser._id,
+        });
+
+        if (result.deleted > 0) {
+          toast.success(`Deleted ${result.deleted} chat${result.deleted > 1 ? "s" : ""}`);
+        }
+
+        if (result.failed > 0) {
+          toast.error(`Failed to delete ${result.failed} chat${result.failed > 1 ? "s" : ""}`);
+        }
+
+        // Navigate away if current chat was deleted
+        if (currentChatId && chatIdsToDelete.includes(currentChatId as Id<"chats">)) {
+          navigate({ to: "/" });
+        }
+
+        exitSelectionMode();
+      } catch (error) {
+        console.warn("[Chat] Failed to bulk delete chats:", error);
+        if (error instanceof Error && error.name === "RateLimitError") {
+          toast.error(error.message);
+        } else {
+          toast.error("Failed to delete chats");
+        }
+      } finally {
+        setIsBulkDeleting(false);
+      }
+    },
+    [convexClient, convexUser?._id, currentChatId, navigate, getSelectedChatIds, exitSelectionMode],
+  );
+
+  const handleToggleSelection = useCallback(
+    (chatId: string) => {
+      toggleChatSelection(chatId as Id<"chats">);
+    },
+    [toggleChatSelection],
+  );
+
+  const handleSelectAll = useCallback(() => {
+    const allChatIds = chats.map((chat) => chat._id);
+    selectAll(allChatIds);
+  }, [chats, selectAll]);
+
   useEffect(() => {
     contextMenuRef.current = contextMenu;
   }, [contextMenu]);
@@ -519,11 +636,80 @@ export function AppSidebar() {
           </button>
         </div>
 
-        {/* New Chat Button */}
+        {/* New Chat Button / Selection Mode Controls */}
         <div className="shrink-0 px-3 pb-3">
-          <Button onClick={handleNewChat} className="w-full justify-center gap-2" variant="default">
-            New Chat
-          </Button>
+          {isSelectionMode ? (
+            <div className="flex flex-col gap-2">
+              {/* Selection info and actions */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm text-sidebar-foreground/70">
+                  {selectedChatIds.size} selected
+                </span>
+                <div className="flex items-center gap-1">
+                  {selectedChatIds.size < chats.length ? (
+                    <Button
+                      onClick={handleSelectAll}
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                    >
+                      Select all
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={deselectAll}
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                    >
+                      Deselect all
+                    </Button>
+                  )}
+                  <Button
+                    onClick={exitSelectionMode}
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+              {/* Delete button */}
+              <Button
+                onClick={() => {
+                  if (confirmDelete) {
+                    setShowBulkDeleteDialog(true);
+                  } else {
+                    void handleBulkDelete();
+                  }
+                }}
+                variant="destructive"
+                className="w-full justify-center gap-2"
+                disabled={selectedChatIds.size === 0 || isBulkDeleting}
+              >
+                <Trash2Icon className="size-4" />
+                {isBulkDeleting ? "Deleting..." : `Delete ${selectedChatIds.size} chat${selectedChatIds.size !== 1 ? "s" : ""}`}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button onClick={handleNewChat} className="flex-1 justify-center gap-2" variant="default">
+                New Chat
+              </Button>
+              {chats.length > 0 && (
+                <Button
+                  onClick={toggleSelectionMode}
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  title="Select multiple chats"
+                >
+                  <CheckSquareIcon className="size-4" />
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Chat History - scrollable area that takes remaining space */}
@@ -555,6 +741,9 @@ export function AppSidebar() {
                 onStartEdit={handleStartEdit}
                 onEditSubmit={handleSubmitEdit}
                 onEditCancel={handleCancelEdit}
+                isSelectionMode={isSelectionMode}
+                selectedChatIds={selectedChatIds}
+                onToggleSelection={handleToggleSelection}
               />
               <ChatGroup
                 label="Last 7 days"
@@ -570,6 +759,9 @@ export function AppSidebar() {
                 onStartEdit={handleStartEdit}
                 onEditSubmit={handleSubmitEdit}
                 onEditCancel={handleCancelEdit}
+                isSelectionMode={isSelectionMode}
+                selectedChatIds={selectedChatIds}
+                onToggleSelection={handleToggleSelection}
               />
               <ChatGroup
                 label="Last 30 days"
@@ -585,6 +777,9 @@ export function AppSidebar() {
                 onStartEdit={handleStartEdit}
                 onEditSubmit={handleSubmitEdit}
                 onEditCancel={handleCancelEdit}
+                isSelectionMode={isSelectionMode}
+                selectedChatIds={selectedChatIds}
+                onToggleSelection={handleToggleSelection}
               />
               <ChatGroup
                 label="Older"
@@ -600,6 +795,9 @@ export function AppSidebar() {
                 onStartEdit={handleStartEdit}
                 onEditSubmit={handleSubmitEdit}
                 onEditCancel={handleCancelEdit}
+                isSelectionMode={isSelectionMode}
+                selectedChatIds={selectedChatIds}
+                onToggleSelection={handleToggleSelection}
               />
             </>
           )}
@@ -706,6 +904,41 @@ export function AppSidebar() {
               onClick={() => deleteChatId && handleDeleteChat(deleteChatId)}
             >
               Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog
+        open={showBulkDeleteDialog}
+        onOpenChange={(isDialogOpen) => {
+          if (!isDialogOpen) setShowBulkDeleteDialog(false);
+        }}
+      >
+        <AlertDialogContent
+          size="sm"
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && selectedChatIds.size > 0) {
+              event.preventDefault();
+              void handleBulkDelete();
+            }
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedChatIds.size} chat{selectedChatIds.size !== 1 ? "s" : ""}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedChatIds.size} chat{selectedChatIds.size !== 1 ? "s" : ""}?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => void handleBulkDelete()}
+            >
+              Delete {selectedChatIds.size} chat{selectedChatIds.size !== 1 ? "s" : ""}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

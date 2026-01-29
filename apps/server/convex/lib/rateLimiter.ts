@@ -24,6 +24,7 @@ import { components } from "../_generated/api";
  * CHAT OPERATIONS:
  * - Chat creation: 20/min with 5 burst
  * - Chat deletion: 15/min with 3 burst
+ * - Chat bulk deletion: 50/min with 50 burst (consumes 1 token per chat)
  * - Chat export: 5/min with 2 burst
  *
  * MESSAGE OPERATIONS:
@@ -73,6 +74,12 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
 		rate: 15,
 		period: MINUTE,
 		capacity: 3,
+	},
+	chatBulkDelete: {
+		kind: "token bucket",
+		rate: 50,
+		period: MINUTE,
+		capacity: 50, // Allow up to 50 chats to be deleted in bulk
 	},
 	chatExport: {
 		kind: "token bucket",
