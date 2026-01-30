@@ -31,35 +31,16 @@ interface ProvidersProps {
 
 function useStableConvexAuth() {
   const { isAuthenticated, loading } = useAuth();
-  const [token, setToken] = useState<string | null>(null);
-  const tokenFetchedRef = useRef(false);
-
-  useEffect(() => {
-    if (loading || tokenFetchedRef.current) return;
-    if (!isAuthenticated) {
-      tokenFetchedRef.current = true;
-      return;
-    }
-    tokenFetchedRef.current = true;
-    authClient.convex.token().then((result) => {
-      setToken(result.data?.token || null);
-    }).catch(() => {
-      setToken(null);
-    });
-  }, [isAuthenticated, loading]);
 
   const fetchAccessToken = useCallback(async () => {
-    if (token) return token;
     if (!isAuthenticated) return null;
     try {
       const result = await authClient.convex.token();
-      const newToken = result.data?.token || null;
-      setToken(newToken);
-      return newToken;
+      return result.data?.token || null;
     } catch {
       return null;
     }
-  }, [token, isAuthenticated]);
+  }, [isAuthenticated]);
 
   return useMemo(
     () => ({ isLoading: loading, isAuthenticated, fetchAccessToken }),

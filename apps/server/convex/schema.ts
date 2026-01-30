@@ -136,6 +136,17 @@ export default defineSchema({
 		userId: v.optional(v.id("users")),
 		deletedAt: v.optional(v.number()),
 		streamId: v.optional(v.string()),
+		// Legacy field — present on some existing documents but no longer written.
+		// Kept so schema validation passes for old rows.
+		messageMetadata: v.optional(
+			v.object({
+				modelId: v.optional(v.string()),
+				provider: v.optional(v.string()),
+				reasoningEffort: v.optional(v.string()),
+				maxSteps: v.optional(v.number()),
+				webSearchEnabled: v.optional(v.boolean()),
+			})
+		),
 	})
 		.index("by_chat", ["chatId", "createdAt"])
 		.index("by_client_id", ["chatId", "clientMessageId"])
