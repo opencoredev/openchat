@@ -33,7 +33,7 @@
     "convex:codegen": "cd apps/server && convex codegen",
     "convex:migrate": "bun ./scripts/run-migrations.ts",
     "convex:verify": "bun ./scripts/run-migrations.ts --verify-only",
-    "verify:build": "rm -rf apps/web/.next && (cd apps/web && bunx next build) && bunx turbo run build --filter=web --filter=server"
+    "verify:build": "(cd apps/web && bunx vite build) && bunx turbo run build --filter=web --filter=server"
   },
   "dependencies": {
     "@ai-sdk/devtools": "^0.0.6",
@@ -50,9 +50,9 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.0.13",
-    "convex": "^1.29.3",
+    "convex": "^1.31.7",
     "oxlint": "^1.30.0",
-    "turbo": "^2.6.3",
+    "turbo": "^2.8.0",
     "vitest": "^4.0.13",
     "ws": "^8.18.0"
   },
