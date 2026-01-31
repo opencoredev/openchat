@@ -216,9 +216,6 @@ export function useAuth(): AuthContextValue {
  * Legacy hook for backward compatibility.
  * Uses our stable, non-reactive session management.
  */
-/**
- * Sign in with GitHub OAuth
- */
 export async function signInWithGitHub(callbackURL = "/") {
   return authClient.signIn.social({
     provider: "github",
@@ -226,9 +223,6 @@ export async function signInWithGitHub(callbackURL = "/") {
   });
 }
 
-/**
- * Sign in with Vercel OAuth
- */
 export async function signInWithVercel(callbackURL = "/") {
   return authClient.signIn.social({
     provider: "vercel",
@@ -236,9 +230,25 @@ export async function signInWithVercel(callbackURL = "/") {
   });
 }
 
-/**
- * Sign out
- */
+export async function signInWithEmail(email: string, password: string) {
+  return authClient.signIn.email({
+    email,
+    password,
+  });
+}
+
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+  name: string,
+) {
+  return authClient.signUp.email({
+    email,
+    password,
+    name,
+  });
+}
+
 export async function signOut() {
   return authClient.signOut({
     fetchOptions: {
