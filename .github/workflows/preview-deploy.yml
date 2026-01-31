@@ -100,6 +100,7 @@ jobs:
       - name: Configure Railway Environment
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          REDIS_RAILWAY_REF: ${{ '${{Redis.REDIS_URL}}' }}
         run: |
           echo "🚂 Configuring Railway environment via GraphQL API..."
 
@@ -150,12 +151,11 @@ jobs:
             https://backboard.railway.app/graphql/v2
 
           # Set REDIS_URL (Railway service reference)
-          REDIS_REF="${{ '${{Redis.REDIS_URL}}' }}"
           echo "Setting REDIS_URL..."
           curl -s -X POST \
             -H "Authorization: Bearer ${RAILWAY_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "{\"query\": \"mutation { variableUpsert(input: { projectId: \\\"${PROJECT_ID}\\\", environmentId: \\\"${ENV_ID}\\\", serviceId: \\\"${SERVICE_ID}\\\", name: \\\"REDIS_URL\\\", value: \\\"${REDIS_REF}\\\" }) }\"}" \
+            -d "{\"query\": \"mutation { variableUpsert(input: { projectId: \\\"${PROJECT_ID}\\\", environmentId: \\\"${ENV_ID}\\\", serviceId: \\\"${SERVICE_ID}\\\", name: \\\"REDIS_URL\\\", value: \\\"${REDIS_RAILWAY_REF}\\\" }) }\"}" \
             https://backboard.railway.app/graphql/v2
 
           echo "✅ Railway environment variables updated"
