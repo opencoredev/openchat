@@ -246,18 +246,22 @@ function SignInPage() {
       if (isSignUp) {
         const { error } = await signUpWithEmail(email, password, name || email.split("@")[0]);
         if (error) {
-          setEmailError(error.message || "Sign up failed");
+          setEmailError("Could not create account. The email may already be in use.");
           return;
         }
       } else {
         const { error } = await signInWithEmail(email, password);
         if (error) {
-          setEmailError(error.message || "Invalid email or password");
+          setEmailError("Invalid email or password.");
           return;
         }
       }
-      await refetchSession();
-      navigate({ to: "/" });
+      const success = await refetchSession();
+      if (success) {
+        navigate({ to: "/" });
+      } else {
+        setEmailError("Signed in but failed to load session. Please refresh the page.");
+      }
     } catch {
       setEmailError(isSignUp ? "Sign up failed. Please try again." : "Sign in failed. Please try again.");
     } finally {

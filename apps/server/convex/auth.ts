@@ -85,7 +85,7 @@ export const createAuth = (
 		// Use Convex site URL as baseURL so OAuth callbacks work correctly
 		baseURL: convexSiteUrl,
 		database: authComponent.adapter(ctx),
-		// Email & password authentication (alongside OAuth)
+		// TODO: add email verification (requireEmailVerification + sendVerificationEmail)
 		emailAndPassword: {
 			enabled: true,
 			minPasswordLength: 8,

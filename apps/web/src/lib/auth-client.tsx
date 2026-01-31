@@ -104,7 +104,7 @@ interface AuthContextValue {
   session: { id: string; token: string } | null;
   loading: boolean;
   isAuthenticated: boolean;
-  refetchSession: () => Promise<void>;
+  refetchSession: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -122,9 +122,9 @@ export function StableAuthProvider({ children }: { children: ReactNode }) {
   const fetchedRef = useRef(false);
   const fetchingRef = useRef(false);
 
-  const fetchSession = useCallback(async () => {
+  const fetchSession = useCallback(async (): Promise<boolean> => {
     // Prevent concurrent fetches
-    if (fetchingRef.current) return;
+    if (fetchingRef.current) return false;
     fetchingRef.current = true;
 
     try {
@@ -143,12 +143,14 @@ export function StableAuthProvider({ children }: { children: ReactNode }) {
           },
           session: { id: result.data.session.id, token: result.data.session.token },
         });
-      } else {
-        setSessionData({ user: null, session: null });
+        return true;
       }
+      setSessionData({ user: null, session: null });
+      return false;
     } catch (error) {
       console.error("[StableAuthProvider] Failed to fetch session:", error);
       setSessionData({ user: null, session: null });
+      return false;
     } finally {
       setLoading(false);
       fetchingRef.current = false;
@@ -206,7 +208,7 @@ export function useAuth(): AuthContextValue {
       session: null,
       loading: true,
       isAuthenticated: false,
-      refetchSession: async () => {},
+      refetchSession: async () => false,
     };
   }
   return context;
