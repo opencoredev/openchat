@@ -32,28 +32,34 @@ jobs:
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
         run: |
-          echo "🚀 Deploying Convex preview for PR #${{ github.event.pull_request.number }}..."
+          PR_NUM=${{ github.event.pull_request.number }}
+          echo "🚀 Deploying Convex preview for PR #${PR_NUM}..."
 
-          # Deploy to Convex preview
-          OUTPUT=$(bunx convex deploy --preview-create pr-${{ github.event.pull_request.number }} 2>&1)
-          echo "$OUTPUT"
+          OUTPUT_FILE=$(mktemp)
+          set +e
+          bunx convex deploy --preview-create "pr-${PR_NUM}" 2>&1 | tee "$OUTPUT_FILE"
+          EXIT_CODE=${PIPESTATUS[0]}
+          set -e
 
-          # Extract the deployment URL from output
-          CONVEX_URL=$(echo "$OUTPUT" | grep -o 'https://[a-z0-9-]*\.convex\.cloud' | head -1)
+          if [ "$EXIT_CODE" -ne 0 ]; then
+            echo "❌ convex deploy exited with code $EXIT_CODE"
+            cat "$OUTPUT_FILE"
+            exit 1
+          fi
+
+          CONVEX_URL=$(grep -o 'https://[a-z0-9-]*\.convex\.cloud' "$OUTPUT_FILE" | head -1)
 
           if [ -z "$CONVEX_URL" ]; then
             echo "❌ Failed to extract Convex URL from deployment output"
             exit 1
           fi
 
-          # Derive the site URL from the cloud URL
           CONVEX_SITE_URL=$(echo "$CONVEX_URL" | sed 's/\.convex\.cloud/.convex.site/')
 
           echo "✅ Convex Preview deployed!"
           echo "   Cloud URL: $CONVEX_URL"
           echo "   Site URL: $CONVEX_SITE_URL"
 
-          # Set outputs for later steps
           echo "convex_url=$CONVEX_URL" >> $GITHUB_OUTPUT
           echo "convex_site_url=$CONVEX_SITE_URL" >> $GITHUB_OUTPUT
 
