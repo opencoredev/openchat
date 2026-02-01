@@ -65,6 +65,7 @@ jobs:
 
           bunx convex env set SITE_URL "$RAILWAY_URL" --preview-name pr-${PR_NUM}
           bunx convex env set NEXT_PUBLIC_DEPLOYMENT "preview" --preview-name pr-${PR_NUM}
+          bunx convex env set DEPLOYMENT_TYPE "preview" --preview-name pr-${PR_NUM}
           bunx convex env set BETTER_AUTH_SECRET "$BETTER_AUTH_SECRET" --preview-name pr-${PR_NUM}
           bunx convex env set GITHUB_CLIENT_ID "$GITHUB_CLIENT_ID" --preview-name pr-${PR_NUM}
           bunx convex env set GITHUB_CLIENT_SECRET "$GITHUB_CLIENT_SECRET" --preview-name pr-${PR_NUM}
