@@ -57,6 +57,8 @@ jobs:
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           GITHUB_CLIENT_ID: ${{ secrets.AUTH_GITHUB_CLIENT_ID }}
           GITHUB_CLIENT_SECRET: ${{ secrets.AUTH_GITHUB_CLIENT_SECRET }}
+          VERCEL_CLIENT_ID: ${{ secrets.VERCEL_CLIENT_ID }}
+          VERCEL_CLIENT_SECRET: ${{ secrets.VERCEL_CLIENT_SECRET }}
         run: |
           PR_NUM=${{ github.event.pull_request.number }}
           RAILWAY_URL="https://web-openchat-pr-${PR_NUM}.up.railway.app"
@@ -66,6 +68,9 @@ jobs:
           bunx convex env set BETTER_AUTH_SECRET "$BETTER_AUTH_SECRET" --preview-name pr-${PR_NUM}
           bunx convex env set GITHUB_CLIENT_ID "$GITHUB_CLIENT_ID" --preview-name pr-${PR_NUM}
           bunx convex env set GITHUB_CLIENT_SECRET "$GITHUB_CLIENT_SECRET" --preview-name pr-${PR_NUM}
+          bunx convex env set VERCEL_CLIENT_ID "$VERCEL_CLIENT_ID" --preview-name pr-${PR_NUM}
+          bunx convex env set VERCEL_CLIENT_SECRET "$VERCEL_CLIENT_SECRET" --preview-name pr-${PR_NUM}
+          bunx convex env set PRODUCTION_CONVEX_SITE_URL "https://outgoing-setter-201.convex.site" --preview-name pr-${PR_NUM}
 
           echo "✅ Convex env vars set for pr-${PR_NUM}"
 
