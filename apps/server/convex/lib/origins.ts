@@ -1,21 +1,37 @@
-const BASE_ALLOWED_ORIGINS = [
+const ALLOWED_ORIGINS = [
 	"http://localhost:3000",
 	"https://osschat.dev",
+	"*.osschat.dev",
+	"*.up.railway.app",
 ];
 
-export function getPreviewOrigins(): string[] {
-	const origins: string[] = [];
-	for (let i = 1; i <= 200; i++) {
-		origins.push(`https://pr-${i}.osschat.dev`);
-	}
-	return origins;
-}
-
 export function getAllowedOrigins(): string[] {
-	return [...BASE_ALLOWED_ORIGINS, ...getPreviewOrigins()];
+	const siteUrl = process.env.SITE_URL;
+	const origins = [...ALLOWED_ORIGINS];
+	if (siteUrl) origins.push(siteUrl);
+	return origins;
 }
 
 export function getCorsOrigin(origin: string | null): string | null {
 	if (!origin) return null;
-	return getAllowedOrigins().includes(origin) ? origin : null;
+	const allowed = getAllowedOrigins();
+	for (const pattern of allowed) {
+		if (pattern === origin) return origin;
+		if (pattern.startsWith("*.")) {
+			const wildcardDomain = pattern.slice(1);
+			const rootDomain = pattern.slice(2);
+			try {
+				const url = new URL(origin);
+				if (
+					url.protocol === "https:" &&
+					(url.hostname.endsWith(wildcardDomain) || url.hostname === rootDomain)
+				) {
+					return origin;
+				}
+			} catch {
+				continue;
+			}
+		}
+	}
+	return null;
 }

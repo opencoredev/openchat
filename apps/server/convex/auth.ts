@@ -6,7 +6,7 @@ import { oAuthProxy } from "better-auth/plugins";
 import { components } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
-import { requireEnv } from "./env";
+
 import { getAllowedOrigins } from "./lib/origins";
 
 /**
@@ -85,17 +85,25 @@ export const createAuth = (
 		// Use Convex site URL as baseURL so OAuth callbacks work correctly
 		baseURL: convexSiteUrl,
 		database: authComponent.adapter(ctx),
-		// GitHub OAuth only - no email/password
+		// TODO: add email verification (requireEmailVerification + sendVerificationEmail)
 		emailAndPassword: {
-			enabled: false,
+			enabled: true,
+			minPasswordLength: 8,
+			maxPasswordLength: 128,
 		},
 		socialProviders: {
-			github: {
-				clientId: requireEnv("GITHUB_CLIENT_ID"),
-				clientSecret: requireEnv("GITHUB_CLIENT_SECRET"),
-				// Use current environment's URL for OAuth callbacks
-				redirectURI: `${convexSiteUrl}/api/auth/callback/github`,
-			},
+			// Only include GitHub OAuth if credentials are configured
+			// (avoids throwing during Convex module analysis when env vars aren't set yet)
+			...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
+				? {
+						github: {
+							clientId: process.env.GITHUB_CLIENT_ID,
+							clientSecret: process.env.GITHUB_CLIENT_SECRET,
+							// Use current environment's URL for OAuth callbacks
+							redirectURI: `${convexSiteUrl}/api/auth/callback/github`,
+						},
+					}
+				: {}),
 			// Only include Vercel OAuth if credentials are configured
 			...(process.env.VERCEL_CLIENT_ID && process.env.VERCEL_CLIENT_SECRET
 				? {
