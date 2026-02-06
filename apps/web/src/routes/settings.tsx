@@ -14,7 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { authClient, signOut, useAuth } from "@/lib/auth-client";
 import { useOpenRouterKey } from "@/stores/openrouter";
-import { DAILY_LIMIT_CENTS, useProviderStore, isPreviewDeployment } from "@/stores/provider";
+import { DAILY_LIMIT_CENTS, isPreviewDeployment, useProviderStore } from "@/stores/provider";
 import { getCacheStatus, useModels } from "@/stores/model";
 import { useChatTitleStore } from "@/stores/chat-title";
 import { useUIStore } from "@/stores/ui";

@@ -1,11 +1,18 @@
 {
   "name": "openchat",
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@vitest/coverage-v8": "^4.0.18",
+    "convex": "^1.31.7",
+    "oxlint": "^1.43.0",
+    "turbo": "^2.8.3",
+    "vitest": "^4.0.18"
+  },
+  "overrides": {
+    "@peculiar/asn1-schema": "2.6.0"
+  },
+  "packageManager": "bun@1.3.0",
   "private": true,
-  "type": "module",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "check": "turbo lint",
     "dev": "bun ./scripts/check-redis.ts && turbo -F web -F server dev",
@@ -35,29 +42,13 @@
     "convex:verify": "bun ./scripts/run-migrations.ts --verify-only",
     "verify:build": "(cd apps/web && bunx vite build) && bunx turbo run build --filter=web --filter=server"
   },
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "dependencies": {
-    "@ai-sdk/devtools": "^0.0.6",
-    "@ai-sdk/provider-utils": "^3.0.17",
-    "@emotion/react": "^11.14.0",
-    "@opentech1/cc-sync": "^2.0.12",
-    "@vercel/analytics": "^1.5.0",
-    "better-sqlite3": "^12.4.6",
-    "motion": "^12.23.24",
-    "zustand": "^5.0.8"
-  },
-  "devDependencies": {
-    "@react-grab/claude-code": "^0.0.67",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@types/ws": "^8.18.1",
-    "@vitest/coverage-v8": "^4.0.13",
-    "convex": "^1.31.7",
-    "oxlint": "^1.30.0",
-    "turbo": "^2.8.0",
-    "vitest": "^4.0.13",
-    "ws": "^8.18.0"
-  },
-  "overrides": {
-    "@peculiar/asn1-schema": "2.6.0"
-  },
-  "packageManager": "bun@1.3.0"
+    "@ai-sdk/devtools": "^0.0.12",
+    "@ai-sdk/provider-utils": "^4.0.14"
+  }
 }

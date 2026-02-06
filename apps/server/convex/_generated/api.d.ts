@@ -1010,6 +1010,7 @@ export declare const components: {
         "query",
         "internal",
         {
+          join?: any;
           limit?: number;
           model:
             | "user"
@@ -1063,6 +1064,7 @@ export declare const components: {
         "query",
         "internal",
         {
+          join?: any;
           model:
             | "user"
             | "session"
@@ -2072,14 +2074,8 @@ export declare const components: {
       >;
     };
     adapterTest: {
-      count: FunctionReference<"query", "internal", any, any>;
-      create: FunctionReference<"mutation", "internal", any, any>;
-      delete: FunctionReference<"mutation", "internal", any, any>;
-      deleteMany: FunctionReference<"mutation", "internal", any, any>;
-      findMany: FunctionReference<"query", "internal", any, any>;
-      findOne: FunctionReference<"query", "internal", any, any>;
-      update: FunctionReference<"mutation", "internal", any, any>;
-      updateMany: FunctionReference<"mutation", "internal", any, any>;
+      runCustomTests: FunctionReference<"action", "internal", any, any>;
+      runTests: FunctionReference<"action", "internal", any, any>;
     };
   };
   rateLimiter: {
