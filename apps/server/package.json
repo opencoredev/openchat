@@ -11,10 +11,10 @@
     "test": "echo \"No Convex tests yet\""
   },
   "dependencies": {
-    "@convex-dev/better-auth": "^0.10.4",
+    "@convex-dev/better-auth": "^0.10.10",
     "@convex-dev/persistent-text-streaming": "^0.3.0",
-    "@convex-dev/rate-limiter": "^0.3.0",
-    "better-auth": "1.4.7",
+    "@convex-dev/rate-limiter": "^0.3.2",
+    "better-auth": "1.4.18",
     "convex": "^1.31.7"
   },
   "devDependencies": {

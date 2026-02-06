@@ -208,7 +208,7 @@ export function useAuth(): AuthContextValue {
       session: null,
       loading: true,
       isAuthenticated: false,
-      refetchSession: async () => false,
+      refetchSession: () => Promise.resolve(false),
     };
   }
   return context;

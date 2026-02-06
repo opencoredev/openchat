@@ -19,11 +19,11 @@ if (typeof window !== "undefined") {
     if (connection?.effectiveType && /2g/.test(connection.effectiveType)) return;
 
     const run = () => prefetchModels();
-    const requestIdle = (window as Window & {
+    const requestIdle = (window as unknown as {
       requestIdleCallback?: (cb: () => void, options?: { timeout: number }) => number;
     }).requestIdleCallback;
 
-    if (requestIdle) {
+    if (typeof requestIdle === "function") {
       requestIdle(run, { timeout: 2000 });
     } else {
       setTimeout(run, 1500);
