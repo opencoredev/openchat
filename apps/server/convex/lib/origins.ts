@@ -21,7 +21,7 @@ export function getAllowedOrigins(): string[] {
 	// Add SITE_URL if configured (e.g., for preview deployments)
 	const siteUrl = process.env.SITE_URL;
 	if (siteUrl) {
-		origins.push(siteUrl);
+		origins.push(siteUrl.trim());
 	}
 
 	// Add any additional explicitly configured origins
