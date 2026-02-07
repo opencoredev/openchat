@@ -383,10 +383,13 @@ export function DataTable({
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (active && over && active.id !== over.id) {
-      setData((data) => {
-        const oldIndex = dataIds.indexOf(active.id)
-        const newIndex = dataIds.indexOf(over.id)
-        return arrayMove(data, oldIndex, newIndex)
+      setData((prevData) => {
+        const oldIndex = prevData.findIndex((row) => String(row.id) === String(active.id))
+        const newIndex = prevData.findIndex((row) => String(row.id) === String(over.id))
+        if (oldIndex < 0 || newIndex < 0) {
+          return prevData
+        }
+        return arrayMove(prevData, oldIndex, newIndex)
       })
     }
   }
@@ -681,7 +684,9 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
   const isMobile = useIsMobile()
   return (
     <Drawer direction={isMobile ? "bottom" : "right"}>
-      <DrawerTrigger asChild><Button variant="link" className="text-foreground w-fit px-0 text-left">{item.header}</Button></DrawerTrigger>
+      <DrawerTrigger asChild>
+        <Button variant="link" className="text-foreground w-fit px-0 text-left">{item.header}</Button>
+      </DrawerTrigger>
       <DrawerContent>
         <DrawerHeader className="gap-1">
           <DrawerTitle>{item.header}</DrawerTitle>
@@ -857,7 +862,9 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
         </div>
         <DrawerFooter>
           <Button>Submit</Button>
-          <DrawerClose render={<Button variant="outline" />}></DrawerClose>
+          <DrawerClose asChild>
+            <Button variant="outline">Cancel</Button>
+          </DrawerClose>
         </DrawerFooter>
       </DrawerContent>
     </Drawer>
