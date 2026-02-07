@@ -7,6 +7,7 @@ import { convexClient } from "../lib/convex";
 import { StableAuthProvider, authClient, useAuth } from "../lib/auth-client";
 import { prefetchModels } from "../stores/model";
 import { useProviderStore } from "../stores/provider";
+import { useOpenRouterStore } from "../stores/openrouter";
 import { ThemeProvider } from "./theme-provider";
 import { PostHogProvider } from "./posthog";
 
@@ -142,11 +143,42 @@ function UsageSyncProvider({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Component that checks OpenRouter API key status from the server.
+ * This syncs the hasApiKey state without exposing the actual key to the client.
+ */
+function OpenRouterKeyStatusProvider({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, loading } = useAuth();
+  const checkApiKeyStatus = useOpenRouterStore((s) => s.checkApiKeyStatus);
+  const checkedRef = useRef(false);
+
+  useEffect(() => {
+    // Only check once when user is authenticated
+    if (loading || !isAuthenticated || checkedRef.current) {
+      return;
+    }
+
+    checkedRef.current = true;
+    checkApiKeyStatus();
+  }, [loading, isAuthenticated, checkApiKeyStatus]);
+
+  // Reset checked state when user logs out
+  useEffect(() => {
+    if (!isAuthenticated && !loading) {
+      checkedRef.current = false;
+    }
+  }, [isAuthenticated, loading]);
+
+  return <>{children}</>;
+}
+
 function ConvexAuthWrapper({ children }: { children: React.ReactNode }) {
   return (
     <ConvexProviderWithAuth client={convexClient!} useAuth={useStableConvexAuth}>
       <UserSyncProvider>
-        <UsageSyncProvider>{children}</UsageSyncProvider>
+        <UsageSyncProvider>
+          <OpenRouterKeyStatusProvider>{children}</OpenRouterKeyStatusProvider>
+        </UsageSyncProvider>
       </UserSyncProvider>
     </ConvexProviderWithAuth>
   );
