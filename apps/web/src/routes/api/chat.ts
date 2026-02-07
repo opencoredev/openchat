@@ -50,7 +50,7 @@ function getRequestIp(request: Request): string | null {
 	}
 
 	// Only trust standard proxy headers when explicitly enabled
-	if (TRUST_PROXY_FORWARDED === "true" || TRUST_PROXY_FORWARDED === "1") {
+	if (TRUST_PROXY_FORWARDED?.toLowerCase() === "true" || TRUST_PROXY_FORWARDED === "1") {
 		// x-forwarded-for may contain a comma-separated list of IPs
 		// The first IP is the original client, subsequent ones are proxies
 		const forwardedFor = request.headers.get("x-forwarded-for");
