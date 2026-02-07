@@ -30,9 +30,19 @@ export async function getConvexAuthToken(request: Request): Promise<string | nul
 	return data?.token ?? null;
 }
 
+/**
+ * Validates that the request has a same-origin Origin header.
+ * For state-changing requests (POST, PUT, DELETE), this provides CSRF protection.
+ * 
+ * NOTE: Missing Origin header is treated as invalid for security.
+ * While some legitimate requests may not include Origin (e.g., same-origin GET
+ * from the URL bar), state-changing requests from browsers should always include it.
+ */
 export function isSameOrigin(request: Request): boolean {
 	const origin = request.headers.get("origin");
-	if (!origin) return true;
+	// Treat missing Origin header as invalid - this prevents CSRF attacks
+	// from contexts that omit or null the Origin header
+	if (!origin) return false;
 	return origin === new URL(request.url).origin;
 }
 
