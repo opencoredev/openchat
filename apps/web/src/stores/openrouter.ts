@@ -54,7 +54,7 @@ export const useOpenRouterStore = create<OpenRouterState>()(
 				// Skip if already initialized
 				if (get().isInitialized) return;
 
-				set({ isLoading: true }, false, "openrouter/initialize");
+				set({ isLoading: true, isInitialized: true }, false, "openrouter/initialize");
 				try {
 					const response = await fetch("/api/openrouter-key");
 					if (response.ok) {
