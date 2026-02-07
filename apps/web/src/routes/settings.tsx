@@ -2,7 +2,7 @@
  * Settings Page
  */
 
-import {   useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
@@ -365,12 +365,19 @@ function AccountSection({
 }
 
 function ProvidersSection() {
-  const { hasApiKey, clearApiKey } = useOpenRouterKey();
-  const activeProvider = useProviderStore((s) => s.activeProvider);
-  const setActiveProvider = useProviderStore((s) => s.setActiveProvider);
-  const dailyUsageCents = useProviderStore((s) => s.dailyUsageCents);
-  const remainingBudget = useProviderStore((s) => s.remainingBudgetCents());
-  const [connectModalOpen, setConnectModalOpen] = useState(false);
+	const { hasApiKey, clearApiKey, loadApiKeyStatus, isInitialized } = useOpenRouterKey();
+	const activeProvider = useProviderStore((s) => s.activeProvider);
+	const setActiveProvider = useProviderStore((s) => s.setActiveProvider);
+	const dailyUsageCents = useProviderStore((s) => s.dailyUsageCents);
+	const remainingBudget = useProviderStore((s) => s.remainingBudgetCents());
+	const [connectModalOpen, setConnectModalOpen] = useState(false);
+
+	// Load API key status on mount
+	useEffect(() => {
+		if (!isInitialized) {
+			void loadApiKeyStatus();
+		}
+	}, [isInitialized, loadApiKeyStatus]);
 
 	const handleDisconnect = (e: React.MouseEvent) => {
 		e.stopPropagation();

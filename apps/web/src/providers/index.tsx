@@ -149,7 +149,7 @@ function UsageSyncProvider({ children }: { children: React.ReactNode }) {
  */
 function OpenRouterKeyStatusProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
-  const checkApiKeyStatus = useOpenRouterStore((s) => s.checkApiKeyStatus);
+  const loadApiKeyStatus = useOpenRouterStore((s) => s.loadApiKeyStatus);
   const checkedRef = useRef(false);
   const checkingRef = useRef(false);
 
@@ -161,17 +161,17 @@ function OpenRouterKeyStatusProvider({ children }: { children: React.ReactNode }
 
     checkingRef.current = true;
     
-    checkApiKeyStatus()
+    loadApiKeyStatus()
       .then(() => {
         checkedRef.current = true;
         console.log("[OpenRouterKeyStatus] API key status checked successfully");
       })
-      .catch((error) => {
+      .catch((error: unknown) => {
         console.error("[OpenRouterKeyStatus] Failed to check API key status:", error);
         // Reset so we can retry on next render
         checkingRef.current = false;
       });
-  }, [loading, isAuthenticated, checkApiKeyStatus]);
+  }, [loading, isAuthenticated, loadApiKeyStatus]);
 
   // Reset checked state when user logs out
   useEffect(() => {
