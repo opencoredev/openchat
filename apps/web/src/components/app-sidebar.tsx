@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
-import { CheckIcon, CheckSquareIcon, GitFork, PencilIcon, SparklesIcon, Trash2Icon, XIcon } from "lucide-react";
+import { CheckIcon, GitFork, PencilIcon, SparklesIcon, Trash2Icon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import {
@@ -96,10 +96,9 @@ interface ChatGroupProps {
   onStartEdit: (chatId: string, title: string, event: React.MouseEvent) => void;
   onEditSubmit: () => void;
   onEditCancel: () => void;
-  // Bulk selection props
-  isSelectionMode: boolean;
   selectedChatIds: Set<string>;
-  onToggleSelection: (chatId: string) => void;
+  toggleChatSelection: (chatId: Id<"chats">) => void;
+  deselectAll: () => void;
 }
 
 function ChatGroup({
@@ -116,9 +115,9 @@ function ChatGroup({
   onStartEdit,
   onEditSubmit,
   onEditCancel,
-  isSelectionMode,
   selectedChatIds,
-  onToggleSelection,
+  toggleChatSelection,
+  deselectAll,
 }: ChatGroupProps) {
   if (chats.length === 0) return null;
 
@@ -129,52 +128,35 @@ function ChatGroup({
         {chats.map((chat) => {
           const isSelected = selectedChatIds.has(chat._id);
           return (
-            <SidebarMenuItem key={chat._id} className="group relative">
-              {isSelectionMode && (
-                <button
-                  type="button"
-                  className={cn(
-                    "absolute left-1 top-1/2 -translate-y-1/2 z-10 flex size-5 items-center justify-center rounded border transition-colors",
-                    isSelected
-                      ? "border-sidebar-primary bg-sidebar-primary text-sidebar-primary-foreground"
-                      : "border-sidebar-foreground/30 bg-transparent hover:border-sidebar-foreground/50"
-                  )}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onToggleSelection(chat._id);
-                  }}
-                  aria-label={isSelected ? "Deselect chat" : "Select chat"}
-                >
-                  {isSelected && <CheckIcon className="size-3" />}
-                </button>
+            <SidebarMenuItem key={chat._id} className="relative">
+              {isSelected && (
+                <div className="pointer-events-none absolute left-1 top-1/2 z-10 flex size-5 -translate-y-1/2 items-center justify-center rounded border border-sidebar-primary bg-sidebar-primary text-sidebar-primary-foreground">
+                  <CheckIcon className="size-3" />
+                </div>
               )}
               <SidebarMenuButton
-                isActive={!isSelectionMode && currentChatId === chat._id}
-                onClick={() => {
-                  if (isSelectionMode) {
-                    onToggleSelection(chat._id);
+                isActive={currentChatId === chat._id}
+                onClick={(event) => {
+                  if (editingChatId === chat._id) return;
+                  if (event.shiftKey) {
+                    event.preventDefault();
+                    toggleChatSelection(chat._id);
                     return;
                   }
-                  if (editingChatId === chat._id) return;
+                  if (selectedChatIds.size > 0) {
+                    deselectAll();
+                  }
                   onChatClick(chat._id);
                 }}
                 onContextMenu={(event) => {
-                  if (isSelectionMode) {
-                    event.preventDefault();
-                    return;
-                  }
                   onChatContextMenu(chat._id, event);
                 }}
                 className={cn(
                   "pr-8",
-                  isSelectionMode && "pl-8",
-                  isSelectionMode && isSelected && "bg-sidebar-accent/50"
+                  isSelected && "pl-8 bg-sidebar-accent/50"
                 )}
                >
-                 {!isSelectionMode && (
-                   chat.forkedFromChatId ? <GitFork className="size-4 shrink-0" /> : <ChatIcon />
-                 )}
+                 {chat.forkedFromChatId ? <GitFork className="size-4 shrink-0" /> : <ChatIcon />}
                  {generatingChatIds[chat._id] ? (
                   <span className="block h-5 flex-1 rounded bg-sidebar-foreground/10 animate-pulse" />
                 ) : editingChatId === chat._id ? (
@@ -202,7 +184,6 @@ function ChatGroup({
                     className="truncate"
                     onMouseDown={(event) => event.stopPropagation()}
                     onDoubleClick={(event) => {
-                      if (isSelectionMode) return;
                       onStartEdit(chat._id, chat.title, event);
                     }}
                   >
@@ -210,16 +191,14 @@ function ChatGroup({
                   </span>
                 )}
               </SidebarMenuButton>
-              {!isSelectionMode && (
-                <button
-                  type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex size-6 items-center justify-center opacity-0 transition-opacity group-hover:opacity-70 text-sidebar-foreground/60 hover:text-sidebar-foreground/85 z-10"
-                  onClick={(event) => onQuickDelete(chat._id, event)}
-                  aria-label="Delete chat"
-                >
-                  <XIcon className="size-3.5" />
-                </button>
-              )}
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex size-6 items-center justify-center opacity-0 transition-opacity group-hover/menu-item:opacity-70 text-sidebar-foreground/60 hover:text-sidebar-foreground/85 z-10"
+                onClick={(event) => onQuickDelete(chat._id, event)}
+                aria-label="Delete chat"
+              >
+                <XIcon className="size-3.5" />
+              </button>
             </SidebarMenuItem>
           );
         })}
@@ -257,12 +236,8 @@ export function AppSidebar({
   const isMountedRef = useRef(true);
 
   // Bulk selection state
-  const isSelectionMode = useBulkSelectionStore((s) => s.isSelectionMode);
   const selectedChatIds = useBulkSelectionStore((s) => s.selectedChatIds);
-  const toggleSelectionMode = useBulkSelectionStore((s) => s.toggleSelectionMode);
-  const exitSelectionMode = useBulkSelectionStore((s) => s.exitSelectionMode);
   const toggleChatSelection = useBulkSelectionStore((s) => s.toggleChatSelection);
-  const selectAll = useBulkSelectionStore((s) => s.selectAll);
   const deselectAll = useBulkSelectionStore((s) => s.deselectAll);
   const getSelectedChatIds = useBulkSelectionStore((s) => s.getSelectedChatIds);
 
@@ -506,7 +481,7 @@ export function AppSidebar({
           navigate({ to: "/" });
         }
 
-        exitSelectionMode();
+        deselectAll();
       } catch (error) {
         console.warn("[Chat] Failed to bulk delete chats:", error);
         if (error instanceof Error && error.name === "RateLimitError") {
@@ -518,20 +493,8 @@ export function AppSidebar({
         setIsBulkDeleting(false);
       }
     },
-    [convexClient, convexUser?._id, currentChatId, navigate, getSelectedChatIds, exitSelectionMode],
+    [convexClient, convexUser?._id, currentChatId, navigate, getSelectedChatIds, deselectAll],
   );
-
-  const handleToggleSelection = useCallback(
-    (chatId: string) => {
-      toggleChatSelection(chatId as Id<"chats">);
-    },
-    [toggleChatSelection],
-  );
-
-  const handleSelectAll = useCallback(() => {
-    const allChatIds = chats.map((chat) => chat._id);
-    selectAll(allChatIds);
-  }, [chats, selectAll]);
 
   useEffect(() => {
     contextMenuRef.current = contextMenu;
@@ -570,6 +533,9 @@ export function AppSidebar({
         setContextMenu(null);
         setDeleteChatId(null);
       }
+      if (event.key === "Escape" && selectedChatIds.size > 0) {
+        deselectAll();
+      }
     };
 
     window.addEventListener("click", handleDismiss);
@@ -581,7 +547,7 @@ export function AppSidebar({
       window.removeEventListener("contextmenu", handleDismiss);
       window.removeEventListener("keydown", handleKey);
     };
-  }, []);
+  }, [deselectAll, selectedChatIds.size]);
 
   return (
     <>
@@ -643,80 +609,11 @@ export function AppSidebar({
           </button>
         </div>
 
-        {/* New Chat Button / Selection Mode Controls */}
+        {/* New Chat Button */}
         <div className="shrink-0 px-3 pb-3">
-          {isSelectionMode ? (
-            <div className="flex flex-col gap-2">
-              {/* Selection info and actions */}
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm text-sidebar-foreground/70">
-                  {selectedChatIds.size} selected
-                </span>
-                <div className="flex items-center gap-1">
-                  {selectedChatIds.size < chats.length ? (
-                    <Button
-                      onClick={handleSelectAll}
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                    >
-                      Select all
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={deselectAll}
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                    >
-                      Deselect all
-                    </Button>
-                  )}
-                  <Button
-                    onClick={exitSelectionMode}
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-xs"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-              {/* Delete button */}
-              <Button
-                onClick={() => {
-                  if (confirmDelete) {
-                    setShowBulkDeleteDialog(true);
-                  } else {
-                    void handleBulkDelete();
-                  }
-                }}
-                variant="destructive"
-                className="w-full justify-center gap-2"
-                disabled={selectedChatIds.size === 0 || isBulkDeleting}
-              >
-                <Trash2Icon className="size-4" />
-                {isBulkDeleting ? "Deleting..." : `Delete ${selectedChatIds.size} chat${selectedChatIds.size !== 1 ? "s" : ""}`}
-              </Button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Button onClick={handleNewChat} className="flex-1 justify-center gap-2" variant="default">
-                New Chat
-              </Button>
-              {chats.length > 0 && (
-                <Button
-                  onClick={toggleSelectionMode}
-                  variant="outline"
-                  size="icon"
-                  className="shrink-0"
-                  title="Select multiple chats"
-                >
-                  <CheckSquareIcon className="size-4" />
-                </Button>
-              )}
-            </div>
-          )}
+          <Button onClick={handleNewChat} className="w-full justify-center gap-2" variant="default">
+            New Chat
+          </Button>
         </div>
 
         {/* Chat History - scrollable area that takes remaining space */}
@@ -748,9 +645,9 @@ export function AppSidebar({
                 onStartEdit={handleStartEdit}
                 onEditSubmit={handleSubmitEdit}
                 onEditCancel={handleCancelEdit}
-                isSelectionMode={isSelectionMode}
                 selectedChatIds={selectedChatIds}
-                onToggleSelection={handleToggleSelection}
+                toggleChatSelection={toggleChatSelection}
+                deselectAll={deselectAll}
               />
               <ChatGroup
                 label="Last 7 days"
@@ -766,9 +663,9 @@ export function AppSidebar({
                 onStartEdit={handleStartEdit}
                 onEditSubmit={handleSubmitEdit}
                 onEditCancel={handleCancelEdit}
-                isSelectionMode={isSelectionMode}
                 selectedChatIds={selectedChatIds}
-                onToggleSelection={handleToggleSelection}
+                toggleChatSelection={toggleChatSelection}
+                deselectAll={deselectAll}
               />
               <ChatGroup
                 label="Last 30 days"
@@ -784,9 +681,9 @@ export function AppSidebar({
                 onStartEdit={handleStartEdit}
                 onEditSubmit={handleSubmitEdit}
                 onEditCancel={handleCancelEdit}
-                isSelectionMode={isSelectionMode}
                 selectedChatIds={selectedChatIds}
-                onToggleSelection={handleToggleSelection}
+                toggleChatSelection={toggleChatSelection}
+                deselectAll={deselectAll}
               />
               <ChatGroup
                 label="Older"
@@ -802,16 +699,41 @@ export function AppSidebar({
                 onStartEdit={handleStartEdit}
                 onEditSubmit={handleSubmitEdit}
                 onEditCancel={handleCancelEdit}
-                isSelectionMode={isSelectionMode}
                 selectedChatIds={selectedChatIds}
-                onToggleSelection={handleToggleSelection}
+                toggleChatSelection={toggleChatSelection}
+                deselectAll={deselectAll}
               />
             </>
           )}
         </SidebarContent>
 
+        {selectedChatIds.size > 0 && (
+          <div className="shrink-0 border-t border-sidebar-border/50 px-3 py-2 flex items-center justify-between gap-2">
+            <span className="text-sm text-sidebar-foreground/70">{selectedChatIds.size} selected</span>
+            <div className="flex items-center gap-1">
+              <Button onClick={deselectAll} variant="ghost" size="sm" className="h-7 px-2 text-xs">Cancel</Button>
+              <Button
+                onClick={() => {
+                  if (confirmDelete) {
+                    setShowBulkDeleteDialog(true);
+                  } else {
+                    void handleBulkDelete();
+                  }
+                }}
+                variant="destructive"
+                size="sm"
+                className="h-7 px-2 text-xs gap-1"
+                disabled={isBulkDeleting}
+              >
+                <Trash2Icon className="size-3" />
+                Delete
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Footer with Profile Card - always visible, sticky at bottom */}
-        <SidebarFooter className="shrink-0 border-t border-sidebar-border/50 p-3">
+        <SidebarFooter className="shrink-0 p-3">
           {user && (
             <button
               onClick={() => {

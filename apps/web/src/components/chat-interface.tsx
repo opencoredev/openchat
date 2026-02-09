@@ -934,6 +934,7 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
 }
 
 interface ChatMessageListProps {
+  chatId: string | null;
   messages: Array<{
     id: string;
     role: string;
@@ -949,6 +950,7 @@ interface ChatMessageListProps {
 }
 
 const ChatMessageList = memo(function ChatMessageList({
+  chatId,
   messages,
   isLoading,
   isNewChat,
@@ -958,6 +960,16 @@ const ChatMessageList = memo(function ChatMessageList({
 	onForkMessage,
 }: ChatMessageListProps) {
   const [openByMessageId, setOpenByMessageId] = useState<Record<string, boolean>>({});
+
+  const prevChatIdRef = useRef(chatId);
+  useEffect(() => {
+    if (prevChatIdRef.current !== chatId) {
+      setOpenByMessageId({});
+      setEditingMessageId(null);
+      setEditingContent("");
+      prevChatIdRef.current = chatId;
+    }
+  }, [chatId]);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -1435,6 +1447,7 @@ function ChatInterfaceContent({
   return (
     <div className="flex h-full flex-col">
       <ChatMessageList
+        chatId={chatId}
         messages={messages}
         isLoading={isLoading}
         isNewChat={isNewChat}
