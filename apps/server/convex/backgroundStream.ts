@@ -623,6 +623,14 @@ export const completeStream = internalMutation({
 		webSearchUsed: v.optional(v.boolean()),
 		webSearchCallCount: v.optional(v.number()),
 		toolCallCount: v.optional(v.number()),
+		tokensPerSecond: v.optional(v.number()),
+		timeToFirstTokenMs: v.optional(v.number()),
+		totalDurationMs: v.optional(v.number()),
+		tokenUsage: v.optional(v.object({
+			promptTokens: v.number(),
+			completionTokens: v.number(),
+			totalTokens: v.number(),
+		})),
 	},
 	handler: async (ctx, args) => {
 		const job = await ctx.db.get(args.jobId);
@@ -693,6 +701,10 @@ export const completeStream = internalMutation({
 					reasoningTokenCount: args.reasoningTokenCount,
 					reasoningRequested: args.reasoningRequested,
 				chainOfThoughtParts: args.chainOfThoughtParts,
+				tokensPerSecond: args.tokensPerSecond,
+				timeToFirstTokenMs: args.timeToFirstTokenMs,
+				totalDurationMs: args.totalDurationMs,
+				tokenUsage: args.tokenUsage,
 				messageMetadata: {
 					modelId: job.model,
 					provider: job.provider,
@@ -723,6 +735,10 @@ export const completeStream = internalMutation({
 					reasoningTokenCount: args.reasoningTokenCount,
 					reasoningRequested: args.reasoningRequested,
 				chainOfThoughtParts: args.chainOfThoughtParts,
+				tokensPerSecond: args.tokensPerSecond,
+				timeToFirstTokenMs: args.timeToFirstTokenMs,
+				totalDurationMs: args.totalDurationMs,
+				tokenUsage: args.tokenUsage,
 				messageMetadata: {
 					modelId: job.model,
 					provider: job.provider,
@@ -817,9 +833,10 @@ export const executeStream = internalAction({
 		let reasoningChunkCount = 0;
 		let reasoningStartTime: number | null = null;
 		let reasoningEndTime: number | null = null;
-		let streamCompletedTime: number | null = null;
-		let pendingUpdateCounter = 0;
-		let usageSummary: UsagePayload | null = null;
+	let streamCompletedTime: number | null = null;
+	let firstTextDeltaTime: number | null = null;
+	let pendingUpdateCounter = 0;
+	let usageSummary: UsagePayload | null = null;
 
 		const upsertReasoningPart = (id: string): ChainOfThoughtPart => {
 			const existingIndex = reasoningPartById.get(id);
@@ -1159,11 +1176,14 @@ export const executeStream = internalAction({
 
 			for await (const part of result.fullStream) {
 				switch (part.type) {
-					case "text-delta": {
-						fullContent += part.text;
-						pendingUpdateCounter++;
-						break;
+				case "text-delta": {
+					if (firstTextDeltaTime === null) {
+						firstTextDeltaTime = Date.now();
 					}
+					fullContent += part.text;
+					pendingUpdateCounter++;
+					break;
+				}
 					case "reasoning-start": {
 						if (!reasoningRequested) break;
 						const reasoningPart = upsertReasoningPart(part.id);
@@ -1294,9 +1314,19 @@ export const executeStream = internalAction({
 				});
 			}
 
-			clearTimeout(timeoutId);
+		clearTimeout(timeoutId);
 
-			if (job.provider === "osschat") {
+		// Compute analytics for message persistence
+		const totalDurationMs = streamCompletedTime - job.createdAt;
+		const timeToFirstTokenMs = firstTextDeltaTime
+			? firstTextDeltaTime - job.createdAt
+			: undefined;
+		const completionTokens = usageSummary?.completionTokens ?? 0;
+		const tokensPerSecond = totalDurationMs > 0 && completionTokens > 0
+			? Math.round((completionTokens / (totalDurationMs / 1000)) * 100) / 100
+			: undefined;
+
+		if (job.provider === "osschat") {
 				const usageCents = calculateUsageCents(
 					usageSummary,
 					job.messages,
@@ -1321,21 +1351,29 @@ export const executeStream = internalAction({
 				const thinkingTimeSec = getThinkingTimeSec();
 				const toolMetrics = getToolMetrics();
 
-				await ctx.runMutation(internal.backgroundStream.completeStream, {
-				jobId: args.jobId,
-				content: fullContent,
-				reasoning: reasoningRequested ? fullReasoning || undefined : undefined,
-				chainOfThoughtParts: getPersistableChainOfThoughtParts(),
-				thinkingTimeMs,
-				thinkingTimeSec,
-					reasoningCharCount: reasoningRequested ? fullReasoning.length : undefined,
-					reasoningChunkCount: reasoningRequested ? reasoningChunkCount : undefined,
-					reasoningTokenCount: getReasoningTokenCount(),
-					reasoningRequested,
-					webSearchUsed: toolMetrics.webSearchUsed,
-					webSearchCallCount: toolMetrics.webSearchCallCount,
-				toolCallCount: toolMetrics.toolCallCount,
-			});
+			await ctx.runMutation(internal.backgroundStream.completeStream, {
+			jobId: args.jobId,
+			content: fullContent,
+			reasoning: reasoningRequested ? fullReasoning || undefined : undefined,
+			chainOfThoughtParts: getPersistableChainOfThoughtParts(),
+			thinkingTimeMs,
+			thinkingTimeSec,
+				reasoningCharCount: reasoningRequested ? fullReasoning.length : undefined,
+				reasoningChunkCount: reasoningRequested ? reasoningChunkCount : undefined,
+				reasoningTokenCount: getReasoningTokenCount(),
+				reasoningRequested,
+				webSearchUsed: toolMetrics.webSearchUsed,
+				webSearchCallCount: toolMetrics.webSearchCallCount,
+			toolCallCount: toolMetrics.toolCallCount,
+			tokensPerSecond,
+			timeToFirstTokenMs,
+			totalDurationMs,
+			tokenUsage: usageSummary ? {
+				promptTokens: usageSummary.promptTokens ?? 0,
+				completionTokens: usageSummary.completionTokens ?? 0,
+				totalTokens: usageSummary.totalTokens ?? 0,
+			} : undefined,
+		});
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : "Unknown error";
 				await ctx.runMutation(internal.backgroundStream.failStream, {
