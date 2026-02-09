@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
-import { CheckIcon, GitFork, PencilIcon, SparklesIcon, Trash2Icon, XIcon } from "lucide-react";
+import { PencilIcon, SparklesIcon, Trash2Icon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import {
@@ -34,7 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChatIcon, ChevronRightIcon, MenuIcon, PlusIcon, SidebarIcon } from "@/components/icons";
+import { ChevronRightIcon, MenuIcon, PlusIcon, SidebarIcon } from "@/components/icons";
 
 const CHATS_CACHE_KEY = "openchat-chats-cache";
 const CONTEXT_MENU_PADDING = 12;
@@ -97,7 +97,7 @@ interface ChatGroupProps {
   onEditSubmit: () => void;
   onEditCancel: () => void;
   selectedChatIds: Set<string>;
-  toggleChatSelection: (chatId: Id<"chats">) => void;
+  onShiftClick: (chatId: Id<"chats">) => void;
   deselectAll: () => void;
 }
 
@@ -116,7 +116,7 @@ function ChatGroup({
   onEditSubmit,
   onEditCancel,
   selectedChatIds,
-  toggleChatSelection,
+  onShiftClick,
   deselectAll,
 }: ChatGroupProps) {
   if (chats.length === 0) return null;
@@ -129,18 +129,13 @@ function ChatGroup({
           const isSelected = selectedChatIds.has(chat._id);
           return (
             <SidebarMenuItem key={chat._id} className="relative">
-              {isSelected && (
-                <div className="pointer-events-none absolute left-1 top-1/2 z-10 flex size-5 -translate-y-1/2 items-center justify-center rounded border border-sidebar-primary bg-sidebar-primary text-sidebar-primary-foreground">
-                  <CheckIcon className="size-3" />
-                </div>
-              )}
               <SidebarMenuButton
                 isActive={currentChatId === chat._id}
                 onClick={(event) => {
                   if (editingChatId === chat._id) return;
                   if (event.shiftKey) {
                     event.preventDefault();
-                    toggleChatSelection(chat._id);
+                    onShiftClick(chat._id);
                     return;
                   }
                   if (selectedChatIds.size > 0) {
@@ -153,10 +148,9 @@ function ChatGroup({
                 }}
                 className={cn(
                   "pr-8",
-                  isSelected && "pl-8 bg-sidebar-accent/50"
+                  isSelected && "bg-sidebar-primary/15 border-l-2 border-sidebar-primary"
                 )}
                >
-                 {chat.forkedFromChatId ? <GitFork className="size-4 shrink-0" /> : <ChatIcon />}
                  {generatingChatIds[chat._id] ? (
                   <span className="block h-5 flex-1 rounded bg-sidebar-foreground/10 animate-pulse" />
                 ) : editingChatId === chat._id ? (
@@ -194,7 +188,15 @@ function ChatGroup({
               <button
                 type="button"
                 className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex size-6 items-center justify-center opacity-0 transition-opacity group-hover/menu-item:opacity-70 text-sidebar-foreground/60 hover:text-sidebar-foreground/85 z-10"
-                onClick={(event) => onQuickDelete(chat._id, event)}
+                onClick={(event) => {
+                  if (event.shiftKey) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onShiftClick(chat._id);
+                    return;
+                  }
+                  onQuickDelete(chat._id, event);
+                }}
                 aria-label="Delete chat"
               >
                 <XIcon className="size-3.5" />
@@ -235,11 +237,12 @@ export function AppSidebar({
   const contextMenuElementRef = useRef<HTMLDivElement | null>(null);
   const isMountedRef = useRef(true);
 
-  // Bulk selection state
   const selectedChatIds = useBulkSelectionStore((s) => s.selectedChatIds);
   const toggleChatSelection = useBulkSelectionStore((s) => s.toggleChatSelection);
+  const selectMultiple = useBulkSelectionStore((s) => s.selectAll);
   const deselectAll = useBulkSelectionStore((s) => s.deselectAll);
   const getSelectedChatIds = useBulkSelectionStore((s) => s.getSelectedChatIds);
+  const selectionAnchorRef = useRef<string | null>(null);
 
   // Get current chat ID from URL if we're on a chat page
   let currentChatId: string | undefined;
@@ -297,9 +300,36 @@ export function AppSidebar({
     
   const dayKey = new Date().toDateString();
   const grouped = useMemo(() => groupChatsByTime(chats, Date.now()), [chats, dayKey]);
+  const flatChatIds = useMemo(
+    () => [...grouped.today, ...grouped.last7Days, ...grouped.last30Days, ...grouped.older].map((c) => c._id),
+    [grouped],
+  );
   const deleteChat = useMemo(
     () => (deleteChatId ? chats.find((chat) => chat._id === deleteChatId) : null),
     [deleteChatId, chats],
+  );
+
+  const handleShiftClick = useCallback(
+    (chatId: Id<"chats">) => {
+      const anchor = selectionAnchorRef.current;
+      if (!anchor || selectedChatIds.size === 0) {
+        toggleChatSelection(chatId);
+        selectionAnchorRef.current = chatId;
+        return;
+      }
+      const anchorIdx = flatChatIds.indexOf(anchor as Id<"chats">);
+      const targetIdx = flatChatIds.indexOf(chatId);
+      if (anchorIdx === -1 || targetIdx === -1) {
+        toggleChatSelection(chatId);
+        selectionAnchorRef.current = chatId;
+        return;
+      }
+      const start = Math.min(anchorIdx, targetIdx);
+      const end = Math.max(anchorIdx, targetIdx);
+      const rangeIds = flatChatIds.slice(start, end + 1);
+      selectMultiple(rangeIds);
+    },
+    [flatChatIds, selectedChatIds.size, toggleChatSelection, selectMultiple],
   );
 
   const handleNewChat = () => {
@@ -646,7 +676,7 @@ export function AppSidebar({
                 onEditSubmit={handleSubmitEdit}
                 onEditCancel={handleCancelEdit}
                 selectedChatIds={selectedChatIds}
-                toggleChatSelection={toggleChatSelection}
+                onShiftClick={handleShiftClick}
                 deselectAll={deselectAll}
               />
               <ChatGroup
@@ -664,7 +694,7 @@ export function AppSidebar({
                 onEditSubmit={handleSubmitEdit}
                 onEditCancel={handleCancelEdit}
                 selectedChatIds={selectedChatIds}
-                toggleChatSelection={toggleChatSelection}
+                onShiftClick={handleShiftClick}
                 deselectAll={deselectAll}
               />
               <ChatGroup
@@ -682,7 +712,7 @@ export function AppSidebar({
                 onEditSubmit={handleSubmitEdit}
                 onEditCancel={handleCancelEdit}
                 selectedChatIds={selectedChatIds}
-                toggleChatSelection={toggleChatSelection}
+                onShiftClick={handleShiftClick}
                 deselectAll={deselectAll}
               />
               <ChatGroup
@@ -700,7 +730,7 @@ export function AppSidebar({
                 onEditSubmit={handleSubmitEdit}
                 onEditCancel={handleCancelEdit}
                 selectedChatIds={selectedChatIds}
-                toggleChatSelection={toggleChatSelection}
+                onShiftClick={handleShiftClick}
                 deselectAll={deselectAll}
               />
             </>

@@ -944,9 +944,10 @@ interface ChatMessageListProps {
   isLoading: boolean;
   isNewChat: boolean;
   onPromptSelect: (prompt: string) => void;
-  onEditMessage: (messageId: string, newContent: string) => Promise<void>;
   onRetryMessage: (messageId: string, modelId?: string) => Promise<void>;
 	onForkMessage: (messageId: string, modelId?: string) => Promise<void>;
+  editingMessageId: string | null;
+  onStartEdit: (messageId: string, content: string) => void;
 }
 
 const ChatMessageList = memo(function ChatMessageList({
@@ -955,9 +956,10 @@ const ChatMessageList = memo(function ChatMessageList({
   isLoading,
   isNewChat,
   onPromptSelect,
-  onEditMessage,
   onRetryMessage,
 	onForkMessage,
+  editingMessageId,
+  onStartEdit,
 }: ChatMessageListProps) {
   const [openByMessageId, setOpenByMessageId] = useState<Record<string, boolean>>({});
 
@@ -965,14 +967,9 @@ const ChatMessageList = memo(function ChatMessageList({
   useEffect(() => {
     if (prevChatIdRef.current !== chatId) {
       setOpenByMessageId({});
-      setEditingMessageId(null);
-      setEditingContent("");
       prevChatIdRef.current = chatId;
     }
   }, [chatId]);
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [editingContent, setEditingContent] = useState("");
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const prevThinkingStreamingByMessageIdRef = useRef<Record<string, boolean>>({});
 
   const processedMessages = useMemo(() => {
@@ -1122,29 +1119,6 @@ const ChatMessageList = memo(function ChatMessageList({
     });
   }, []);
 
-  const startEditing = useCallback((messageId: string, content: string) => {
-    setEditingMessageId(messageId);
-    setEditingContent(content);
-  }, []);
-
-  const cancelEditing = useCallback(() => {
-    setEditingMessageId(null);
-    setEditingContent("");
-    setIsSavingEdit(false);
-  }, []);
-
-  const submitEdit = useCallback(async () => {
-    if (!editingMessageId || !editingContent.trim()) return;
-
-    try {
-      setIsSavingEdit(true);
-      await onEditMessage(editingMessageId, editingContent);
-      cancelEditing();
-    } finally {
-      setIsSavingEdit(false);
-    }
-  }, [editingMessageId, editingContent, onEditMessage, cancelEditing]);
-
   return (
     <Conversation className="flex-1 px-2 md:px-4" showScrollButton>
       <AutoScroll messageCount={messages.length} />
@@ -1170,84 +1144,8 @@ const ChatMessageList = memo(function ChatMessageList({
               }
 
               return (
-                <div key={item.message.id} className="group">
+                <div key={item.message.id} className={cn("group", editingMessageId === item.message.id && "ring-2 ring-primary/30 rounded-2xl")}>
                   <Message from={item.message.role as "user" | "assistant"}>
-                    {item.message.role === "user" && editingMessageId === item.message.id ? (
-                      <MessageContent>
-                        <div className="w-full max-w-[min(100%,42rem)]">
-                          <div
-                            className={cn(
-                              "relative rounded-2xl",
-                              "bg-background/90 backdrop-blur-xl",
-                              "border border-border/40",
-                              "shadow-lg shadow-black/5",
-                            )}
-                          >
-                            <textarea
-                              ref={(el) => {
-                                if (el) {
-                                  el.focus();
-                                  el.setSelectionRange(el.value.length, el.value.length);
-                                }
-                              }}
-                              value={editingContent}
-                              onChange={(e) => setEditingContent(e.currentTarget.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Escape") {
-                                  e.preventDefault();
-                                  cancelEditing();
-                                }
-                                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                                  e.preventDefault();
-                                  void submitEdit();
-                                }
-                              }}
-                              disabled={isSavingEdit}
-                              className={cn(
-                                "min-h-[60px] w-full py-3 px-4",
-                                "text-[15px] leading-relaxed",
-                                "placeholder:text-muted-foreground/50",
-                                "resize-none border-0 bg-transparent shadow-none ring-0 outline-none focus-visible:ring-0",
-                              )}
-                              aria-label="Edit message"
-                            />
-                            <div className="flex items-center justify-between px-3 pb-3 pt-1">
-                              <button
-                                type="button"
-                                onClick={cancelEditing}
-                                disabled={isSavingEdit}
-                                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-                              >
-                                <XIcon className="size-3.5" />
-                                Cancel
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  void submitEdit();
-                                }}
-                                disabled={!editingContent.trim() || isSavingEdit}
-                                className={cn(
-                                  "flex items-center justify-center",
-                                  "size-8 rounded-full",
-                                  "transition-all duration-150",
-                                  editingContent.trim() && !isSavingEdit
-                                    ? "bg-primary text-primary-foreground hover:scale-105 active:scale-95"
-                                    : "bg-muted text-muted-foreground cursor-not-allowed",
-                                )}
-                                aria-label={isSavingEdit ? "Saving..." : "Save & regenerate"}
-                              >
-                                {isSavingEdit ? (
-                                  <Loader2Icon className="size-3.5 animate-spin" />
-                                ) : (
-                                  <ArrowUpIcon className="size-3.5" />
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </MessageContent>
-                    ) : (
                       <MessageContent>
                         {item.thinkingSteps.length > 0 && (
                           <ChainOfThought
@@ -1281,13 +1179,12 @@ const ChatMessageList = memo(function ChatMessageList({
                           />
                         ))}
                       </MessageContent>
-                    )}
 					{item.message.role === "user" ? (
 						<UserMessageActions
 							messageId={item.message.id}
 							content={item.textParts.map((p) => p.text).join("")}
 							isStreaming={item.isCurrentlyStreaming || editingMessageId === item.message.id}
-							onEdit={() => startEditing(item.message.id, item.textParts.map((p) => p.text).join(""))}
+							onEdit={() => onStartEdit(item.message.id, item.textParts.map((p) => p.text).join(""))}
 							onRetry={(modelId) => {
 								void onRetryMessage(item.message.id, modelId);
 							}}
@@ -1385,6 +1282,9 @@ function ChatInterfaceContent({
   textareaRef,
 }: ChatInterfaceContentProps) {
   const controller = usePromptInputController();
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const savedDraftRef = useRef<string>("");
 
   // Persist prompt drafts to localStorage (per-chat, debounced, non-annoying)
   const { clearDraft } = usePromptDraft({
@@ -1392,9 +1292,19 @@ function ChatInterfaceContent({
     textInputController: controller.textInput,
   });
 
+  useEffect(() => {
+    setEditingMessageId(null);
+    setIsSavingEdit(false);
+  }, [chatId]);
+
   // Cmd+L / Ctrl+L keybind to toggle focus on prompt input
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && editingMessageId) {
+        e.preventDefault();
+        cancelEdit();
+        return;
+      }
       // Check for Cmd+L (Mac) or Ctrl+L (Windows/Linux)
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "l") {
         e.preventDefault();
@@ -1418,7 +1328,7 @@ function ChatInterfaceContent({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [textareaRef]);
+  }, [textareaRef, editingMessageId]);
 
   // Handler for StartScreen prompt selection - populates input and focuses
   const setInput = controller.textInput.setInput;
@@ -1433,15 +1343,46 @@ function ChatInterfaceContent({
     [setInput, textareaRef],
   );
 
-  // Wrap handleSubmit to clear the draft after successful submission
+  const startEdit = useCallback(
+    (messageId: string, content: string) => {
+      savedDraftRef.current = controller.textInput.value;
+      setEditingMessageId(messageId);
+      setInput(content);
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 0);
+    },
+    [controller.textInput.value, setInput, textareaRef],
+  );
+
+  const cancelEdit = useCallback(() => {
+    setEditingMessageId(null);
+    setIsSavingEdit(false);
+    setInput(savedDraftRef.current);
+    savedDraftRef.current = "";
+  }, [setInput]);
+
   const handleSubmitWithDraftClear = useCallback(
     async (message: PromptInputMessage) => {
-      // Use .then() to only clear draft on success, preserving draft on errors for retry
+      if (editingMessageId) {
+        if (!message.text.trim()) return;
+        try {
+          setIsSavingEdit(true);
+          await onEditMessage(editingMessageId, message.text);
+          setEditingMessageId(null);
+          setIsSavingEdit(false);
+          savedDraftRef.current = "";
+          clearDraft();
+        } catch {
+          setIsSavingEdit(false);
+        }
+        return;
+      }
       await handleSubmit(message).then(() => {
         clearDraft();
       });
     },
-    [handleSubmit, clearDraft],
+    [handleSubmit, clearDraft, editingMessageId, onEditMessage],
   );
 
   return (
@@ -1452,16 +1393,30 @@ function ChatInterfaceContent({
         isLoading={isLoading}
         isNewChat={isNewChat}
         onPromptSelect={onPromptSelect}
-        onEditMessage={onEditMessage}
         onRetryMessage={onRetryMessage}
 			onForkMessage={onForkMessage}
+        editingMessageId={editingMessageId}
+        onStartEdit={startEdit}
       />
 
       <div className="px-2 md:px-4 pt-2 md:pt-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:pb-4">
         <div className="mx-auto max-w-3xl">
+          {editingMessageId && (
+            <div className="mb-2 flex items-center justify-between rounded-lg bg-primary/10 border border-primary/20 px-3 py-2">
+              <span className="text-sm text-primary font-medium">Editing message</span>
+              <button
+                type="button"
+                onClick={cancelEdit}
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <XIcon className="size-3" />
+                Cancel
+              </button>
+            </div>
+          )}
           <PremiumPromptInputInner
             onSubmit={handleSubmitWithDraftClear}
-            isLoading={isLoading}
+            isLoading={isLoading || isSavingEdit}
             onStop={stop}
             textareaRef={textareaRef}
           />
