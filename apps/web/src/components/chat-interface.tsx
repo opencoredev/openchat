@@ -15,10 +15,12 @@ import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowUpIcon, BrainIcon, GlobeIcon,
+  CheckIcon,
   Loader2Icon,
   PaperclipIcon,
   SearchIcon,
   SquareIcon,
+  XIcon,
   } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
@@ -43,6 +45,7 @@ import {
 import { ConnectedModelSelector } from "./model-selector";
 import { StartScreen } from "./start-screen";
 import { UserMessageActions, AssistantMessageActions } from "@/components/message-actions";
+import { MessageAnalytics } from "@/components/message-analytics";
 import type { UIDataTypes, UIMessagePart, UITools } from "ai";
 import type {PromptInputMessage} from "./ai-elements/prompt-input";
 import { cn } from "@/lib/utils";
@@ -869,7 +872,7 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Use persistent chat hook with Convex integration
-  const { messages, sendMessage, status, error, stop, isNewChat } = usePersistentChat({
+  const { messages, sendMessage, editMessage, status, error, stop, isNewChat } = usePersistentChat({
     chatId,
     onChatCreated: (newChatId) => {
       // Navigate to the new chat page
@@ -913,6 +916,7 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
         error={error ?? null}
         stop={stop}
         handleSubmit={handleSubmit}
+        onEditMessage={editMessage}
         textareaRef={textareaRef}
       />
     </PromptInputProvider>
@@ -929,6 +933,7 @@ interface ChatMessageListProps {
   isLoading: boolean;
   isNewChat: boolean;
   onPromptSelect: (prompt: string) => void;
+  onEditMessage: (messageId: string, newContent: string) => Promise<void>;
 }
 
 const ChatMessageList = memo(function ChatMessageList({
@@ -936,8 +941,12 @@ const ChatMessageList = memo(function ChatMessageList({
   isLoading,
   isNewChat,
   onPromptSelect,
+  onEditMessage,
 }: ChatMessageListProps) {
   const [openByMessageId, setOpenByMessageId] = useState<Record<string, boolean>>({});
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const prevThinkingStreamingByMessageIdRef = useRef<Record<string, boolean>>({});
 
   const processedMessages = useMemo(() => {
@@ -953,6 +962,15 @@ const ChatMessageList = memo(function ChatMessageList({
           retryable?: boolean;
         };
         messageType?: "text" | "error" | "system";
+        modelId?: string;
+        tokensPerSecond?: number;
+        tokenUsage?: {
+          promptTokens: number;
+          completionTokens: number;
+          totalTokens: number;
+        };
+        timeToFirstTokenMs?: number;
+        totalDurationMs?: number;
       };
 
       const allParts = message.parts || [];
@@ -1069,6 +1087,29 @@ const ChatMessageList = memo(function ChatMessageList({
     });
   }, []);
 
+  const startEditing = useCallback((messageId: string, content: string) => {
+    setEditingMessageId(messageId);
+    setEditingContent(content);
+  }, []);
+
+  const cancelEditing = useCallback(() => {
+    setEditingMessageId(null);
+    setEditingContent("");
+    setIsSavingEdit(false);
+  }, []);
+
+  const submitEdit = useCallback(async () => {
+    if (!editingMessageId || !editingContent.trim()) return;
+
+    try {
+      setIsSavingEdit(true);
+      await onEditMessage(editingMessageId, editingContent);
+      cancelEditing();
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }, [editingMessageId, editingContent, onEditMessage, cancelEditing]);
+
   return (
     <Conversation className="flex-1 px-2 md:px-4" showScrollButton>
       <AutoScroll messageCount={messages.length} />
@@ -1096,51 +1137,109 @@ const ChatMessageList = memo(function ChatMessageList({
               return (
                 <div key={item.message.id} className="group">
                   <Message from={item.message.role as "user" | "assistant"}>
-                    <MessageContent>
-                      {item.thinkingSteps.length > 0 && (
-                        <ChainOfThought
-                          steps={item.thinkingSteps}
-                          isStreaming={item.isAnyStepStreaming}
-                          hasTextContent={item.hasTextContent || item.textParts.length > 0}
-                          thinkingTimeSec={item.thinkingTimeSec}
-                          reasoningRequested={item.reasoningRequested}
-                          reasoningTokenCount={item.reasoningTokenCount}
-                          open={openByMessageId[item.message.id] ?? item.isAnyStepStreaming}
-                          onOpenChange={(open) => setPanelOpen(item.message.id, open)}
-                        />
-                      )}
+                    {item.message.role === "user" && editingMessageId === item.message.id ? (
+                      <MessageContent>
+                        <div className="w-full max-w-[min(100%,42rem)] space-y-2">
+                          <textarea
+                            value={editingContent}
+                            onChange={(e) => setEditingContent(e.currentTarget.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") {
+                                e.preventDefault();
+                                cancelEditing();
+                              }
+                              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                                e.preventDefault();
+                                void submitEdit();
+                              }
+                            }}
+                            disabled={isSavingEdit}
+                            className="min-h-24 w-full resize-y rounded-xl border border-border/60 bg-background/70 p-3 text-sm leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                            aria-label="Edit message"
+                          />
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={cancelEditing}
+                              disabled={isSavingEdit}
+                            >
+                              <XIcon className="size-3.5" />
+                              Cancel
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => {
+                                void submitEdit();
+                              }}
+                              disabled={!editingContent.trim() || isSavingEdit}
+                            >
+                              <CheckIcon className="size-3.5" />
+                              {isSavingEdit ? "Saving..." : "Save & regenerate"}
+                            </Button>
+                          </div>
+                        </div>
+                      </MessageContent>
+                    ) : (
+                      <MessageContent>
+                        {item.thinkingSteps.length > 0 && (
+                          <ChainOfThought
+                            steps={item.thinkingSteps}
+                            isStreaming={item.isAnyStepStreaming}
+                            hasTextContent={item.hasTextContent || item.textParts.length > 0}
+                            thinkingTimeSec={item.thinkingTimeSec}
+                            reasoningRequested={item.reasoningRequested}
+                            reasoningTokenCount={item.reasoningTokenCount}
+                            open={openByMessageId[item.message.id] ?? item.isAnyStepStreaming}
+                            onOpenChange={(open) => setPanelOpen(item.message.id, open)}
+                          />
+                        )}
 
-                      {item.textParts.map((part, partIndex) => (
-                        <MessageResponse
-                          key={`text-${partIndex}`}
-                          isStreaming={item.isCurrentlyStreaming && partIndex === item.textParts.length - 1}
-                          skipInitialAnimation={item.resumedFromActiveStream}
-                        >
-                          {part.text || ""}
-                        </MessageResponse>
-                      ))}
+                        {item.textParts.map((part, partIndex) => (
+                          <MessageResponse
+                            key={`text-${partIndex}`}
+                            isStreaming={item.isCurrentlyStreaming && partIndex === item.textParts.length - 1}
+                            skipInitialAnimation={item.resumedFromActiveStream}
+                          >
+                            {part.text || ""}
+                          </MessageResponse>
+                        ))}
 
-                      {item.fileParts.map((part, partIndex) => (
-                        <MessageFile
-                          key={`file-${partIndex}`}
-                          filename={part.filename}
-                          url={part.url}
-                          mediaType={part.mediaType}
-                        />
-                      ))}
-                    </MessageContent>
+                        {item.fileParts.map((part, partIndex) => (
+                          <MessageFile
+                            key={`file-${partIndex}`}
+                            filename={part.filename}
+                            url={part.url}
+                            mediaType={part.mediaType}
+                          />
+                        ))}
+                      </MessageContent>
+                    )}
                     {item.message.role === "user" ? (
                       <UserMessageActions
                         messageId={item.message.id}
                         content={item.textParts.map((p) => p.text).join("")}
-                        isStreaming={item.isCurrentlyStreaming}
+                        isStreaming={item.isCurrentlyStreaming || editingMessageId === item.message.id}
+                        onEdit={() => startEditing(item.message.id, item.textParts.map((p) => p.text).join(""))}
                       />
                     ) : (
-                      <AssistantMessageActions
-                        messageId={item.message.id}
-                        content={item.textParts.map((p) => p.text).join("")}
-                        isStreaming={item.isCurrentlyStreaming}
-                      />
+                      <>
+                        <AssistantMessageActions
+                          messageId={item.message.id}
+                          content={item.textParts.map((p) => p.text).join("")}
+                          isStreaming={item.isCurrentlyStreaming}
+                        />
+                        <MessageAnalytics
+                          modelId={item.msg.modelId}
+                          tokensPerSecond={item.msg.tokensPerSecond}
+                          tokenUsage={item.msg.tokenUsage}
+                          timeToFirstTokenMs={item.msg.timeToFirstTokenMs}
+                          totalDurationMs={item.msg.totalDurationMs}
+                          isStreaming={item.isCurrentlyStreaming}
+                        />
+                      </>
                     )}
                   </Message>
                 </div>
@@ -1171,6 +1270,7 @@ interface ChatInterfaceContentProps {
   error: Error | null;
   stop: () => void;
   handleSubmit: (message: PromptInputMessage) => Promise<void>;
+  onEditMessage: (messageId: string, newContent: string) => Promise<void>;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
 }
 
@@ -1182,6 +1282,7 @@ function ChatInterfaceContent({
   error: _error,
   stop,
   handleSubmit,
+  onEditMessage,
   textareaRef,
 }: ChatInterfaceContentProps) {
   const controller = usePromptInputController();
@@ -1251,6 +1352,7 @@ function ChatInterfaceContent({
         isLoading={isLoading}
         isNewChat={isNewChat}
         onPromptSelect={onPromptSelect}
+        onEditMessage={onEditMessage}
       />
 
       <div className="px-2 md:px-4 pt-2 md:pt-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:pb-4">
