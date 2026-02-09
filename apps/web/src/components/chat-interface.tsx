@@ -44,7 +44,7 @@ import {
 import { ConnectedModelSelector } from "./model-selector";
 import { StartScreen } from "./start-screen";
 import { UserMessageActions, AssistantMessageActions } from "@/components/message-actions";
-import { MessageAnalytics } from "@/components/message-analytics";
+
 import type { UIDataTypes, UIMessagePart, UITools } from "ai";
 import type {PromptInputMessage} from "./ai-elements/prompt-input";
 import { cn } from "@/lib/utils";
@@ -1015,6 +1015,15 @@ const ChatMessageList = memo(function ChatMessageList({
         reasoningRequested?: unknown;
         reasoningTokenCount?: unknown;
         resumedFromActiveStream?: unknown;
+        modelId?: string;
+        tokensPerSecond?: number;
+        timeToFirstTokenMs?: number;
+        totalDurationMs?: number;
+        tokenUsage?: {
+          promptTokens: number;
+          completionTokens: number;
+          totalTokens: number;
+        };
       } | undefined;
       const thinkingTimeSec =
         typeof metadata?.thinkingTimeSec === "number"
@@ -1275,49 +1284,45 @@ const ChatMessageList = memo(function ChatMessageList({
 							}}
 						/>
 					) : (
-						<>
-							<AssistantMessageActions
-								messageId={item.message.id}
-								content={item.textParts.map((p) => p.text).join("")}
-								isStreaming={item.isCurrentlyStreaming}
-								onRetry={(modelId) => {
-									const precedingUser = processedMessages.slice(0, itemIndex)
-										.reverse()
-										.find((candidate) => candidate.message.role === "user");
+						<AssistantMessageActions
+							messageId={item.message.id}
+							content={item.textParts.map((p) => p.text).join("")}
+							isStreaming={item.isCurrentlyStreaming}
+							analytics={{
+								modelId: (item.message.metadata as Record<string, unknown> | undefined)?.modelId as string | undefined,
+								tokensPerSecond: (item.message.metadata as Record<string, unknown> | undefined)?.tokensPerSecond as number | undefined,
+								tokenUsage: (item.message.metadata as Record<string, unknown> | undefined)?.tokenUsage as { promptTokens: number; completionTokens: number; totalTokens: number } | undefined,
+								timeToFirstTokenMs: (item.message.metadata as Record<string, unknown> | undefined)?.timeToFirstTokenMs as number | undefined,
+							}}
+							onRetry={(modelId) => {
+								const precedingUser = processedMessages.slice(0, itemIndex)
+									.reverse()
+									.find((candidate) => candidate.message.role === "user");
 
-									if (!precedingUser) {
-										toast.error("Could not retry response", {
-											description: "No preceding user message found for this assistant response.",
-										});
-										return;
-									}
+								if (!precedingUser) {
+									toast.error("Could not retry response", {
+										description: "No preceding user message found for this assistant response.",
+									});
+									return;
+								}
 
-									void onRetryMessage(precedingUser.message.id, modelId);
-								}}
-								onFork={(modelId) => {
-									const precedingUser = processedMessages.slice(0, itemIndex)
-										.reverse()
-										.find((candidate) => candidate.message.role === "user");
+								void onRetryMessage(precedingUser.message.id, modelId);
+							}}
+							onFork={(modelId) => {
+								const precedingUser = processedMessages.slice(0, itemIndex)
+									.reverse()
+									.find((candidate) => candidate.message.role === "user");
 
-									if (!precedingUser) {
-										toast.error("Could not branch off", {
-											description: "No preceding user message found for this assistant response.",
-										});
-										return;
-									}
+								if (!precedingUser) {
+									toast.error("Could not branch off", {
+										description: "No preceding user message found for this assistant response.",
+									});
+									return;
+								}
 
-									void onForkMessage(precedingUser.message.id, modelId);
-								}}
-							/>
-                        <MessageAnalytics
-                          modelId={item.msg.modelId}
-                          tokensPerSecond={item.msg.tokensPerSecond}
-                          tokenUsage={item.msg.tokenUsage}
-                          timeToFirstTokenMs={item.msg.timeToFirstTokenMs}
-                          totalDurationMs={item.msg.totalDurationMs}
-                          isStreaming={item.isCurrentlyStreaming}
-                        />
-                      </>
+								void onForkMessage(precedingUser.message.id, modelId);
+							}}
+						/>
                     )}
                   </Message>
                 </div>

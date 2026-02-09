@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { Check, Copy, GitFork, Pencil, RotateCcw } from "lucide-react";
+import { Check, Clock, Copy, GitFork, Pencil, RotateCcw, Zap, Coins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -20,6 +20,17 @@ import { useFavoriteModels } from "@/hooks/use-favorite-models";
 import { copyMessageText } from "@/lib/clipboard";
 import { useModelStore, useModels } from "@/stores/model";
 
+interface AnalyticsData {
+	modelId?: string;
+	tokensPerSecond?: number;
+	tokenUsage?: {
+		promptTokens: number;
+		completionTokens: number;
+		totalTokens: number;
+	};
+	timeToFirstTokenMs?: number;
+}
+
 interface MessageActionsProps {
 	messageId: string;
 	content: string;
@@ -27,6 +38,7 @@ interface MessageActionsProps {
 	onEdit?: () => void;
 	onRetry?: (modelId?: string) => void;
 	onFork?: (modelId?: string) => void;
+	analytics?: AnalyticsData;
 }
 
 function ProviderLogo({ providerId }: { providerId: string }) {
@@ -373,10 +385,61 @@ export function UserMessageActions({
 	);
 }
 
+function formatModelName(modelId: string): string {
+	const slug = modelId.includes("/") ? modelId.split("/").pop()! : modelId;
+	const cleaned = slug
+		.replace(/:free$/, "")
+		.replace(/:extended$/, "")
+		.replace(/-instruct$/, "")
+		.replace(/-chat$/, "");
+	return cleaned
+		.split("-")
+		.map((word) => {
+			if (/^\d/.test(word)) return word;
+			return word.charAt(0).toUpperCase() + word.slice(1);
+		})
+		.join(" ");
+}
+
+function InlineAnalytics({ analytics }: { analytics?: AnalyticsData }) {
+	if (!analytics) return null;
+
+	const { modelId, tokensPerSecond, tokenUsage, timeToFirstTokenMs } = analytics;
+	const hasAnyData = modelId || tokensPerSecond != null || tokenUsage || timeToFirstTokenMs != null;
+	if (!hasAnyData) return null;
+
+	return (
+		<div className="flex items-center gap-2 text-xs text-muted-foreground/50 select-none">
+			{modelId && (
+				<span className="font-medium">{formatModelName(modelId)}</span>
+			)}
+			{tokensPerSecond != null && (
+				<span className="flex items-center gap-1">
+					<Zap className="size-3" />
+					{tokensPerSecond.toFixed(2)} tok/sec
+				</span>
+			)}
+			{tokenUsage && (
+				<span className="flex items-center gap-1">
+					<Coins className="size-3" />
+					{tokenUsage.completionTokens.toLocaleString("en-US")} tokens
+				</span>
+			)}
+			{timeToFirstTokenMs != null && (
+				<span className="flex items-center gap-1">
+					<Clock className="size-3" />
+					Time-to-First: {(timeToFirstTokenMs / 1000).toFixed(2)} sec
+				</span>
+			)}
+		</div>
+	);
+}
+
 export function AssistantMessageActions({
 	messageId,
 	content,
 	isStreaming,
+	analytics,
 	onRetry,
 	onFork,
 }: MessageActionsProps) {
@@ -384,12 +447,13 @@ export function AssistantMessageActions({
 
 	return (
 		<TooltipProvider>
-			<div className="flex items-center gap-1 py-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-				<CopyButton content={content} />
-
-				<RetryDropdown messageId={messageId} onRetry={onRetry} />
-
-				<ForkDropdown messageId={messageId} onFork={onFork} />
+			<div className="flex items-center gap-2 py-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+				<div className="flex items-center gap-1">
+					<CopyButton content={content} />
+					<RetryDropdown messageId={messageId} onRetry={onRetry} />
+					<ForkDropdown messageId={messageId} onFork={onFork} />
+				</div>
+				<InlineAnalytics analytics={analytics} />
 			</div>
 		</TooltipProvider>
 	);

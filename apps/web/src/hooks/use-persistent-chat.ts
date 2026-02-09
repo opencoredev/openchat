@@ -212,6 +212,14 @@ function convexMessageToUIMessage(msg: {
 	toolCallCount?: number;
 	maxSteps?: number;
 	createdAt: number;
+	tokensPerSecond?: number;
+	timeToFirstTokenMs?: number;
+	totalDurationMs?: number;
+	tokenUsage?: {
+		promptTokens: number;
+		completionTokens: number;
+		totalTokens: number;
+	};
 }): UIMessage {
 	return {
 		id: msg.clientMessageId || msg._id,
@@ -230,6 +238,10 @@ function convexMessageToUIMessage(msg: {
 			webSearchCallCount: msg.webSearchCallCount,
 			toolCallCount: msg.toolCallCount,
 			maxSteps: msg.maxSteps,
+			tokensPerSecond: msg.tokensPerSecond,
+			timeToFirstTokenMs: msg.timeToFirstTokenMs,
+			totalDurationMs: msg.totalDurationMs,
+			tokenUsage: msg.tokenUsage,
 			resumedFromActiveStream: msg.status === "streaming",
 		},
 		parts: normalizeMessageParts({
