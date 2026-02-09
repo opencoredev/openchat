@@ -194,17 +194,21 @@ const streamdownComponents: StreamdownProps['components'] = {
 export interface MessageResponseProps extends ComponentProps<'div'> {
   children: string
   isStreaming?: boolean
+  skipInitialAnimation?: boolean
 }
 
 export const MessageResponse = ({
   children,
   className,
   isStreaming,
+  skipInitialAnimation,
   ...props
 }: MessageResponseProps) => {
   const { from } = useMessage()
   const isUser = from === 'user'
-  const smoothText = useSmoothText(children || '', !!isStreaming)
+  const smoothText = useSmoothText(children || '', !!isStreaming, {
+    skipInitialAnimation,
+  })
 
   if (isUser) {
     return (
