@@ -9,8 +9,7 @@ COPY apps/web/package.json apps/web/package.json
 COPY apps/server/package.json apps/server/package.json
 COPY apps/extension/package.json apps/extension/package.json
 
-RUN --mount=type=cache,id=openchat-web-bun,target=/root/.bun/install/cache \
-	bun install --frozen-lockfile --filter web
+RUN bun install --frozen-lockfile --filter web
 
 FROM deps AS builder
 WORKDIR /app
