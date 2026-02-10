@@ -1220,7 +1220,7 @@ export const executeStream = internalAction({
 			if (!finalMessagesApplied) {
 				streamOptions.messages = getFinalMessages(
 					streamOptions.messages as Array<{ role: "user" | "assistant" | "system"; content: string }>,
-					webSearchRequested && webSearchMode !== "tool",
+					webSearchRequested && webSearchMode !== "tool" && webSearchMode !== "unavailable",
 				);
 			}
 				const configuredMaxSteps =
