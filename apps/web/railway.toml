@@ -1,7 +1,17 @@
 [build]
 builder = "RAILPACK"
 buildCommand = "cd apps/web && bun run build"
-watchPatterns = ["apps/web/**", "apps/server/convex/**"]
+watchPatterns = [
+	"apps/web/**",
+	"apps/server/convex/**",
+	"apps/web/package.json",
+	"apps/server/package.json",
+	"apps/extension/package.json",
+	"package.json",
+	"bun.lock",
+	"bunfig.toml",
+	"turbo.json",
+]
 
 [deploy]
 startCommand = "cd apps/web && bun .output/server/index.mjs"
