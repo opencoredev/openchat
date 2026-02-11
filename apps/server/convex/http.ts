@@ -4,7 +4,7 @@ import { httpAction } from "./_generated/server";
 import { streamLLM } from "./streaming";
 import { api } from "./_generated/api";
 import { authComponent, createAuth } from "./auth";
-import { getAllowedOrigins } from "./lib/origins";
+import { getAllowedOrigins, getCorsOrigin } from "./lib/origins";
 
 const http = httpRouter();
 
@@ -51,18 +51,31 @@ http.route({
 });
 
 // Public stats endpoint for sign-in page
+// SECURITY: This endpoint exposes only aggregate, non-sensitive stats (counts, stars).
+// If sensitive data is ever added, ensure CORS remains restricted to getAllowedOrigins().
 http.route({
   path: "/stats",
   method: "GET",
-  handler: httpAction(async (ctx) => {
+  handler: httpAction(async (ctx, request) => {
+    const origin = request.headers.get("origin");
+    const allowedOrigin = getCorsOrigin(origin);
+
     const stats = await ctx.runQuery(api.stats.getPublicStats, {});
+
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+      "cache-control": "public, max-age=60", // Cache for 1 minute
+      "vary": "Origin",
+    };
+
+    // Only set CORS header for allowed origins
+    if (allowedOrigin) {
+      headers["access-control-allow-origin"] = allowedOrigin;
+    }
+
     return new Response(JSON.stringify(stats), {
       status: 200,
-      headers: {
-        "content-type": "application/json",
-        "access-control-allow-origin": "*",
-        "cache-control": "public, max-age=60", // Cache for 1 minute
-      },
+      headers,
     });
   }),
 });
