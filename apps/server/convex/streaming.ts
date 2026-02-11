@@ -84,7 +84,7 @@ export const createStream = mutation({
  *
  * SECURITY: Requires authentication and verifies ownership of the stream.
  */
-export const getStreamBody = query({
+export const getStreamBody = internalQuery({
 	args: {
 		streamId: StreamIdValidator,
 		userId: v.id("users"),
@@ -158,7 +158,7 @@ export const getStreamMessage = internalQuery({
  *
  * SECURITY: Requires authentication and verifies ownership of the stream.
  */
-export const getStreamStatus = query({
+export const getStreamStatus = internalQuery({
 	args: {
 		streamId: v.string(),
 		userId: v.id("users"),
@@ -270,7 +270,7 @@ export const cancelStream = mutation({
 /**
  * Check if a stream has been cancelled (internal query for streamLLM)
  */
-export const isStreamCancelled = query({
+export const isStreamCancelled = internalQuery({
 	args: {
 		streamId: v.string(),
 	},
@@ -770,7 +770,7 @@ export const streamLLM = httpAction(async (ctx, request) => {
 				const now = Date.now();
 				if (now - lastCancellationCheck >= CANCELLATION_CHECK_INTERVAL_MS) {
 					lastCancellationCheck = now;
-					const cancelled = await actionCtx.runQuery(api.streaming.isStreamCancelled, {
+					const cancelled = await actionCtx.runQuery(internal.streaming.isStreamCancelled, {
 						streamId: streamId,
 					});
 					if (cancelled) {
