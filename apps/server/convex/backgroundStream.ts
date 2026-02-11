@@ -11,6 +11,10 @@ import {
 	calculateUsageCents,
 } from "./lib/billingUtils";
 import type { UsagePayload } from "./lib/billingUtils";
+import {
+	getDailyUsageFromUpstash,
+	incrementDailyUsageInUpstash,
+} from "./lib/upstashUsage";
 import { requireAuthUserId } from "./lib/auth";
 import { decryptSecret } from "./lib/crypto";
 
@@ -24,6 +28,16 @@ const chainOfThoughtPartValidator = v.object({
 	input: v.optional(v.any()),
 	output: v.optional(v.any()),
 	errorText: v.optional(v.string()),
+});
+
+const streamOptionsValidator = v.object({
+	enableReasoning: v.optional(v.boolean()),
+	reasoningEffort: v.optional(v.string()),
+	enableWebSearch: v.optional(v.boolean()),
+	supportsToolCalls: v.optional(v.boolean()),
+	maxSteps: v.optional(v.number()),
+	dynamicPrompt: v.optional(v.boolean()),
+	jonMode: v.optional(v.boolean()),
 });
 
 type ChainOfThoughtPart = {
@@ -44,32 +58,6 @@ const MAX_SEARCH_SNIPPET_CHARS = 1000;
 const MAX_SEARCH_CONTEXT_CHARS = 8000;
 const MAX_COMBINED_SEARCH_CONTEXT_CHARS = 12000;
 const MAX_PREFETCH_SEARCHES = 5;
-const DYNAMIC_PROMPT_BASE = "You are a helpful assistant.";
-const JON_MODE_SYSTEM_PROMPT = `Write like a real person, not a language model.
-Voice:
-- Always use contractions (don't, can't, it's, won't, we're).
-- Vary sentence length dramatically. Short ones. Then longer ones that take their time.
-- Have opinions. "I think" and "honestly" are fine. Don't hedge everything into mush.
-- Match the user's energy. Casual if they're casual, precise if they're technical.
-- Choose unexpected words over obvious defaults. Use colloquialisms and idioms where they fit.
-Never do:
-- No sycophancy ("Great question!", "Absolutely!", "I'd be happy to", "Of course!").
-- No meta-commentary ("It's important to note", "Let me explain", "I hope this helps").
-- No hedging chains ("could potentially perhaps maybe").
-- No rhetorical questions or "not only...but also" constructions.
-- No rule-of-three lists ("fast, reliable, and scalable").
-- No summarizing conclusions or formulaic transitions ("Furthermore", "Moreover", "In summary").
-- No em dashes. Don't open by restating what the user said.
-Word choice:
-- If a simpler everyday word exists, use it. "Use" not "utilize". "Is" not "serves as". "Has" not "boasts".
-- Avoid words that sound like marketing copy, corporate speak, or LinkedIn posts. If it would fit in a press release or TED talk title, pick a different word.
-- Avoid vague abstract nouns where a concrete one works. Avoid inflated verbs where a plain one works.
-Structure:
-- Skip intro-body-conclusion. Start wherever makes sense, sometimes mid-thought.
-- Irregular paragraph lengths. One sentence alone is fine.
-- Use concrete details over generic statements.
-- Stop when done. No wrap-up. No "hope that helps."
-- Leave some thoughts slightly unpolished. Perfect structure feels algorithmic.`;
 
 function usageFromLanguageModelUsage(usage: {
 	inputTokens?: number;
@@ -113,6 +101,20 @@ function isWebSearchToolName(toolName: string | undefined): boolean {
 	if (!toolName) return false;
 	const normalized = toolName.toLowerCase();
 	return normalized === "websearch" || normalized === "web_search";
+}
+
+function getLatestUserSeedText(
+	messages: Array<{ role: string; content: string }>,
+): string | null {
+	for (let index = messages.length - 1; index >= 0; index--) {
+		const message = messages[index];
+		if (message?.role !== "user") continue;
+		const normalized = message.content.trim().slice(0, 300);
+		if (normalized.length > 0) {
+			return normalized;
+		}
+	}
+	return null;
 }
 
 function truncateText(value: string, maxChars: number): string {
@@ -291,34 +293,26 @@ export const startStream = mutation({
 			role: v.string(),
 			content: v.string(),
 		})),
-		options: v.optional(v.object({
-			enableReasoning: v.optional(v.boolean()),
-			reasoningEffort: v.optional(v.string()),
-			enableWebSearch: v.optional(v.boolean()),
-			supportsToolCalls: v.optional(v.boolean()),
-			maxSteps: v.optional(v.number()),
-			jonMode: v.optional(v.boolean()),
-			dynamicPrompt: v.optional(v.boolean()),
-		})),
+		options: v.optional(streamOptionsValidator),
 	},
 	returns: v.id("streamJobs"),
-		handler: async (ctx, args) => {
+	handler: async (ctx, args) => {
 		const userId = await requireAuthUserId(ctx, args.userId);
 		const chat = await ctx.db.get(args.chatId);
 		if (!chat || chat.userId !== userId) {
 			throw new Error("Chat not found or unauthorized");
 		}
 
-			if (args.provider === "osschat") {
+		if (args.provider === "osschat") {
+			const currentDate = getCurrentDateKey();
 			const user = await ctx.db.get(userId);
 			if (!user) {
 				throw new Error("User not found");
 			}
 
-			const currentDate = getCurrentDateKey();
-			const usedCents =
+			const persistedUsageCents =
 				user.aiUsageDate === currentDate ? (user.aiUsageCents ?? 0) : 0;
-			if (usedCents >= DAILY_AI_LIMIT_CENTS) {
+			if (persistedUsageCents >= DAILY_AI_LIMIT_CENTS) {
 				throw new Error("Daily usage limit reached. Connect your OpenRouter account to continue.");
 			}
 		}
@@ -371,6 +365,21 @@ export const startStream = mutation({
 			jobId,
 		});
 
+		const shouldGenerateAutoTitle =
+			(chat.title === "New Chat" || !chat.title) &&
+			(chat.messageCount ?? 0) <= 1;
+		const seedText = shouldGenerateAutoTitle ? getLatestUserSeedText(args.messages) : null;
+		if (seedText) {
+			await ctx.scheduler.runAfter(0, internal.chats.generateAndSetTitleInternal, {
+				chatId: args.chatId,
+				userId,
+				seedText,
+				length: "standard",
+				provider: args.provider === "openrouter" ? "openrouter" : "osschat",
+				force: false,
+			});
+		}
+
 		return jobId;
 	},
 });
@@ -386,15 +395,7 @@ export const getStreamJob = query({
 			status: v.string(),
 			model: v.string(),
 			provider: v.string(),
-			options: v.optional(v.object({
-				enableReasoning: v.optional(v.boolean()),
-				reasoningEffort: v.optional(v.string()),
-				enableWebSearch: v.optional(v.boolean()),
-				supportsToolCalls: v.optional(v.boolean()),
-				maxSteps: v.optional(v.number()),
-				jonMode: v.optional(v.boolean()),
-				dynamicPrompt: v.optional(v.boolean()),
-			})),
+			options: v.optional(streamOptionsValidator),
 			content: v.string(),
 			reasoning: v.optional(v.string()),
 			chainOfThoughtParts: v.optional(v.array(chainOfThoughtPartValidator)),
@@ -452,15 +453,7 @@ export const getActiveStreamJob = query({
 			status: v.string(),
 			model: v.string(),
 			provider: v.string(),
-			options: v.optional(v.object({
-				enableReasoning: v.optional(v.boolean()),
-				reasoningEffort: v.optional(v.string()),
-				enableWebSearch: v.optional(v.boolean()),
-				supportsToolCalls: v.optional(v.boolean()),
-				maxSteps: v.optional(v.number()),
-				jonMode: v.optional(v.boolean()),
-				dynamicPrompt: v.optional(v.boolean()),
-			})),
+			options: v.optional(streamOptionsValidator),
 			content: v.string(),
 			reasoning: v.optional(v.string()),
 			chainOfThoughtParts: v.optional(v.array(chainOfThoughtPartValidator)),
@@ -803,9 +796,21 @@ export const executeStream = internalAction({
 			jobId: args.jobId
 		});
 
-		if (!job) {
-			return;
-		}
+			if (!job) {
+				return;
+			}
+
+			if (job.provider === "osschat") {
+				const currentDate = getCurrentDateKey();
+				const redisUsageCents = await getDailyUsageFromUpstash(job.userId, currentDate);
+				if (redisUsageCents !== null && redisUsageCents >= DAILY_AI_LIMIT_CENTS) {
+					await ctx.runMutation(internal.backgroundStream.failStream, {
+						jobId: args.jobId,
+						error: "Daily usage limit reached. Connect your OpenRouter account to continue.",
+					});
+					return;
+				}
+			}
 
 		await ctx.runMutation(internal.backgroundStream.updateStreamContent, {
 			jobId: args.jobId,
@@ -913,44 +918,14 @@ export const executeStream = internalAction({
 			];
 		};
 
-		const addJonModeSystemInstruction = (
-			messages: Array<{ role: "user" | "assistant" | "system"; content: string }>
-		) => {
-			return [
-				{ role: "system" as const, content: JON_MODE_SYSTEM_PROMPT },
-				...messages,
-			];
-		};
-
-		const addDynamicPromptSystemInstruction = (
-			messages: Array<{ role: "user" | "assistant" | "system"; content: string }>
-		) => {
-			return [
-				{
-					role: "system" as const,
-					content: `${DYNAMIC_PROMPT_BASE} Your model name is ${job.model}.`,
-				},
-				...messages,
-			];
-		};
-
 		let webSearchMode: "none" | "tool" | "unavailable" = "none";
 
 		const getFinalMessages = (
 			messages: Array<{ role: "user" | "assistant" | "system"; content: string }>,
 			webSearchEnabled: boolean,
 		) => {
-			let result = messages;
-			if (job.options?.jonMode) {
-				result = addJonModeSystemInstruction(result);
-			}
-			if (job.options?.dynamicPrompt ?? true) {
-				result = addDynamicPromptSystemInstruction(result);
-			}
-			if (webSearchEnabled) {
-				result = addWebSearchSystemInstruction(result);
-			}
-			return result;
+			if (!webSearchEnabled) return messages;
+			return addWebSearchSystemInstruction(messages);
 		};
 
 			const getThinkingTimeSec = () => {
@@ -1099,7 +1074,6 @@ export const executeStream = internalAction({
 			const supportsToolCalls = job.options?.supportsToolCalls !== false;
 			let webSearchUnavailableReason: string | null = null;
 			let availableSearches = 0;
-			let finalMessagesApplied = false;
 
 			if (webSearchRequested) {
 				const searchLimit = await ctx.runQuery(internal.search.checkSearchLimitInternal, {
@@ -1164,17 +1138,12 @@ export const executeStream = internalAction({
 					toolPart.state = "input-available";
 					pendingUpdateCounter++;
 
-					try {
-						// Increment FIRST — this mutation is serializable in Convex,
-						// so it will throw if the limit is already reached.
-						// This prevents the TOCTOU race condition where two concurrent
-						// requests could both pass the initial check and exceed the limit.
+						try {
+							const rawOutput = await execute({ query: searchQuery });
+							const compactOutput = compactWebSearchOutput(rawOutput);
 						await ctx.runMutation(internal.search.incrementSearchUsageInternal, {
 							userId: job.userId,
 						});
-
-						const rawOutput = await execute({ query: searchQuery });
-						const compactOutput = compactWebSearchOutput(rawOutput);
 						toolPart.output = compactOutput;
 						toolPart.state = "output-available";
 						pendingUpdateCounter++;
@@ -1189,23 +1158,15 @@ export const executeStream = internalAction({
 										: chunk;
 								contextChunks.push(trimmedChunk);
 								remainingContextChars -= trimmedChunk.length;
+								}
 							}
-						}
-					} catch (error) {
-						const errorText =
-							error instanceof Error ? error.message : "Web search failed";
-						// If increment threw due to limit, stop searching
-						if (errorText.includes("Daily search limit reached")) {
-							toolPart.errorText = "Daily search limit reached";
+						} catch (error) {
+							const errorText =
+								error instanceof Error ? error.message : "Web search failed";
+							toolPart.errorText = errorText;
 							toolPart.state = "output-error";
 							pendingUpdateCounter++;
-							await persistProgress(true);
-							break;
 						}
-						toolPart.errorText = errorText;
-						toolPart.state = "output-error";
-						pendingUpdateCounter++;
-					}
 
 					await persistProgress(true);
 				}
@@ -1226,23 +1187,11 @@ export const executeStream = internalAction({
 							false,
 						)),
 					];
-					finalMessagesApplied = true;
 				}
 			}
-
-			if (!finalMessagesApplied) {
-				streamOptions.messages = getFinalMessages(
-					streamOptions.messages as Array<{ role: "user" | "assistant" | "system"; content: string }>,
-					webSearchRequested && webSearchMode !== "tool" && webSearchMode !== "unavailable",
-				);
-			}
-			const configuredMaxSteps =
-				typeof job.options?.maxSteps === "number"
-					&& Number.isFinite(job.options.maxSteps)
-					&& job.options.maxSteps > 0
-					? Math.floor(job.options.maxSteps)
-					: undefined;
-			const stepLimit = Math.max(1, Math.min(configuredMaxSteps ?? 1, 10));
+				const configuredMaxSteps =
+					typeof job.options?.maxSteps === "number" ? job.options.maxSteps : undefined;
+				const stepLimit = Math.max(1, Math.min(configuredMaxSteps ?? 1, 10));
 				streamOptions.stopWhen = stepCountIs(stepLimit);
 
 			const result = streamText(streamOptions);
@@ -1405,17 +1354,23 @@ export const executeStream = internalAction({
 					job.messages,
 					fullContent,
 				);
-				if (usageCents && usageCents > 0) {
-					for (let attempt = 0; attempt < 2; attempt++) {
-						try {
-							await ctx.runMutation(internal.users.incrementAiUsage, {
-								userId: job.userId,
-								usageCents,
-							});
-							break;
-						} catch {
-							// No-op; retried below.
-						}
+					if (usageCents && usageCents > 0) {
+						for (let attempt = 0; attempt < 2; attempt++) {
+							try {
+								await ctx.runMutation(internal.users.incrementAiUsage, {
+									userId: job.userId,
+									usageCents,
+									skipRedisSync: true,
+								});
+								await incrementDailyUsageInUpstash(
+									job.userId,
+									getCurrentDateKey(),
+									usageCents,
+								);
+								break;
+							} catch {
+								// No-op; retried below.
+							}
 					}
 				}
 			}
