@@ -65,6 +65,7 @@ http.route({
     const headers: Record<string, string> = {
       "content-type": "application/json",
       "cache-control": "public, max-age=60", // Cache for 1 minute
+      "vary": "Origin",
     };
 
     // Only set CORS header for allowed origins
