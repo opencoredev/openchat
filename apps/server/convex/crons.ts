@@ -178,15 +178,12 @@ export const runCleanupBatchForWorkflow = action({
 		if (!expectedToken) {
 			throw new Error("Unauthorized");
 		}
-		// Constant-time comparison to prevent timing attacks
 		const a = args.workflowToken;
 		const b = expectedToken;
-		if (a.length !== b.length) {
-			throw new Error("Unauthorized");
-		}
-		let mismatch = 0;
-		for (let i = 0; i < a.length; i++) {
-			mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+		let mismatch = a.length ^ b.length;
+		const len = Math.max(a.length, b.length);
+		for (let i = 0; i < len; i++) {
+			mismatch |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
 		}
 		if (mismatch !== 0) {
 			throw new Error("Unauthorized");
