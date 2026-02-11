@@ -20,18 +20,31 @@ export function OpenRouterConnectModal({ open, onOpenChange }: OpenRouterConnect
   const { hasApiKey, initiateLogin, isLoading } = useOpenRouterKey();
   const [isClosing, setIsClosing] = useState(false);
 
-  // Close modal when API key is set (successful connection)
-  useEffect(() => {
-    if (hasApiKey && open) {
-      // Small delay to show success state
-      const timer = setTimeout(() => {
-        onOpenChange(false);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [hasApiKey, open, onOpenChange]);
+	// Close modal when API key is set (successful connection)
+	useEffect(() => {
+		if (hasApiKey && open) {
+			// Small delay to show success state
+			const timer = setTimeout(() => {
+				onOpenChange(false);
+			}, 1000);
+			return () => clearTimeout(timer);
+		}
+	}, [hasApiKey, open, onOpenChange]);
 
-  const handleConnect = () => {
+	// Handle Escape key to close modal
+	useEffect(() => {
+		if (!open) return;
+		function handleKeyDown(e: KeyboardEvent) {
+			if (e.key === "Escape") {
+				e.preventDefault();
+				handleClose();
+			}
+		}
+		document.addEventListener("keydown", handleKeyDown);
+		return () => document.removeEventListener("keydown", handleKeyDown);
+	}, [open]);
+
+	const handleConnect = () => {
     const callbackUrl = `${window.location.origin}/openrouter/callback`;
     initiateLogin(callbackUrl);
   };

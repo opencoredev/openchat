@@ -3,16 +3,19 @@ import {
   Outlet,
   Scripts,
   createRootRoute,
+  useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
 import { Providers } from "../providers";
-import { CommandPalette, useCommandPaletteShortcut } from "../components/command-palette";
+// import { CommandPalette } from "../components/command-palette";
 import { SidebarInset, SidebarProvider } from "../components/ui/sidebar";
 import { NavigationProgress } from "../components/navigation-progress";
 import { AppSidebar } from "../components/app-sidebar";
 import { useAuth } from "../lib/auth-client";
 import { usePostHogPageView } from "../providers/posthog";
 import { convexClient } from "../lib/convex";
+import { useGlobalShortcuts } from "@/hooks/use-global-shortcuts";
+import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 
 import appCss from "../styles.css?url";
 
@@ -136,14 +139,16 @@ function RootComponent() {
 }
 
 function AppShell() {
-  // Register global keyboard shortcuts
-  useCommandPaletteShortcut();
-
   // Track page views
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
   usePostHogPageView(pathname);
 
   const { isAuthenticated, loading } = useAuth();
+
+  useGlobalShortcuts({ navigate, isAuthenticated, pathname });
+
+  const showHelpButton = isAuthenticated && (pathname === "/" || pathname.startsWith("/c/"));
 
   if (!convexClient || loading) {
     return (
@@ -158,7 +163,7 @@ function AppShell() {
     return (
       <>
         <Outlet />
-        <CommandPalette />
+        {/* <CommandPalette /> */}
       </>
     );
   }
@@ -169,7 +174,8 @@ function AppShell() {
       <SidebarInset className="relative overflow-hidden">
         <Outlet />
       </SidebarInset>
-      <CommandPalette />
+      {/* <CommandPalette /> */}
+      <ShortcutsDialog showHelpButton={showHelpButton} />
     </SidebarProvider>
   );
 }
