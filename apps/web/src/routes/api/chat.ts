@@ -156,6 +156,19 @@ export const Route = createFileRoute("/api/chat")({
 					return json({ error: "chatId is required" }, { status: 400 });
 				}
 
+				// Validate chat ownership via Convex (authoritative source)
+				const convexClient = await getConvexClientForRequest(request);
+				if (!convexClient) {
+					return json({ error: "Unauthorized" }, { status: 401 });
+				}
+				const chat = await convexClient.query(api.chats.get, {
+					chatId: chatId as Id<"chats">,
+					userId,
+				});
+				if (!chat) {
+					return json({ error: "Unauthorized" }, { status: 403 });
+				}
+
 				const redisReady = await redis.ensureConnected();
 				if (!redisReady) {
 					console.log("[Chat API GET] Redis not available");
@@ -344,6 +357,21 @@ export const Route = createFileRoute("/api/chat")({
 
 					const messageId = generateId();
 					const streamId = `${chatId}-${messageId}`;
+
+					// Validate chat ownership before initializing Redis stream or setting active stream
+					if (chatId) {
+						const ownershipClient = await getConvexClientForRequest(request);
+						if (!ownershipClient) {
+							return json({ error: "Unauthorized" }, { status: 401 });
+						}
+						const ownedChat = await ownershipClient.query(api.chats.get, {
+							chatId: chatId as Id<"chats">,
+							userId: convexUserId,
+						});
+						if (!ownedChat) {
+							return json({ error: "Unauthorized" }, { status: 403 });
+						}
+					}
 
 					if (chatId && redisReady) {
 						console.log("[Chat API POST] Initializing Redis stream for chat:", chatId);
