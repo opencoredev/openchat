@@ -196,8 +196,6 @@ const workflow = serve<GenerateTitlePayload>(async (context) => {
 	} = payload;
 
 	const authToken = await context.run("resolve-auth", async () => {
-		const forwardedToken = context.headers.get("x-convex-token");
-		if (forwardedToken) return forwardedToken;
 		return getAuthTokenFromWorkflowHeaders(context.headers);
 	});
 	if (!authToken) {
@@ -362,7 +360,6 @@ export const Route = createFileRoute("/api/workflow/generate-title")({
 
 				try {
 					const headers = getWorkflowTriggerHeaders(request.headers);
-					headers["x-convex-token"] = authToken;
 					const { workflowRunId } = await workflowClient.trigger({
 						url: request.url,
 						body: normalizedPayload,

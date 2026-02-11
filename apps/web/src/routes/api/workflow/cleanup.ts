@@ -1,9 +1,9 @@
+import { timingSafeEqual } from "node:crypto";
 import { createFileRoute } from "@tanstack/react-router";
 import { json } from "@tanstack/react-start";
 import { serve } from "@upstash/workflow/tanstack";
 import { api } from "@server/convex/_generated/api";
 import { createConvexServerClient } from "@/lib/convex-server";
-import { getConvexAuthToken, isSameOrigin } from "@/lib/server-auth";
 import { workflowClient } from "@/lib/upstash";
 
 type CleanupPayload = {
@@ -51,17 +51,23 @@ function parseCleanupPayload(raw: unknown): CleanupPayload | null {
 	return parsed;
 }
 
+function safeCompare(a: string, b: string): boolean {
+	if (a.length !== b.length) return false;
+	return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
 function hasValidCleanupToken(headers: Headers): boolean {
 	const expectedToken = process.env.WORKFLOW_CLEANUP_TOKEN?.trim();
 	if (!expectedToken) return false;
 
 	const bearer = headers.get("authorization");
 	if (bearer?.startsWith("Bearer ")) {
-		return bearer.slice("Bearer ".length).trim() === expectedToken;
+		return safeCompare(bearer.slice("Bearer ".length).trim(), expectedToken);
 	}
 
 	const workflowHeader = headers.get("x-workflow-cleanup-token");
-	return workflowHeader?.trim() === expectedToken;
+	if (!workflowHeader) return false;
+	return safeCompare(workflowHeader.trim(), expectedToken);
 }
 
 async function runCleanupInline(payload: CleanupPayload): Promise<{
@@ -80,6 +86,7 @@ async function runCleanupInline(payload: CleanupPayload): Promise<{
 
 	let batches = 0;
 	let totalDeleted = 0;
+	let hitBatchLimit = false;
 
 	while (batches < MAX_CLEANUP_BATCHES) {
 		batches += 1;
@@ -100,10 +107,16 @@ async function runCleanupInline(payload: CleanupPayload): Promise<{
 			dryRun: false,
 		});
 		totalDeleted += deletedBatch.deleted;
+
+		if (batches >= MAX_CLEANUP_BATCHES) {
+			hitBatchLimit = true;
+			break;
+		}
+
 		await new Promise((resolve) => setTimeout(resolve, 1_000));
 	}
 
-	if (batches >= MAX_CLEANUP_BATCHES) {
+	if (hitBatchLimit) {
 		throw new Error(`Cleanup exceeded maximum batches (${MAX_CLEANUP_BATCHES})`);
 	}
 
@@ -126,6 +139,7 @@ const workflow = serve<CleanupPayload>(async (context) => {
 
 	let batches = 0;
 	let totalDeleted = 0;
+	let hitBatchLimit = false;
 
 	while (batches < MAX_CLEANUP_BATCHES) {
 		batches += 1;
@@ -152,10 +166,16 @@ const workflow = serve<CleanupPayload>(async (context) => {
 		});
 
 		totalDeleted += deletedBatch.deleted;
+
+		if (batches >= MAX_CLEANUP_BATCHES) {
+			hitBatchLimit = true;
+			break;
+		}
+
 		await context.sleep(`sleep-${batches}`, "1s");
 	}
 
-	if (batches >= MAX_CLEANUP_BATCHES) {
+	if (hitBatchLimit) {
 		throw new Error(`Cleanup exceeded maximum batches (${MAX_CLEANUP_BATCHES})`);
 	}
 
@@ -177,15 +197,8 @@ export const Route = createFileRoute("/api/workflow/cleanup")({
 					return workflow.POST({ request });
 				}
 
-				const hasCleanupToken = hasValidCleanupToken(request.headers);
-				if (!hasCleanupToken) {
-					if (!isSameOrigin(request)) {
-						return json({ error: "Invalid origin" }, { status: 403 });
-					}
-					const authToken = await getConvexAuthToken(request);
-					if (!authToken) {
-						return json({ error: "Unauthorized" }, { status: 401 });
-					}
+				if (!hasValidCleanupToken(request.headers)) {
+					return json({ error: "Unauthorized — cleanup token required" }, { status: 401 });
 				}
 
 				let payloadRaw: unknown;

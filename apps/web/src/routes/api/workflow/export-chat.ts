@@ -41,9 +41,6 @@ type ChatExportData = {
 };
 
 async function getAuthTokenFromWorkflowHeaders(headers: Headers): Promise<string | null> {
-	const forwardedToken = headers.get("x-convex-token");
-	if (forwardedToken) return forwardedToken;
-
 	if (!CONVEX_SITE_URL) return null;
 
 	const cookie = headers.get("cookie");
@@ -273,7 +270,6 @@ export const Route = createFileRoute("/api/workflow/export-chat")({
 
 				try {
 					const triggerHeaders = getWorkflowTriggerHeaders(request.headers);
-					triggerHeaders["x-convex-token"] = authToken;
 					const { workflowRunId } = await workflowClient.trigger({
 						url: request.url,
 						body: normalizedPayload,

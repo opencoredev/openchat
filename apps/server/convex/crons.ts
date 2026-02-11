@@ -175,7 +175,20 @@ export const runCleanupBatchForWorkflow = action({
 		args,
 	): Promise<{ success: boolean; deleted: number; dryRun: boolean; cutoffDate: string }> => {
 		const expectedToken = process.env.WORKFLOW_CLEANUP_TOKEN;
-		if (!expectedToken || args.workflowToken !== expectedToken) {
+		if (!expectedToken) {
+			throw new Error("Unauthorized");
+		}
+		// Constant-time comparison to prevent timing attacks
+		const a = args.workflowToken;
+		const b = expectedToken;
+		if (a.length !== b.length) {
+			throw new Error("Unauthorized");
+		}
+		let mismatch = 0;
+		for (let i = 0; i < a.length; i++) {
+			mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+		}
+		if (mismatch !== 0) {
 			throw new Error("Unauthorized");
 		}
 
