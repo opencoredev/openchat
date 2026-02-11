@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { createFileRoute } from "@tanstack/react-router";
 import { json } from "@tanstack/react-start";
 import { serve } from "@upstash/workflow/tanstack";
@@ -51,14 +52,10 @@ function parseCleanupPayload(raw: unknown): CleanupPayload | null {
 }
 
 function safeCompare(a: string, b: string): boolean {
-	const bufA = Buffer.from(a);
-	const bufB = Buffer.from(b);
-	let mismatch = bufA.length ^ bufB.length;
-	const len = Math.max(bufA.length, bufB.length);
-	for (let i = 0; i < len; i++) {
-		mismatch |= (bufA[i] || 0) ^ (bufB[i] || 0);
-	}
-	return mismatch === 0;
+	const key = "cleanup-token-compare";
+	const hmacA = createHmac("sha256", key).update(a).digest();
+	const hmacB = createHmac("sha256", key).update(b).digest();
+	return timingSafeEqual(hmacA, hmacB);
 }
 
 function hasValidCleanupToken(headers: Headers): boolean {
