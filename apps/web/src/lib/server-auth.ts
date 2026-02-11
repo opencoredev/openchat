@@ -47,7 +47,9 @@ export async function getConvexAuthToken(request: Request): Promise<string | nul
 				if (data?.token) return data.token;
 			}
 			// Auth endpoint explicitly rejected this session.
-			if (!response.ok) return null;
+			if (response.status >= 400 && response.status < 500) {
+				return null;
+			}
 		} catch {
 			// Fall through to cookie fallback.
 		}

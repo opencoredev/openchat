@@ -76,4 +76,20 @@ describe("server-auth.getConvexAuthToken", () => {
 
 		await expect(getConvexAuthToken(request)).resolves.toBeNull();
 	});
+
+	it("falls back to cookie token when token endpoint has a server error", async () => {
+		vi.stubEnv("VITE_CONVEX_SITE_URL", "https://example.convex.site");
+		vi.stubEnv("CONVEX_SITE_URL", "https://example.convex.site");
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ error: "server-error" }), {
+				status: 503,
+				headers: { "Content-Type": "application/json" },
+			}),
+		);
+
+		const { getConvexAuthToken } = await loadModule();
+		const request = requestWithCookie("better-auth.convex_jwt=fallback-token");
+
+		await expect(getConvexAuthToken(request)).resolves.toBe("fallback-token");
+	});
 });

@@ -125,17 +125,12 @@ function getWorkflowTriggerHeaders(headers: Headers): Record<string, string> {
 
 async function runDeleteAccountInline(
 	payload: DeleteAccountPayload,
-	headers: Headers,
+	authToken: string,
 ): Promise<{
 	success: boolean;
 	deleted: { streamJobs: number; messages: number; chats: number; files: number; redisKeys: number };
 }> {
 	const { userId, externalId, batchSize } = payload;
-	const authToken = await getAuthTokenFromWorkflowHeaders(headers);
-	if (!authToken) {
-		throw new Error("Unauthorized");
-	}
-
 	const convexClient = createConvexServerClient(authToken);
 	const convexUserId = userId as Id<"users">;
 
@@ -294,7 +289,7 @@ export const Route = createFileRoute("/api/workflow/delete-account")({
 
 				if (isLocalWorkflowRequest(request)) {
 					try {
-						const result = await runDeleteAccountInline(normalizedPayload, request.headers);
+						const result = await runDeleteAccountInline(normalizedPayload, authToken);
 						return json(result, { status: 200 });
 					} catch (error) {
 						const message = error instanceof Error ? error.message : "Failed to delete account";
