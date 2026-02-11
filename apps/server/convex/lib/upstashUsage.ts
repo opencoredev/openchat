@@ -77,13 +77,15 @@ export async function incrementDailyUsageInUpstash(
 ): Promise<void> {
 	if (!getConfig()) return;
 	if (!Number.isFinite(usageCents) || usageCents <= 0) return;
+	const roundedCents = Math.ceil(usageCents);
+	if (roundedCents <= 0) return;
 
 	const key = usageCounterKey(userId, dateKey);
 
 	try {
 		const expiresAt = getMidnightUtcEpochSeconds(dateKey);
 		await executePipeline([
-			["INCRBY", key, Math.floor(usageCents)],
+			["INCRBY", key, roundedCents],
 			["EXPIREAT", key, expiresAt],
 		]);
 	} catch (error) {

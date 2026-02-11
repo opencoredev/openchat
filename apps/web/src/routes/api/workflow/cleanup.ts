@@ -51,10 +51,9 @@ function parseCleanupPayload(raw: unknown): CleanupPayload | null {
 	return parsed;
 }
 
-function safeCompare(a: string, b: string): boolean {
-	const key = "cleanup-token-compare";
-	const hmacA = createHmac("sha256", key).update(a).digest();
-	const hmacB = createHmac("sha256", key).update(b).digest();
+function safeCompare(a: string, b: string, hmacKey: string): boolean {
+	const hmacA = createHmac("sha256", hmacKey).update(a).digest();
+	const hmacB = createHmac("sha256", hmacKey).update(b).digest();
 	return timingSafeEqual(hmacA, hmacB);
 }
 
@@ -64,12 +63,12 @@ function hasValidCleanupToken(headers: Headers): boolean {
 
 	const bearer = headers.get("authorization");
 	if (bearer?.startsWith("Bearer ")) {
-		return safeCompare(bearer.slice("Bearer ".length).trim(), expectedToken);
+		return safeCompare(bearer.slice("Bearer ".length).trim(), expectedToken, expectedToken);
 	}
 
 	const workflowHeader = headers.get("x-workflow-cleanup-token");
 	if (!workflowHeader) return false;
-	return safeCompare(workflowHeader.trim(), expectedToken);
+	return safeCompare(workflowHeader.trim(), expectedToken, expectedToken);
 }
 
 async function runCleanupInline(payload: CleanupPayload): Promise<{

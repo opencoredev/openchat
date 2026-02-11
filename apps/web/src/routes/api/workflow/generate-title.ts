@@ -61,6 +61,7 @@ function parseGenerateTitlePayload(raw: unknown): GenerateTitlePayload | null {
 	return {
 		chatId: payload.chatId.trim(),
 		userId: payload.userId.trim(),
+		authToken: typeof payload.authToken === "string" ? payload.authToken : undefined,
 		seedText: payload.seedText,
 		length: payload.length,
 		provider: payload.provider,

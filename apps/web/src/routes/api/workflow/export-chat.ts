@@ -60,6 +60,7 @@ function parseExportPayload(raw: unknown): ExportChatPayload | null {
 	return {
 		chatId: payload.chatId.trim(),
 		userId: payload.userId.trim(),
+		authToken: typeof payload.authToken === "string" ? payload.authToken : undefined,
 		format,
 	};
 }

@@ -36,6 +36,7 @@ function parseDeletePayload(raw: unknown): DeleteAccountPayload | null {
 	const parsed: DeleteAccountPayload = {
 		userId: payload.userId.trim(),
 		externalId: payload.externalId.trim(),
+		authToken: typeof payload.authToken === "string" ? payload.authToken : undefined,
 	};
 
 	if (payload.batchSize !== undefined) {

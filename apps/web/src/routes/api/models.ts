@@ -17,12 +17,17 @@ const modelsIpRatelimit = upstashRedis
 	: null;
 
 async function fetchModelsFromOpenRouter(): Promise<Response> {
-	const response = await fetch(OPENROUTER_MODELS_URL, {
-		headers: {
-			Accept: "application/json",
-		},
-		signal: AbortSignal.timeout(OPENROUTER_FETCH_TIMEOUT_MS),
-	});
+	let response: globalThis.Response;
+	try {
+		response = await fetch(OPENROUTER_MODELS_URL, {
+			headers: {
+				Accept: "application/json",
+			},
+			signal: AbortSignal.timeout(OPENROUTER_FETCH_TIMEOUT_MS),
+		});
+	} catch {
+		return json({ error: "Upstream service unavailable" }, { status: 502 });
+	}
 
 	if (!response.ok) {
 		return json(
