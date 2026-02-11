@@ -148,7 +148,7 @@ async function main() {
   process.stdout.write("[setup-db] Waiting for Postgres to become ready...\n");
   await waitForReady(containerName, postgresUser);
 
-  const databaseUrl = `postgres://${postgresUser}:${encodeURIComponent(postgresPassword)}@localhost:${desiredPort}/openchat_test`;
+  const databaseUrl = `postgres://${encodeURIComponent(postgresUser)}:${encodeURIComponent(postgresPassword)}@localhost:${desiredPort}/openchat_test`;
   process.env.DATABASE_URL = databaseUrl;
   process.stdout.write(`[setup-db] Ready!\n`);
   process.stdout.write(`DATABASE_URL=${databaseUrl}\n`);
