@@ -1130,7 +1130,7 @@ export const executeStream = internalAction({
 						const errorText =
 							error instanceof Error ? error.message : "Web search failed";
 						// If increment threw due to limit, stop searching
-						if (errorText.includes("limit")) {
+						if (errorText.includes("Daily search limit reached")) {
 							toolPart.errorText = "Daily search limit reached";
 							toolPart.state = "output-error";
 							pendingUpdateCounter++;
