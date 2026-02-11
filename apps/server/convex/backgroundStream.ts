@@ -1372,23 +1372,27 @@ export const executeStream = internalAction({
 					job.messages,
 					fullContent,
 				);
-				if (usageCents && usageCents > 0) {
-					for (let attempt = 0; attempt < 2; attempt++) {
-						try {
-							await ctx.runMutation(internal.users.incrementAiUsage, {
-								userId: job.userId,
-								usageCents,
-							});
-							await incrementDailyUsageInUpstash(
-								job.userId,
-								getCurrentDateKey(),
-								usageCents,
-							);
-							break;
-						} catch {
-							// No-op; retried below.
-						}
+			if (usageCents && usageCents > 0) {
+				for (let attempt = 0; attempt < 2; attempt++) {
+					try {
+						await ctx.runMutation(internal.users.incrementAiUsage, {
+							userId: job.userId,
+							usageCents,
+						});
+						break;
+					} catch {
+						if (attempt === 1) break;
 					}
+				}
+				try {
+					await incrementDailyUsageInUpstash(
+						job.userId,
+						getCurrentDateKey(),
+						usageCents,
+					);
+				} catch {
+					// Upstash usage tracking is best-effort; don't fail the stream.
+				}
 				}
 			}
 

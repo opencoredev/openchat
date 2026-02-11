@@ -7,12 +7,10 @@ import { createConvexServerClient } from "@/lib/convex-server";
 import { getAuthUser, getConvexAuthToken, isSameOrigin } from "@/lib/server-auth";
 import { authRatelimit, upstashRedis, workflowClient } from "@/lib/upstash";
 
-const CONVEX_SITE_URL =
-	process.env.VITE_CONVEX_SITE_URL || process.env.CONVEX_SITE_URL;
-
 type DeleteAccountPayload = {
 	userId: string;
 	externalId: string;
+	authToken?: string;
 	batchSize?: number;
 };
 
@@ -23,21 +21,6 @@ type DeleteStep =
 	| "delete-files";
 
 const MAX_DELETE_BATCHES = 500;
-
-async function getAuthTokenFromWorkflowHeaders(headers: Headers): Promise<string | null> {
-	if (!CONVEX_SITE_URL) return null;
-
-	const cookie = headers.get("cookie");
-	if (!cookie) return null;
-
-	const response = await fetch(`${CONVEX_SITE_URL}/api/auth/convex/token`, {
-		headers: { cookie },
-	});
-	if (!response.ok) return null;
-
-	const data = (await response.json()) as { token?: string } | null;
-	return data?.token ?? null;
-}
 
 function parseDeletePayload(raw: unknown): DeleteAccountPayload | null {
 	if (!raw || typeof raw !== "object") return null;
@@ -111,15 +94,10 @@ function isLocalWorkflowRequest(request: Request): boolean {
 	return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 }
 
-function getWorkflowTriggerHeaders(headers: Headers): Record<string, string> {
-	const triggerHeaders: Record<string, string> = {
+function getWorkflowTriggerHeaders(): Record<string, string> {
+	return {
 		"Content-Type": "application/json",
 	};
-	const cookie = headers.get("cookie");
-	if (cookie) {
-		triggerHeaders.cookie = cookie;
-	}
-	return triggerHeaders;
 }
 
 async function runDeleteAccountInline(
@@ -180,9 +158,7 @@ async function runDeleteAccountInline(
 
 const workflow = serve<DeleteAccountPayload>(async (context) => {
 	const { userId, externalId, batchSize } = context.requestPayload;
-	const authToken = await context.run("resolve-auth", async () => {
-		return getAuthTokenFromWorkflowHeaders(context.headers);
-	});
+	const authToken = context.requestPayload.authToken;
 	if (!authToken) {
 		throw new Error("Unauthorized");
 	}
@@ -293,6 +269,7 @@ export const Route = createFileRoute("/api/workflow/delete-account")({
 					...payload,
 					userId: authConvexUser._id,
 					externalId: authUser.id,
+					authToken,
 				};
 
 				if (isLocalWorkflowRequest(request)) {
@@ -314,7 +291,7 @@ export const Route = createFileRoute("/api/workflow/delete-account")({
 				}
 
 				try {
-					const triggerHeaders = getWorkflowTriggerHeaders(request.headers);
+					const triggerHeaders = getWorkflowTriggerHeaders();
 					const { workflowRunId } = await workflowClient.trigger({
 						url: request.url,
 						body: normalizedPayload,

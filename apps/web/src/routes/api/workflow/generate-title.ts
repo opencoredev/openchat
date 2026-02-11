@@ -8,9 +8,6 @@ import { decryptSecret } from "@/lib/server-crypto";
 import { getAuthUser, getConvexAuthToken, isSameOrigin } from "@/lib/server-auth";
 import { authRatelimit, workflowClient } from "@/lib/upstash";
 
-const CONVEX_SITE_URL =
-	process.env.VITE_CONVEX_SITE_URL || process.env.CONVEX_SITE_URL;
-
 const TITLE_MODEL_ID = "google/gemini-2.5-flash-lite";
 const TITLE_MAX_LENGTH = 200;
 
@@ -20,6 +17,7 @@ type TitleProvider = "osschat" | "openrouter";
 type GenerateTitlePayload = {
 	chatId: string;
 	userId: string;
+	authToken?: string;
 	seedText?: string;
 	length: TitleLength;
 	provider: TitleProvider;
@@ -90,35 +88,15 @@ function sanitizeGeneratedTitle(input: string): string {
 	return title.slice(0, TITLE_MAX_LENGTH);
 }
 
-async function getAuthTokenFromWorkflowHeaders(headers: Headers): Promise<string | null> {
-	if (!CONVEX_SITE_URL) return null;
-
-	const cookie = headers.get("cookie");
-	if (!cookie) return null;
-
-	const response = await fetch(`${CONVEX_SITE_URL}/api/auth/convex/token`, {
-		headers: { cookie },
-	});
-	if (!response.ok) return null;
-
-	const data = (await response.json()) as { token?: string } | null;
-	return data?.token ?? null;
-}
-
 function isLocalWorkflowRequest(request: Request): boolean {
 	const hostname = new URL(request.url).hostname;
 	return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 }
 
-function getWorkflowTriggerHeaders(headers: Headers): Record<string, string> {
-	const triggerHeaders: Record<string, string> = {
+function getWorkflowTriggerHeaders(): Record<string, string> {
+	return {
 		"Content-Type": "application/json",
 	};
-	const cookie = headers.get("cookie");
-	if (cookie) {
-		triggerHeaders.cookie = cookie;
-	}
-	return triggerHeaders;
 }
 
 async function runGenerateTitleInline(
@@ -195,9 +173,7 @@ const workflow = serve<GenerateTitlePayload>(async (context) => {
 		mode = "auto",
 	} = payload;
 
-	const authToken = await context.run("resolve-auth", async () => {
-		return getAuthTokenFromWorkflowHeaders(context.headers);
-	});
+	const authToken = payload.authToken;
 	if (!authToken) {
 		throw new Error("Unauthorized");
 	}
@@ -341,6 +317,7 @@ export const Route = createFileRoute("/api/workflow/generate-title")({
 				const normalizedPayload: GenerateTitlePayload = {
 					...payload,
 					userId: authConvexUser._id,
+					authToken,
 				};
 
 				if (isLocalWorkflowRequest(request)) {
@@ -366,7 +343,7 @@ export const Route = createFileRoute("/api/workflow/generate-title")({
 				}
 
 				try {
-					const headers = getWorkflowTriggerHeaders(request.headers);
+					const headers = getWorkflowTriggerHeaders();
 					const { workflowRunId } = await workflowClient.trigger({
 						url: request.url,
 						body: normalizedPayload,

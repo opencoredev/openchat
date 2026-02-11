@@ -40,6 +40,10 @@ export const workflowClient = QSTASH_TOKEN
 		})
 	: null;
 
+if (!upstashRedis) {
+	console.warn("[Upstash] Redis not configured — rate limiting is disabled");
+}
+
 export function isUpstashRedisConfigured(): boolean {
 	return upstashRedis !== null;
 }
