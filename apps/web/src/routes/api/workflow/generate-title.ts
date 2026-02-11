@@ -5,7 +5,7 @@ import { api } from "@server/convex/_generated/api";
 import type { Id } from "@server/convex/_generated/dataModel";
 import { createConvexServerClient } from "@/lib/convex-server";
 import { decryptSecret } from "@/lib/server-crypto";
-import { getConvexAuthToken, isSameOrigin } from "@/lib/server-auth";
+import { getAuthUser, getConvexAuthToken, isSameOrigin } from "@/lib/server-auth";
 import { workflowClient } from "@/lib/upstash";
 
 const CONVEX_SITE_URL =
@@ -25,6 +25,50 @@ type GenerateTitlePayload = {
 	provider: TitleProvider;
 	mode?: "auto" | "manual";
 };
+
+function parseGenerateTitlePayload(raw: unknown): GenerateTitlePayload | null {
+	if (!raw || typeof raw !== "object") return null;
+
+	const payload = raw as Record<string, unknown>;
+	if (typeof payload.chatId !== "string" || payload.chatId.trim().length === 0) {
+		return null;
+	}
+	if (typeof payload.userId !== "string" || payload.userId.trim().length === 0) {
+		return null;
+	}
+	if (
+		payload.length !== "short" &&
+		payload.length !== "standard" &&
+		payload.length !== "long"
+	) {
+		return null;
+	}
+	if (payload.provider !== "osschat" && payload.provider !== "openrouter") {
+		return null;
+	}
+	if (
+		payload.mode !== undefined &&
+		payload.mode !== "auto" &&
+		payload.mode !== "manual"
+	) {
+		return null;
+	}
+	if (
+		payload.seedText !== undefined &&
+		typeof payload.seedText !== "string"
+	) {
+		return null;
+	}
+
+	return {
+		chatId: payload.chatId.trim(),
+		userId: payload.userId.trim(),
+		seedText: payload.seedText,
+		length: payload.length,
+		provider: payload.provider,
+		mode: payload.mode,
+	};
+}
 
 const TITLE_STYLE_PROMPTS: Record<TitleLength, string> = {
 	short: "Use 2-4 words.",
@@ -135,7 +179,22 @@ async function runGenerateTitleInline(
 }
 
 const workflow = serve<GenerateTitlePayload>(async (context) => {
-	const { chatId, userId, seedText = "", length, provider, mode = "auto" } = context.requestPayload;
+	const payload = await context.run("load-payload", async () => {
+		const parsed = parseGenerateTitlePayload(context.requestPayload);
+		if (!parsed) {
+			throw new Error("Invalid payload");
+		}
+		return parsed;
+	});
+	const {
+		chatId,
+		userId,
+		seedText = "",
+		length,
+		provider,
+		mode = "auto",
+	} = payload;
+
 	const authToken = await context.run("resolve-auth", async () => {
 		const forwardedToken = context.headers.get("x-convex-token");
 		if (forwardedToken) return forwardedToken;
@@ -194,7 +253,7 @@ const workflow = serve<GenerateTitlePayload>(async (context) => {
 			"HTTP-Referer": process.env.VITE_CONVEX_SITE_URL || "https://osschat.io",
 			"X-Title": "OSSChat",
 		},
-		body: JSON.stringify({
+		body: {
 			model: TITLE_MODEL_ID,
 			messages: [
 				{ role: "system", content: systemPrompt },
@@ -202,7 +261,7 @@ const workflow = serve<GenerateTitlePayload>(async (context) => {
 			],
 			temperature: 0.2,
 			max_tokens: 32,
-		}),
+		},
 		retries: 2,
 		timeout: "30s",
 	});
@@ -247,21 +306,41 @@ export const Route = createFileRoute("/api/workflow/generate-title")({
 					return json({ error: "Invalid origin" }, { status: 403 });
 				}
 
-				let payload: GenerateTitlePayload;
+				let payloadRaw: unknown;
 				try {
-					payload = (await request.json()) as GenerateTitlePayload;
+					payloadRaw = await request.json();
 				} catch {
 					return json({ error: "Invalid JSON payload" }, { status: 400 });
+				}
+				const payload = parseGenerateTitlePayload(payloadRaw);
+				if (!payload) {
+					return json({ error: "Invalid title payload" }, { status: 400 });
 				}
 
 				const authToken = await getConvexAuthToken(request);
 				if (!authToken) {
 					return json({ error: "Unauthorized" }, { status: 401 });
 				}
+				const authUser = await getAuthUser(request);
+				if (!authUser) {
+					return json({ error: "Unauthorized" }, { status: 401 });
+				}
+				const authConvexClient = createConvexServerClient(authToken);
+				const authConvexUser = await authConvexClient.query(api.users.getByExternalId, {
+					externalId: authUser.id,
+				});
+				if (!authConvexUser?._id) {
+					return json({ error: "Unauthorized" }, { status: 401 });
+				}
+
+				const normalizedPayload: GenerateTitlePayload = {
+					...payload,
+					userId: authConvexUser._id,
+				};
 
 				if (isLocalWorkflowRequest(request)) {
 					try {
-						const result = await runGenerateTitleInline(payload, authToken);
+						const result = await runGenerateTitleInline(normalizedPayload, authToken);
 						if (!result.saved) {
 							const status = result.reason === "missing_openrouter_key" ? 400 : 409;
 							return json(result, { status });
@@ -286,7 +365,7 @@ export const Route = createFileRoute("/api/workflow/generate-title")({
 					headers["x-convex-token"] = authToken;
 					const { workflowRunId } = await workflowClient.trigger({
 						url: request.url,
-						body: payload,
+						body: normalizedPayload,
 						headers,
 					});
 					return json({ queued: true, workflowRunId }, { status: 202 });

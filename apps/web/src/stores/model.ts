@@ -333,9 +333,9 @@ async function fetchAllModels(): Promise<Array<Model>> {
         headers: { "Content-Type": "application/json" },
       });
 
-      if (!response.ok) {
-        throw new Error(`OpenRouter API error: ${response.status}`);
-      }
+	      if (!response.ok) {
+	        throw new Error(`Models API error: ${response.status}`);
+	      }
 
       const data = await response.json();
       const rawModels = data.data || [];

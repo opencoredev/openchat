@@ -60,4 +60,20 @@ describe("server-auth.getConvexAuthToken", () => {
 
 		await expect(getConvexAuthToken(request)).resolves.toBe("fallback-token");
 	});
+
+	it("returns null when token endpoint explicitly rejects the request", async () => {
+		vi.stubEnv("VITE_CONVEX_SITE_URL", "https://example.convex.site");
+		vi.stubEnv("CONVEX_SITE_URL", "https://example.convex.site");
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ error: "unauthorized" }), {
+				status: 401,
+				headers: { "Content-Type": "application/json" },
+			}),
+		);
+
+		const { getConvexAuthToken } = await loadModule();
+		const request = requestWithCookie("better-auth.convex_jwt=fallback-token");
+
+		await expect(getConvexAuthToken(request)).resolves.toBeNull();
+	});
 });

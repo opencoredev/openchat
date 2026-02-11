@@ -313,7 +313,6 @@ export const incrementAiUsage = internalMutation({
 	args: {
 		userId: v.id("users"),
 		usageCents: v.number(),
-		skipRedisSync: v.optional(v.boolean()),
 	},
 	returns: v.object({
 		usedCents: v.number(),
@@ -367,10 +366,6 @@ export const incrementAiUsage = internalMutation({
 			aiUsageDate: currentDate,
 			updatedAt: Date.now(),
 		});
-
-		// NOTE: Redis sync is performed from action callsites (e.g. backgroundStream)
-		// to avoid HTTP side effects inside mutations.
-		void args.skipRedisSync;
 
 		return {
 			usedCents: nextCents,

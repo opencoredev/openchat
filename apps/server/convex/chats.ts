@@ -549,6 +549,9 @@ async function generateTitleFromSeed(
 	length: TitleLength,
 	openRouterKey: string,
 ): Promise<string | null> {
+	const normalizedSeed = seedText.trim().slice(0, 500);
+	if (!normalizedSeed) return null;
+
 	const systemPrompt = [
 		"Create a specific, useful chat title.",
 		"Return only the title in Title Case; no quotes, no trailing punctuation.",
@@ -567,10 +570,10 @@ async function generateTitleFromSeed(
 			},
 			body: JSON.stringify({
 				model: TITLE_MODEL_ID,
-				messages: [
-					{ role: "system", content: systemPrompt },
-					{ role: "user", content: seedText },
-				],
+					messages: [
+						{ role: "system", content: systemPrompt },
+						{ role: "user", content: normalizedSeed },
+					],
 				temperature: 0.2,
 				max_tokens: 32,
 			}),

@@ -4,6 +4,7 @@ import { serve } from "@upstash/workflow/tanstack";
 import { api } from "@server/convex/_generated/api";
 import type { Id } from "@server/convex/_generated/dataModel";
 import { createConvexServerClient } from "@/lib/convex-server";
+import { getAuthUser, getConvexAuthToken, isSameOrigin } from "@/lib/server-auth";
 import { upstashRedis, workflowClient } from "@/lib/upstash";
 
 const CONVEX_SITE_URL =
@@ -22,6 +23,9 @@ type DeleteStep =
 	| "delete-files";
 
 async function getAuthTokenFromWorkflowHeaders(headers: Headers): Promise<string | null> {
+	const forwardedToken = headers.get("x-convex-token");
+	if (forwardedToken) return forwardedToken;
+
 	if (!CONVEX_SITE_URL) return null;
 
 	const cookie = headers.get("cookie");
@@ -34,6 +38,37 @@ async function getAuthTokenFromWorkflowHeaders(headers: Headers): Promise<string
 
 	const data = (await response.json()) as { token?: string } | null;
 	return data?.token ?? null;
+}
+
+function parseDeletePayload(raw: unknown): DeleteAccountPayload | null {
+	if (!raw || typeof raw !== "object") return null;
+
+	const payload = raw as Record<string, unknown>;
+	if (typeof payload.userId !== "string" || payload.userId.trim().length === 0) {
+		return null;
+	}
+	if (typeof payload.externalId !== "string" || payload.externalId.trim().length === 0) {
+		return null;
+	}
+
+	const parsed: DeleteAccountPayload = {
+		userId: payload.userId.trim(),
+		externalId: payload.externalId.trim(),
+	};
+
+	if (payload.batchSize !== undefined) {
+		if (
+			typeof payload.batchSize !== "number" ||
+			!Number.isFinite(payload.batchSize) ||
+			payload.batchSize < 1 ||
+			payload.batchSize > 1_000
+		) {
+			return null;
+		}
+		parsed.batchSize = Math.floor(payload.batchSize);
+	}
+
+	return parsed;
 }
 
 async function clearRedisUserKeys(userId: string): Promise<number> {
@@ -221,16 +256,45 @@ export const Route = createFileRoute("/api/workflow/delete-account")({
 					return workflow.POST({ request });
 				}
 
-				let payload: DeleteAccountPayload;
+				if (!isSameOrigin(request)) {
+					return json({ error: "Invalid origin" }, { status: 403 });
+				}
+
+				const authToken = await getConvexAuthToken(request);
+				if (!authToken) {
+					return json({ error: "Unauthorized" }, { status: 401 });
+				}
+				const authUser = await getAuthUser(request);
+				if (!authUser) {
+					return json({ error: "Unauthorized" }, { status: 401 });
+				}
+				const authConvexClient = createConvexServerClient(authToken);
+				const authConvexUser = await authConvexClient.query(api.users.getByExternalId, {
+					externalId: authUser.id,
+				});
+				if (!authConvexUser?._id) {
+					return json({ error: "Unauthorized" }, { status: 401 });
+				}
+
+				let payloadRaw: unknown;
 				try {
-					payload = (await request.json()) as DeleteAccountPayload;
+					payloadRaw = await request.json();
 				} catch {
 					return json({ error: "Invalid JSON payload" }, { status: 400 });
 				}
+				const payload = parseDeletePayload(payloadRaw);
+				if (!payload) {
+					return json({ error: "Invalid delete-account payload" }, { status: 400 });
+				}
+				const normalizedPayload: DeleteAccountPayload = {
+					...payload,
+					userId: authConvexUser._id,
+					externalId: authUser.id,
+				};
 
 				if (isLocalWorkflowRequest(request)) {
 					try {
-						const result = await runDeleteAccountInline(payload, request.headers);
+						const result = await runDeleteAccountInline(normalizedPayload, request.headers);
 						return json(result, { status: 200 });
 					} catch (error) {
 						const message = error instanceof Error ? error.message : "Failed to delete account";
@@ -247,10 +311,12 @@ export const Route = createFileRoute("/api/workflow/delete-account")({
 				}
 
 				try {
+					const triggerHeaders = getWorkflowTriggerHeaders(request.headers);
+					triggerHeaders["x-convex-token"] = authToken;
 					const { workflowRunId } = await workflowClient.trigger({
 						url: request.url,
-						body: payload,
-						headers: getWorkflowTriggerHeaders(request.headers),
+						body: normalizedPayload,
+						headers: triggerHeaders,
 					});
 					return json({ queued: true, workflowRunId }, { status: 202 });
 				} catch (error) {

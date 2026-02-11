@@ -52,9 +52,7 @@ export async function ensureRedisConnected(): Promise<boolean> {
 }
 
 async function getConnectedClient(): Promise<UpstashRedis | null> {
-	if (!upstashRedis) return null;
-	const isReady = await ensureRedisConnected();
-	return isReady ? upstashRedis : null;
+	return upstashRedis;
 }
 
 function parseStreamMeta(value: unknown): StreamMeta | null {
@@ -153,6 +151,9 @@ export async function readStream(
 		lastId === "0" ? "-" : `(${lastId}`,
 		"+",
 	);
+	if (!entries || typeof entries !== "object") {
+		return [];
+	}
 
 	return Object.entries(entries).map(([id, message]) => ({
 		id,

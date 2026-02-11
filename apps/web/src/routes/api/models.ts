@@ -51,9 +51,11 @@ export const Route = createFileRoute("/api/models")({
 				}
 
 				try {
-					const cached = await upstashRedis.get<string>(MODELS_CACHE_KEY);
+					const cached = await upstashRedis.get<string | Record<string, unknown>>(MODELS_CACHE_KEY);
 					if (cached) {
-						return new Response(cached, {
+						const body =
+							typeof cached === "string" ? cached : JSON.stringify(cached);
+						return new Response(body, {
 							status: 200,
 							headers: {
 								"Content-Type": "application/json",

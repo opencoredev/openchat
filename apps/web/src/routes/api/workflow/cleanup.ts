@@ -3,6 +3,7 @@ import { json } from "@tanstack/react-start";
 import { serve } from "@upstash/workflow/tanstack";
 import { api } from "@server/convex/_generated/api";
 import { createConvexServerClient } from "@/lib/convex-server";
+import { getConvexAuthToken, isSameOrigin } from "@/lib/server-auth";
 import { workflowClient } from "@/lib/upstash";
 
 type CleanupPayload = {
@@ -10,9 +11,57 @@ type CleanupPayload = {
 	batchSize?: number;
 };
 
+const MAX_CLEANUP_BATCHES = 1_000;
+
 function isLocalWorkflowRequest(request: Request): boolean {
 	const hostname = new URL(request.url).hostname;
 	return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function parseCleanupPayload(raw: unknown): CleanupPayload | null {
+	if (!raw || typeof raw !== "object") return null;
+
+	const payload = raw as Record<string, unknown>;
+	const parsed: CleanupPayload = {};
+
+	if (payload.retentionDays !== undefined) {
+		if (
+			typeof payload.retentionDays !== "number" ||
+			!Number.isFinite(payload.retentionDays) ||
+			payload.retentionDays < 1 ||
+			payload.retentionDays > 3650
+		) {
+			return null;
+		}
+		parsed.retentionDays = Math.floor(payload.retentionDays);
+	}
+
+	if (payload.batchSize !== undefined) {
+		if (
+			typeof payload.batchSize !== "number" ||
+			!Number.isFinite(payload.batchSize) ||
+			payload.batchSize < 1 ||
+			payload.batchSize > 1_000
+		) {
+			return null;
+		}
+		parsed.batchSize = Math.floor(payload.batchSize);
+	}
+
+	return parsed;
+}
+
+function hasValidCleanupToken(headers: Headers): boolean {
+	const expectedToken = process.env.WORKFLOW_CLEANUP_TOKEN?.trim();
+	if (!expectedToken) return false;
+
+	const bearer = headers.get("authorization");
+	if (bearer?.startsWith("Bearer ")) {
+		return bearer.slice("Bearer ".length).trim() === expectedToken;
+	}
+
+	const workflowHeader = headers.get("x-workflow-cleanup-token");
+	return workflowHeader?.trim() === expectedToken;
 }
 
 async function runCleanupInline(payload: CleanupPayload): Promise<{
@@ -32,7 +81,7 @@ async function runCleanupInline(payload: CleanupPayload): Promise<{
 	let batches = 0;
 	let totalDeleted = 0;
 
-	while (true) {
+	while (batches < MAX_CLEANUP_BATCHES) {
 		batches += 1;
 		const preview = await convexClient.action(api.crons.runCleanupBatchForWorkflow, {
 			workflowToken,
@@ -52,6 +101,10 @@ async function runCleanupInline(payload: CleanupPayload): Promise<{
 		});
 		totalDeleted += deletedBatch.deleted;
 		await new Promise((resolve) => setTimeout(resolve, 1_000));
+	}
+
+	if (batches >= MAX_CLEANUP_BATCHES) {
+		throw new Error(`Cleanup exceeded maximum batches (${MAX_CLEANUP_BATCHES})`);
 	}
 
 	return {
@@ -74,7 +127,7 @@ const workflow = serve<CleanupPayload>(async (context) => {
 	let batches = 0;
 	let totalDeleted = 0;
 
-	while (true) {
+	while (batches < MAX_CLEANUP_BATCHES) {
 		batches += 1;
 		const preview = await context.run(`query-batch-${batches}`, async () => {
 			return convexClient.action(api.crons.runCleanupBatchForWorkflow, {
@@ -102,6 +155,10 @@ const workflow = serve<CleanupPayload>(async (context) => {
 		await context.sleep(`sleep-${batches}`, "1s");
 	}
 
+	if (batches >= MAX_CLEANUP_BATCHES) {
+		throw new Error(`Cleanup exceeded maximum batches (${MAX_CLEANUP_BATCHES})`);
+	}
+
 	return context.run("log-completion", async () => {
 		return {
 			success: true,
@@ -120,11 +177,26 @@ export const Route = createFileRoute("/api/workflow/cleanup")({
 					return workflow.POST({ request });
 				}
 
-				let payload: CleanupPayload;
+				const hasCleanupToken = hasValidCleanupToken(request.headers);
+				if (!hasCleanupToken) {
+					if (!isSameOrigin(request)) {
+						return json({ error: "Invalid origin" }, { status: 403 });
+					}
+					const authToken = await getConvexAuthToken(request);
+					if (!authToken) {
+						return json({ error: "Unauthorized" }, { status: 401 });
+					}
+				}
+
+				let payloadRaw: unknown;
 				try {
-					payload = (await request.json()) as CleanupPayload;
+					payloadRaw = await request.json();
 				} catch {
 					return json({ error: "Invalid JSON payload" }, { status: 400 });
+				}
+				const payload = parseCleanupPayload(payloadRaw);
+				if (!payload) {
+					return json({ error: "Invalid cleanup payload" }, { status: 400 });
 				}
 
 				if (isLocalWorkflowRequest(request)) {
@@ -145,12 +217,18 @@ export const Route = createFileRoute("/api/workflow/cleanup")({
 				}
 
 				try {
+					const triggerHeaders: Record<string, string> = {
+						"Content-Type": "application/json",
+					};
+					const workflowToken = process.env.WORKFLOW_CLEANUP_TOKEN?.trim();
+					if (workflowToken) {
+						triggerHeaders.authorization = `Bearer ${workflowToken}`;
+					}
+
 					const { workflowRunId } = await workflowClient.trigger({
 						url: request.url,
 						body: payload,
-						headers: {
-							"Content-Type": "application/json",
-						},
+						headers: triggerHeaders,
 					});
 					return json({ queued: true, workflowRunId }, { status: 202 });
 				} catch (error) {

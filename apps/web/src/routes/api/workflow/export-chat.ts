@@ -4,6 +4,7 @@ import { serve } from "@upstash/workflow/tanstack";
 import { api } from "@server/convex/_generated/api";
 import type { Id } from "@server/convex/_generated/dataModel";
 import { createConvexServerClient } from "@/lib/convex-server";
+import { getAuthUser, getConvexAuthToken, isSameOrigin } from "@/lib/server-auth";
 import { workflowClient } from "@/lib/upstash";
 
 const CONVEX_SITE_URL =
@@ -40,6 +41,9 @@ type ChatExportData = {
 };
 
 async function getAuthTokenFromWorkflowHeaders(headers: Headers): Promise<string | null> {
+	const forwardedToken = headers.get("x-convex-token");
+	if (forwardedToken) return forwardedToken;
+
 	if (!CONVEX_SITE_URL) return null;
 
 	const cookie = headers.get("cookie");
@@ -52,6 +56,32 @@ async function getAuthTokenFromWorkflowHeaders(headers: Headers): Promise<string
 
 	const data = (await response.json()) as { token?: string } | null;
 	return data?.token ?? null;
+}
+
+function parseExportPayload(raw: unknown): ExportChatPayload | null {
+	if (!raw || typeof raw !== "object") return null;
+
+	const payload = raw as Record<string, unknown>;
+	if (typeof payload.chatId !== "string" || payload.chatId.trim().length === 0) {
+		return null;
+	}
+	if (typeof payload.userId !== "string" || payload.userId.trim().length === 0) {
+		return null;
+	}
+
+	let format: ExportFormat | undefined;
+	if (payload.format !== undefined) {
+		if (payload.format !== "markdown" && payload.format !== "json") {
+			return null;
+		}
+		format = payload.format;
+	}
+
+	return {
+		chatId: payload.chatId.trim(),
+		userId: payload.userId.trim(),
+		format,
+	};
 }
 
 function isLocalWorkflowRequest(request: Request): boolean {
@@ -109,14 +139,9 @@ function formatExportMarkdown(data: ChatExportData): string {
 
 async function runExportChatInline(
 	payload: ExportChatPayload,
-	headers: Headers,
+	authToken: string,
 ): Promise<{ downloadUrl: string; byteLength: number; fileName: string }> {
 	const { chatId, userId, format = "markdown" } = payload;
-	const authToken = await getAuthTokenFromWorkflowHeaders(headers);
-	if (!authToken) {
-		throw new Error("Unauthorized");
-	}
-
 	const convexClient = createConvexServerClient(authToken);
 	const chatExportData = await convexClient.query(api.chats.getChatExportData, {
 		chatId: chatId as Id<"chats">,
@@ -192,16 +217,44 @@ export const Route = createFileRoute("/api/workflow/export-chat")({
 					return workflow.POST({ request });
 				}
 
-				let payload: ExportChatPayload;
+				if (!isSameOrigin(request)) {
+					return json({ error: "Invalid origin" }, { status: 403 });
+				}
+
+				const authToken = await getConvexAuthToken(request);
+				if (!authToken) {
+					return json({ error: "Unauthorized" }, { status: 401 });
+				}
+				const authUser = await getAuthUser(request);
+				if (!authUser) {
+					return json({ error: "Unauthorized" }, { status: 401 });
+				}
+				const authConvexClient = createConvexServerClient(authToken);
+				const authConvexUser = await authConvexClient.query(api.users.getByExternalId, {
+					externalId: authUser.id,
+				});
+				if (!authConvexUser?._id) {
+					return json({ error: "Unauthorized" }, { status: 401 });
+				}
+
+				let payloadRaw: unknown;
 				try {
-					payload = (await request.json()) as ExportChatPayload;
+					payloadRaw = await request.json();
 				} catch {
 					return json({ error: "Invalid JSON payload" }, { status: 400 });
 				}
+				const payload = parseExportPayload(payloadRaw);
+				if (!payload) {
+					return json({ error: "Invalid export payload" }, { status: 400 });
+				}
+				const normalizedPayload: ExportChatPayload = {
+					...payload,
+					userId: authConvexUser._id,
+				};
 
 				if (isLocalWorkflowRequest(request)) {
 					try {
-						const result = await runExportChatInline(payload, request.headers);
+						const result = await runExportChatInline(normalizedPayload, authToken);
 						return json(result, { status: 200 });
 					} catch (error) {
 						const message = error instanceof Error ? error.message : "Failed to export chat";
@@ -219,10 +272,12 @@ export const Route = createFileRoute("/api/workflow/export-chat")({
 				}
 
 				try {
+					const triggerHeaders = getWorkflowTriggerHeaders(request.headers);
+					triggerHeaders["x-convex-token"] = authToken;
 					const { workflowRunId } = await workflowClient.trigger({
 						url: request.url,
-						body: payload,
-						headers: getWorkflowTriggerHeaders(request.headers),
+						body: normalizedPayload,
+						headers: triggerHeaders,
 					});
 					return json({ queued: true, workflowRunId }, { status: 202 });
 				} catch (error) {

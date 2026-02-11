@@ -1,10 +1,10 @@
-const UPSTASH_REDIS_REST_URL = process.env.UPSTASH_REDIS_REST_URL?.trim();
-const UPSTASH_REDIS_REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
-
 type PipelineResult = Array<{ result: unknown }>;
 
-function isConfigured(): boolean {
-	return Boolean(UPSTASH_REDIS_REST_URL && UPSTASH_REDIS_REST_TOKEN);
+function getConfig(): { url: string; token: string } | null {
+	const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
+	const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+	if (!url || !token) return null;
+	return { url, token };
 }
 
 function shouldLogUpstashUsageErrors(): boolean {
@@ -22,12 +22,13 @@ function getMidnightUtcEpochSeconds(dateKey: string): number {
 }
 
 async function executePipeline(commands: Array<Array<string | number>>): Promise<PipelineResult | null> {
-	if (!isConfigured()) return null;
+	const config = getConfig();
+	if (!config) return null;
 
-	const response = await fetch(`${UPSTASH_REDIS_REST_URL}/pipeline`, {
+	const response = await fetch(`${config.url}/pipeline`, {
 		method: "POST",
 		headers: {
-			Authorization: `Bearer ${UPSTASH_REDIS_REST_TOKEN}`,
+			Authorization: `Bearer ${config.token}`,
 			"Content-Type": "application/json",
 		},
 		body: JSON.stringify(commands),
@@ -45,7 +46,7 @@ export async function getDailyUsageFromUpstash(
 	userId: string,
 	dateKey: string,
 ): Promise<number | null> {
-	if (!isConfigured()) return null;
+	if (!getConfig()) return null;
 
 	try {
 		const key = usageCounterKey(userId, dateKey);
@@ -71,7 +72,7 @@ export async function incrementDailyUsageInUpstash(
 	dateKey: string,
 	usageCents: number,
 ): Promise<void> {
-	if (!isConfigured()) return;
+	if (!getConfig()) return;
 	if (!Number.isFinite(usageCents) || usageCents <= 0) return;
 
 	const key = usageCounterKey(userId, dateKey);

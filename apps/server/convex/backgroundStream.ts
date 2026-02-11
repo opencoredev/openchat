@@ -793,24 +793,24 @@ export const executeStream = internalAction({
 	},
 	handler: async (ctx, args) => {
 		const job = await ctx.runQuery(internal.backgroundStream.getJobInternal, {
-			jobId: args.jobId
+			jobId: args.jobId,
 		});
 
-			if (!job) {
+		if (!job) {
+			return;
+		}
+
+		if (job.provider === "osschat") {
+			const currentDate = getCurrentDateKey();
+			const redisUsageCents = await getDailyUsageFromUpstash(job.userId, currentDate);
+			if (redisUsageCents !== null && redisUsageCents >= DAILY_AI_LIMIT_CENTS) {
+				await ctx.runMutation(internal.backgroundStream.failStream, {
+					jobId: args.jobId,
+					error: "Daily usage limit reached. Connect your OpenRouter account to continue.",
+				});
 				return;
 			}
-
-			if (job.provider === "osschat") {
-				const currentDate = getCurrentDateKey();
-				const redisUsageCents = await getDailyUsageFromUpstash(job.userId, currentDate);
-				if (redisUsageCents !== null && redisUsageCents >= DAILY_AI_LIMIT_CENTS) {
-					await ctx.runMutation(internal.backgroundStream.failStream, {
-						jobId: args.jobId,
-						error: "Daily usage limit reached. Connect your OpenRouter account to continue.",
-					});
-					return;
-				}
-			}
+		}
 
 		await ctx.runMutation(internal.backgroundStream.updateStreamContent, {
 			jobId: args.jobId,
@@ -855,10 +855,10 @@ export const executeStream = internalAction({
 		let reasoningChunkCount = 0;
 		let reasoningStartTime: number | null = null;
 		let reasoningEndTime: number | null = null;
-	let streamCompletedTime: number | null = null;
-	let firstTextDeltaTime: number | null = null;
-	let pendingUpdateCounter = 0;
-	let usageSummary: UsagePayload | null = null;
+		let streamCompletedTime: number | null = null;
+		let firstTextDeltaTime: number | null = null;
+		let pendingUpdateCounter = 0;
+		let usageSummary: UsagePayload | null = null;
 
 		const upsertReasoningPart = (id: string): ChainOfThoughtPart => {
 			const existingIndex = reasoningPartById.get(id);
@@ -1336,77 +1336,79 @@ export const executeStream = internalAction({
 				});
 			}
 
-		clearTimeout(timeoutId);
+			clearTimeout(timeoutId);
 
-		// Compute analytics for message persistence
-		const totalDurationMs = streamCompletedTime - job.createdAt;
-		const timeToFirstTokenMs = firstTextDeltaTime
-			? firstTextDeltaTime - job.createdAt
-			: undefined;
-		const completionTokens = usageSummary?.completionTokens ?? 0;
-		const tokensPerSecond = totalDurationMs > 0 && completionTokens > 0
-			? Math.round((completionTokens / (totalDurationMs / 1000)) * 100) / 100
-			: undefined;
+			// Compute analytics for message persistence
+			const totalDurationMs = streamCompletedTime - job.createdAt;
+			const timeToFirstTokenMs = firstTextDeltaTime
+				? firstTextDeltaTime - job.createdAt
+				: undefined;
+			const completionTokens = usageSummary?.completionTokens ?? 0;
+			const tokensPerSecond =
+				totalDurationMs > 0 && completionTokens > 0
+					? Math.round((completionTokens / (totalDurationMs / 1000)) * 100) / 100
+					: undefined;
 
-		if (job.provider === "osschat") {
+			if (job.provider === "osschat") {
 				const usageCents = calculateUsageCents(
 					usageSummary,
 					job.messages,
 					fullContent,
 				);
-					if (usageCents && usageCents > 0) {
-						for (let attempt = 0; attempt < 2; attempt++) {
-							try {
-								await ctx.runMutation(internal.users.incrementAiUsage, {
-									userId: job.userId,
-									usageCents,
-									skipRedisSync: true,
-								});
-								await incrementDailyUsageInUpstash(
-									job.userId,
-									getCurrentDateKey(),
-									usageCents,
-								);
-								break;
-							} catch {
-								// No-op; retried below.
-							}
+				if (usageCents && usageCents > 0) {
+					for (let attempt = 0; attempt < 2; attempt++) {
+						try {
+							await ctx.runMutation(internal.users.incrementAiUsage, {
+								userId: job.userId,
+								usageCents,
+							});
+							await incrementDailyUsageInUpstash(
+								job.userId,
+								getCurrentDateKey(),
+								usageCents,
+							);
+							break;
+						} catch {
+							// No-op; retried below.
+						}
 					}
 				}
 			}
 
-				const thinkingTimeMs = getThinkingTimeMs();
-				const thinkingTimeSec = getThinkingTimeSec();
-				const toolMetrics = getToolMetrics();
+			const thinkingTimeMs = getThinkingTimeMs();
+			const thinkingTimeSec = getThinkingTimeSec();
+			const toolMetrics = getToolMetrics();
 
 			await ctx.runMutation(internal.backgroundStream.completeStream, {
-			jobId: args.jobId,
-			content: fullContent,
-			reasoning: reasoningRequested ? fullReasoning || undefined : undefined,
-			chainOfThoughtParts: getPersistableChainOfThoughtParts(),
-			thinkingTimeMs,
-			thinkingTimeSec,
+				jobId: args.jobId,
+				content: fullContent,
+				reasoning: reasoningRequested ? fullReasoning || undefined : undefined,
+				chainOfThoughtParts: getPersistableChainOfThoughtParts(),
+				thinkingTimeMs,
+				thinkingTimeSec,
 				reasoningCharCount: reasoningRequested ? fullReasoning.length : undefined,
 				reasoningChunkCount: reasoningRequested ? reasoningChunkCount : undefined,
 				reasoningTokenCount: getReasoningTokenCount(),
 				reasoningRequested,
 				webSearchUsed: toolMetrics.webSearchUsed,
 				webSearchCallCount: toolMetrics.webSearchCallCount,
-			toolCallCount: toolMetrics.toolCallCount,
-			tokensPerSecond,
-			timeToFirstTokenMs,
-			totalDurationMs,
-			tokenUsage: usageSummary ? {
-				promptTokens: usageSummary.promptTokens ?? 0,
-				completionTokens: usageSummary.completionTokens ?? 0,
-				totalTokens: usageSummary.totalTokens ?? 0,
-			} : undefined,
-		});
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : "Unknown error";
-				await ctx.runMutation(internal.backgroundStream.failStream, {
-					jobId: args.jobId,
-					error: errorMessage,
+				toolCallCount: toolMetrics.toolCallCount,
+				tokensPerSecond,
+				timeToFirstTokenMs,
+				totalDurationMs,
+				tokenUsage: usageSummary
+					? {
+							promptTokens: usageSummary.promptTokens ?? 0,
+							completionTokens: usageSummary.completionTokens ?? 0,
+							totalTokens: usageSummary.totalTokens ?? 0,
+						}
+					: undefined,
+			});
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : "Unknown error";
+			await ctx.runMutation(internal.backgroundStream.failStream, {
+				jobId: args.jobId,
+				error: errorMessage,
 				partialContent: fullContent,
 			});
 		}

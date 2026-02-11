@@ -10,6 +10,7 @@ import { useProviderStore } from "@/stores/provider";
 import { useStreamStore } from "@/stores/stream";
 import { useUIStore } from "@/stores/ui";
 import { analytics } from "@/lib/analytics";
+import { shouldTriggerAutoTitle } from "@/lib/title-generation";
 
 interface ChatFileAttachment {
 	type: "file";
@@ -509,24 +510,24 @@ export function usePersistentChat({
 				if (previousHash === nextHash) return prev;
 
 				const updated = [...prev];
-					updated[idx] = {
-						...updated[idx],
-						parts,
-						metadata: {
-								thinkingTimeSec: activeStreamJob.thinkingTimeSec,
-								reasoningRequested: jobReasoningRequested,
-								reasoningTokenCount: activeStreamJob.reasoningTokenCount,
-							modelId: activeStreamJob.model,
-							provider: activeStreamJob.provider,
-							reasoningEffort: activeStreamJob.options?.reasoningEffort,
-							webSearchEnabled: activeStreamJob.options?.enableWebSearch,
-							webSearchUsed: activeStreamJob.webSearchUsed,
-							webSearchCallCount: activeStreamJob.webSearchCallCount,
-							toolCallCount: activeStreamJob.toolCallCount,
-							resumedFromActiveStream: true,
-						},
-					};
-					return updated;
+				updated[idx] = {
+					...updated[idx],
+					parts,
+					metadata: {
+						thinkingTimeSec: activeStreamJob.thinkingTimeSec,
+						reasoningRequested: jobReasoningRequested,
+						reasoningTokenCount: activeStreamJob.reasoningTokenCount,
+						modelId: activeStreamJob.model,
+						provider: activeStreamJob.provider,
+						reasoningEffort: activeStreamJob.options?.reasoningEffort,
+						webSearchEnabled: activeStreamJob.options?.enableWebSearch,
+						webSearchUsed: activeStreamJob.webSearchUsed,
+						webSearchCallCount: activeStreamJob.webSearchCallCount,
+						toolCallCount: activeStreamJob.toolCallCount,
+						resumedFromActiveStream: true,
+					},
+				};
+				return updated;
 			});
 		}
 	}, [activeStreamJob, status]);
@@ -566,6 +567,8 @@ export function usePersistentChat({
 			}
 
 			let targetChatId = chatIdRef.current;
+			const startedWithoutChatId = !targetChatId;
+			const existingMessageCount = messagesResult?.length ?? messages.length;
 
 			if (!targetChatId) {
 				try {
@@ -575,10 +578,10 @@ export function usePersistentChat({
 					setCurrentChatId(targetChatId);
 					analytics.chatCreated();
 					onChatCreatedRef.current?.(targetChatId);
-			} catch {
-				toast.error("Failed to create chat");
-				return;
-			}
+				} catch {
+					toast.error("Failed to create chat");
+					return;
+				}
 			}
 
 			const userMsgId = crypto.randomUUID();
@@ -619,15 +622,15 @@ export function usePersistentChat({
 					model: runtimeModelId,
 					provider: activeProvider,
 					messages: allMsgs,
-						options: {
-							enableReasoning: runtimeReasoningEnabled,
-							reasoningEffort: runtimeReasoningEffort,
-							enableWebSearch: webSearchEnabled,
-							jonMode,
-							dynamicPrompt,
-							supportsToolCalls: runtimeSupportsToolCalls,
-						},
-					});
+					options: {
+						enableReasoning: runtimeReasoningEnabled,
+						reasoningEffort: runtimeReasoningEffort,
+						enableWebSearch: webSearchEnabled,
+						jonMode,
+						dynamicPrompt,
+						supportsToolCalls: runtimeSupportsToolCalls,
+					},
+				});
 
 				setStatus("streaming");
 				streamingRef.current = { id: assistantMsgId, content: "", reasoning: "", chainHash: "[]" };
@@ -635,7 +638,7 @@ export function usePersistentChat({
 				const initialParts: UIMessage["parts"] = [];
 				if (runtimeReasoningEffort !== "none") {
 					const reasoningPart: ReasoningPartWithState = { type: "reasoning", text: "", state: "streaming" };
-				initialParts.push(reasoningPart as UIMessage["parts"][number]);
+					initialParts.push(reasoningPart as UIMessage["parts"][number]);
 				}
 				initialParts.push({ type: "text", text: "", state: "streaming" });
 
@@ -655,6 +658,38 @@ export function usePersistentChat({
 						},
 					},
 				]);
+				const shouldQueueAutoTitle = shouldTriggerAutoTitle({
+					startedWithoutChatId,
+					existingMessageCount,
+					seedText: message.text,
+				});
+				if (shouldQueueAutoTitle) {
+					void fetch("/api/workflow/generate-title", {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({
+							chatId: targetChatId,
+							userId: convexUserId,
+							seedText: message.text.trim().slice(0, 300),
+							length: "standard",
+							provider: activeProvider,
+							mode: "auto",
+						}),
+					})
+						.then(async (response) => {
+							if (response.ok) return;
+							const payload = await response.json().catch(() => null);
+							console.warn("[AutoTitle] Workflow request failed", {
+								status: response.status,
+								payload,
+							});
+						})
+						.catch((autoTitleError) => {
+							console.warn("[AutoTitle] Workflow request failed", autoTitleError);
+						});
+				}
 
 			} catch (err) {
 				const parsedError = err instanceof Error ? err : new Error("Unknown error");
@@ -690,10 +725,19 @@ export function usePersistentChat({
 			}
 		},
 			[
-				convexUserId, isUserLoading, user?.id, chatId, messages, models,
-				activeProvider, webSearchEnabled,
-				jonMode, dynamicPrompt,
-				createChat, sendMessages, startBackgroundStream,
+				convexUserId,
+				isUserLoading,
+				user?.id,
+				messages,
+				messagesResult,
+				models,
+				activeProvider,
+				webSearchEnabled,
+				jonMode,
+				dynamicPrompt,
+				createChat,
+				sendMessages,
+				startBackgroundStream,
 				cleanupStaleJobs,
 			],
 		);

@@ -442,20 +442,20 @@ export function AppSidebar({
         return;
       }
 
-      await convexClient.mutation(api.chats.setGeneratedTitle, {
-        chatId: chatId as Id<"chats">,
-        userId: convexUser._id,
-        title: generatedTitle,
-        force: true,
-      });
+	      await convexClient.mutation(api.chats.setGeneratedTitle, {
+	        chatId: chatId as Id<"chats">,
+	        userId: convexUser._id,
+	        title: generatedTitle,
+	        force: true,
+	      });
 	    } catch (error) {
 	      console.warn("[Chat] Title regeneration failed:", error);
-			const message = error instanceof Error ? error.message : "Failed to regenerate chat name";
-			toast.error(message);
+	      const message = error instanceof Error ? error.message : "Failed to regenerate chat name";
+	      toast.error(message);
 	    } finally {
 	      setTitleGenerating(chatId, false);
 	    }
-  };
+	  };
 
   const handleDeleteChat = useCallback(
     async (chatId: string) => {

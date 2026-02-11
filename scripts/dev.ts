@@ -13,8 +13,7 @@ function sanitizeNodeOptions(nodeOptions: string | undefined): string | undefine
 			continue;
 		}
 		if (token.startsWith("--localstorage-file=")) {
-			const value = token.slice("--localstorage-file=".length).trim();
-			if (!value) continue;
+			continue;
 		}
 		sanitized.push(token);
 	}
