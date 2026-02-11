@@ -116,6 +116,10 @@ function runShortcutAction(id: ShortcutActionId, navigate: NavigateFn) {
 		case "go-to-next-chat":
 			window.dispatchEvent(new CustomEvent(SHORTCUT_EVENT_GO_NEXT_CHAT));
 			return;
+		default: {
+			const _exhaustiveCheck: never = id;
+			return _exhaustiveCheck;
+		}
 	}
 }
 

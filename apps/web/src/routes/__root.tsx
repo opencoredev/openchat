@@ -7,7 +7,6 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { Providers } from "../providers";
-// import { CommandPalette } from "../components/command-palette";
 import { SidebarInset, SidebarProvider } from "../components/ui/sidebar";
 import { NavigationProgress } from "../components/navigation-progress";
 import { AppSidebar } from "../components/app-sidebar";
@@ -163,7 +162,6 @@ function AppShell() {
     return (
       <>
         <Outlet />
-        {/* <CommandPalette /> */}
       </>
     );
   }
@@ -174,7 +172,6 @@ function AppShell() {
       <SidebarInset className="relative overflow-hidden">
         <Outlet />
       </SidebarInset>
-      {/* <CommandPalette /> */}
       <ShortcutsDialog showHelpButton={showHelpButton} />
     </SidebarProvider>
   );

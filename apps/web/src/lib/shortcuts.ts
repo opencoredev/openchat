@@ -377,6 +377,6 @@ export function isReservedShortcutBinding(binding: string): boolean {
 }
 
 export function isMacPlatform(): boolean {
-	if (typeof window === "undefined") return true;
+	if (typeof window === "undefined") return false;
 	return window.navigator.platform.toLowerCase().includes("mac");
 }

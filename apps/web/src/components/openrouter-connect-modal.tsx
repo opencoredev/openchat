@@ -5,7 +5,7 @@
  * Used from Settings page when user wants to connect their own API key.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { CheckIcon, ExternalLinkIcon, KeyIcon, XIcon } from "lucide-react";
 import { Button } from "./ui/button";
 import { useOpenRouterKey } from "@/stores/openrouter";
@@ -19,6 +19,14 @@ interface OpenRouterConnectModalProps {
 export function OpenRouterConnectModal({ open, onOpenChange }: OpenRouterConnectModalProps) {
   const { hasApiKey, initiateLogin, isLoading } = useOpenRouterKey();
   const [isClosing, setIsClosing] = useState(false);
+
+	const handleClose = useCallback(() => {
+		setIsClosing(true);
+		setTimeout(() => {
+			onOpenChange(false);
+			setIsClosing(false);
+		}, 150);
+	}, [onOpenChange]);
 
 	// Close modal when API key is set (successful connection)
 	useEffect(() => {
@@ -42,19 +50,11 @@ export function OpenRouterConnectModal({ open, onOpenChange }: OpenRouterConnect
 		}
 		document.addEventListener("keydown", handleKeyDown);
 		return () => document.removeEventListener("keydown", handleKeyDown);
-	}, [open]);
+	}, [open, handleClose]);
 
 	const handleConnect = () => {
     const callbackUrl = `${window.location.origin}/openrouter/callback`;
     initiateLogin(callbackUrl);
-  };
-
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      onOpenChange(false);
-      setIsClosing(false);
-    }, 150);
   };
 
   if (!open) return null;

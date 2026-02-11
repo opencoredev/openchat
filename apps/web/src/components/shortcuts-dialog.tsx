@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { CircleHelpIcon, SearchIcon, SettingsIcon, XIcon } from "lucide-react";
 import {
@@ -48,6 +48,13 @@ export function ShortcutsDialog({ showHelpButton }: { showHelpButton: boolean })
 	const bindings = useShortcutsStore((s) => s.bindings);
 	const navigate = useNavigate();
 	const [search, setSearch] = useState("");
+
+	// Reset search when dialog opens
+	useEffect(() => {
+		if (shortcutsDialogOpen) {
+			setSearch("");
+		}
+	}, [shortcutsDialogOpen]);
 
 	const isMac = useMemo(() => isMacPlatform(), []);
 
