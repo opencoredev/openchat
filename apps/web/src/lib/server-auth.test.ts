@@ -59,9 +59,9 @@ describe("server-auth.getConvexAuthToken", () => {
 		vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
 
 		const { getConvexAuthToken } = await loadModule();
-		const request = requestWithCookie("better-auth.convex_jwt=fallback-token");
+		const request = requestWithCookie("better-auth.convex_jwt=fallback.token.value");
 
-		await expect(getConvexAuthToken(request)).resolves.toBe("fallback-token");
+		await expect(getConvexAuthToken(request)).resolves.toBe("fallback.token.value");
 	});
 
 	it("returns null when token endpoint explicitly rejects the request", async () => {
@@ -91,8 +91,8 @@ describe("server-auth.getConvexAuthToken", () => {
 		);
 
 		const { getConvexAuthToken } = await loadModule();
-		const request = requestWithCookie("better-auth.convex_jwt=fallback-token");
+		const request = requestWithCookie("better-auth.convex_jwt=fallback.token.value");
 
-		await expect(getConvexAuthToken(request)).resolves.toBe("fallback-token");
+		await expect(getConvexAuthToken(request)).resolves.toBe("fallback.token.value");
 	});
 });

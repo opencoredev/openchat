@@ -74,7 +74,7 @@ async function fetchModelsFromOpenRouter(): Promise<Response> {
 
 function getClientIp(request: Request): string | null {
 	if (!TRUST_PROXY_MODE) {
-		return UNKNOWN_CLIENT_IP;
+		return null;
 	}
 
 	if (TRUST_PROXY_MODE === "cloudflare") {
@@ -92,7 +92,7 @@ function getClientIp(request: Request): string | null {
 	}
 
 	if (TRUST_PROXY_MODE === "true") {
-		return UNKNOWN_CLIENT_IP;
+		return null;
 	}
 
 	return UNKNOWN_CLIENT_IP;
@@ -109,27 +109,24 @@ export const Route = createFileRoute("/api/models")({
 				if (modelsIpRatelimit) {
 					const ip = getClientIp(request);
 					if (!ip) {
-						console.warn("[Models API] Trusted proxy IP unavailable for rate limit");
-						return json(
-							{ error: "Service temporarily unavailable" },
-							{ status: 503 },
-						);
-					}
-					const rl = await modelsIpRatelimit.limit(ip);
-					if (!rl.success) {
-						const retryAfterSeconds = Math.max(
-							1,
-							Math.ceil((rl.reset - Date.now()) / 1000),
-						);
-						return json(
-							{ error: "Rate limit exceeded" },
-							{
-								status: 429,
-								headers: {
-									"Retry-After": String(retryAfterSeconds),
+						console.warn("[Models API] Trusted proxy IP unavailable, skipping rate limit");
+					} else {
+						const rl = await modelsIpRatelimit.limit(ip);
+						if (!rl.success) {
+							const retryAfterSeconds = Math.max(
+								1,
+								Math.ceil((rl.reset - Date.now()) / 1000),
+							);
+							return json(
+								{ error: "Rate limit exceeded" },
+								{
+									status: 429,
+									headers: {
+										"Retry-After": String(retryAfterSeconds),
+									},
 								},
-							},
-						);
+							);
+						}
 					}
 				}
 

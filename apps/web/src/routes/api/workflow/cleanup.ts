@@ -19,7 +19,7 @@ function isLocalWorkflowExecutionEnabled(): boolean {
 }
 
 function parseCleanupPayload(raw: unknown): CleanupPayload | null {
-	if (!raw || typeof raw !== "object") return null;
+	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
 
 	const payload = raw as Record<string, unknown>;
 	const parsed: CleanupPayload = {};
@@ -75,6 +75,17 @@ function hasWorkflowSigningKeysConfigured(): boolean {
 	return Boolean(
 		process.env.QSTASH_CURRENT_SIGNING_KEY && process.env.QSTASH_NEXT_SIGNING_KEY,
 	);
+}
+
+function getWorkflowCallbackUrl(request: Request): string | null {
+	const configuredBase =
+		process.env.VITE_CONVEX_SITE_URL ||
+		process.env.CONVEX_SITE_URL ||
+		process.env.VITE_APP_URL;
+	if (!configuredBase) return null;
+
+	const pathname = new URL(request.url).pathname;
+	return new URL(pathname, configuredBase).toString();
 }
 
 async function runCleanupInline(payload: CleanupPayload): Promise<{
@@ -275,12 +286,17 @@ export const Route = createFileRoute("/api/workflow/cleanup")({
 				}
 
 				try {
+					const callbackUrl = getWorkflowCallbackUrl(request);
+					if (!callbackUrl) {
+						return json({ error: "Workflow callback URL is not configured" }, { status: 500 });
+					}
+
 					const triggerHeaders: Record<string, string> = {
 						"Content-Type": "application/json",
 					};
 
 					const { workflowRunId } = await workflowClient.trigger({
-						url: request.url,
+						url: callbackUrl,
 						body: payload,
 						headers: triggerHeaders,
 					});

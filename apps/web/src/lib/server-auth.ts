@@ -21,6 +21,10 @@ const ALLOW_AUTH_COOKIE_FALLBACK = process.env.ALLOW_AUTH_COOKIE_FALLBACK === "t
 const IS_LOCAL_DEV =
 	!IS_PRODUCTION && (ALLOW_AUTH_COOKIE_FALLBACK || process.env.NODE_ENV === "test");
 
+if (IS_PRODUCTION && ALLOW_AUTH_COOKIE_FALLBACK) {
+	throw new Error("ALLOW_AUTH_COOKIE_FALLBACK must not be enabled in production");
+}
+
 function getCookieValue(cookieHeader: string, name: string): string | null {
 	const target = `${name}=`;
 	for (const part of cookieHeader.split(";")) {
@@ -66,7 +70,11 @@ export async function getConvexAuthToken(request: Request): Promise<string | nul
 	}
 
 	if (!IS_LOCAL_DEV) return null;
-	return getCookieValue(cookie, "better-auth.convex_jwt");
+	const fallbackToken = getCookieValue(cookie, "better-auth.convex_jwt");
+	if (!fallbackToken || fallbackToken.split(".").length !== 3) {
+		return null;
+	}
+	return fallbackToken;
 }
 
 /**

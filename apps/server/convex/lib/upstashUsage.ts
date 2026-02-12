@@ -119,9 +119,12 @@ export async function incrementDailyUsageInUpstash(
 			["EXPIREAT", key, expiresAt],
 		]);
 	} catch (error) {
-		if (shouldLogUpstashUsageErrors()) {
-			console.warn("[Usage] Upstash INCRBY failed", error);
-		}
+		console.error("[Usage] Upstash INCRBY failed — usage not recorded", {
+			userId,
+			dateKey,
+			usageCents,
+			error,
+		});
 	}
 }
 

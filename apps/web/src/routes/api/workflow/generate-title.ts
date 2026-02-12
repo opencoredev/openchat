@@ -104,6 +104,17 @@ function getWorkflowTriggerHeaders(): Record<string, string> {
 	};
 }
 
+function getWorkflowCallbackUrl(request: Request): string | null {
+	const configuredBase =
+		process.env.VITE_CONVEX_SITE_URL ||
+		process.env.CONVEX_SITE_URL ||
+		process.env.VITE_APP_URL;
+	if (!configuredBase) return null;
+
+	const pathname = new URL(request.url).pathname;
+	return new URL(pathname, configuredBase).toString();
+}
+
 function hasWorkflowSigningKeysConfigured(): boolean {
 	return Boolean(
 		process.env.QSTASH_CURRENT_SIGNING_KEY && process.env.QSTASH_NEXT_SIGNING_KEY,
@@ -401,10 +412,14 @@ export const Route = createFileRoute("/api/workflow/generate-title")({
 							{ status: 500 },
 						);
 					}
+					const callbackUrl = getWorkflowCallbackUrl(request);
+					if (!callbackUrl) {
+						return json({ error: "Workflow callback URL is not configured" }, { status: 500 });
+					}
 
 					const headers = getWorkflowTriggerHeaders();
 					const { workflowRunId } = await workflowClient.trigger({
-						url: request.url,
+						url: callbackUrl,
 						body: {
 							...normalizedPayload,
 							authTokenRef,
