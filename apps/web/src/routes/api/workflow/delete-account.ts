@@ -326,7 +326,10 @@ export const Route = createFileRoute("/api/workflow/delete-account")({
 					} catch (error) {
 						const message = error instanceof Error ? error.message : "Failed to delete account";
 						const status = message === "Unauthorized" ? 401 : 500;
-						return json({ error: message }, { status });
+						if (status === 500) {
+							console.error("[Workflow][delete-account] Local execution failed", error);
+						}
+						return json({ error: status === 500 ? "Internal server error" : message }, { status });
 					}
 				}
 
@@ -357,8 +360,8 @@ export const Route = createFileRoute("/api/workflow/delete-account")({
 					});
 					return json({ queued: true, workflowRunId }, { status: 202 });
 				} catch (error) {
-					const message = error instanceof Error ? error.message : "Failed to queue workflow";
-					return json({ error: message }, { status: 500 });
+					console.error("[Workflow][delete-account] Queue trigger failed", error);
+					return json({ error: "Internal server error" }, { status: 500 });
 				}
 			},
 		},

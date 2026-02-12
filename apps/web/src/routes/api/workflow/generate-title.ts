@@ -352,7 +352,10 @@ export const Route = createFileRoute("/api/workflow/generate-title")({
 					} catch (error) {
 						const message = error instanceof Error ? error.message : "Failed to generate title";
 						const status = message === "Unauthorized" ? 401 : 500;
-						return json({ error: message }, { status });
+						if (status === 500) {
+							console.error("[Workflow][generate-title] Inline generation failed", error);
+						}
+						return json({ error: status === 500 ? "Internal server error" : message }, { status });
 					}
 				}
 
@@ -367,7 +370,10 @@ export const Route = createFileRoute("/api/workflow/generate-title")({
 					} catch (error) {
 						const message = error instanceof Error ? error.message : "Failed to generate title";
 						const status = message === "Unauthorized" ? 401 : 500;
-						return json({ error: message }, { status });
+						if (status === 500) {
+							console.error("[Workflow][generate-title] Local execution failed", error);
+						}
+						return json({ error: status === 500 ? "Internal server error" : message }, { status });
 					}
 				}
 
@@ -398,8 +404,8 @@ export const Route = createFileRoute("/api/workflow/generate-title")({
 					});
 					return json({ queued: true, workflowRunId }, { status: 202 });
 				} catch (error) {
-					const message = error instanceof Error ? error.message : "Failed to queue workflow";
-					return json({ error: message }, { status: 500 });
+					console.error("[Workflow][generate-title] Queue trigger failed", error);
+					return json({ error: "Internal server error" }, { status: 500 });
 				}
 			},
 		},

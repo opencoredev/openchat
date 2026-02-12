@@ -265,8 +265,8 @@ export const Route = createFileRoute("/api/workflow/cleanup")({
 						const result = await runCleanupInline(payload);
 						return json(result, { status: 200 });
 					} catch (error) {
-						const message = error instanceof Error ? error.message : "Cleanup failed";
-						return json({ error: message }, { status: 500 });
+						console.error("[Workflow][cleanup] Local execution failed", error);
+						return json({ error: "Internal server error" }, { status: 500 });
 					}
 				}
 
@@ -289,8 +289,8 @@ export const Route = createFileRoute("/api/workflow/cleanup")({
 					});
 					return json({ queued: true, workflowRunId }, { status: 202 });
 				} catch (error) {
-					const message = error instanceof Error ? error.message : "Failed to queue workflow";
-					return json({ error: message }, { status: 500 });
+					console.error("[Workflow][cleanup] Queue trigger failed", error);
+					return json({ error: "Internal server error" }, { status: 500 });
 				}
 			},
 		},

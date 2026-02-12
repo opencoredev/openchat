@@ -19,6 +19,8 @@ import {
 } from "./lib/upstashUsage";
 import { requireAuthUserId } from "./lib/auth";
 import { decryptSecret } from "./lib/crypto";
+import { rateLimiter } from "./lib/rateLimiter";
+import { throwRateLimitError } from "./lib/rateLimitUtils";
 
 const chainOfThoughtPartValidator = v.object({
 	type: v.union(v.literal("reasoning"), v.literal("tool")),
@@ -300,6 +302,13 @@ export const startStream = mutation({
 	returns: v.id("streamJobs"),
 	handler: async (ctx, args) => {
 		const userId = await requireAuthUserId(ctx, args.userId);
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "messageSend", {
+			key: userId,
+		});
+		if (!ok) {
+			throwRateLimitError("streams started", retryAfter);
+		}
+
 		const chat = await ctx.db.get(args.chatId);
 		if (!chat || chat.userId !== userId) {
 			throw new Error("Chat not found or unauthorized");
@@ -821,17 +830,24 @@ export const executeStream = internalAction({
 				}
 			} else {
 				const redisUsageCents = await getDailyUsageFromUpstash(job.userId, currentDate);
+				if (redisUsageCents === null) {
+					await ctx.runMutation(internal.backgroundStream.failStream, {
+						jobId: args.jobId,
+						error: "Usage tracking temporarily unavailable. Please retry shortly.",
+					});
+					return;
+				}
 				const fallbackUsageCents =
-					redisUsageCents ??
-					(await ctx.runQuery(
+					await ctx.runQuery(
 						internal.backgroundStream.getPersistedDailyUsageForDateInternal,
 						{
 							userId: job.userId,
 							dateKey: currentDate,
 						},
-					));
+					);
+				const enforcedUsageCents = Math.max(redisUsageCents, fallbackUsageCents);
 
-				if (fallbackUsageCents >= DAILY_AI_LIMIT_CENTS) {
+				if (enforcedUsageCents >= DAILY_AI_LIMIT_CENTS) {
 					await ctx.runMutation(internal.backgroundStream.failStream, {
 						jobId: args.jobId,
 						error: "Daily usage limit reached. Connect your OpenRouter account to continue.",

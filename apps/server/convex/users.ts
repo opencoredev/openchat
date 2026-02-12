@@ -7,6 +7,8 @@ import { getProfileByUserId, getOrCreateProfile } from "./lib/profiles";
 import { components, internal } from "./_generated/api";
 import { requireAuthUserId, requireAuthUserIdFromAction } from "./lib/auth";
 
+const EMAIL_LINK_MIGRATION_DEADLINE_MS = Date.parse("2026-06-01T00:00:00.000Z");
+
 // User with profile data (for backwards-compatible responses)
 // Includes merged profile data that prefers profile over user during migration
 const userWithProfileDoc = v.object({
@@ -70,7 +72,7 @@ export const ensure = mutation({
 
 		// MIGRATION: Link WorkOS users to Better Auth by email
 		// Uses .first() since duplicate emails may exist from prior migrations
-		if (!existing && args.email) {
+		if (!existing && args.email && Date.now() < EMAIL_LINK_MIGRATION_DEADLINE_MS) {
 			const existingByEmail = await ctx.db
 				.query("users")
 				.withIndex("by_email", (q) => q.eq("email", args.email))
@@ -212,8 +214,6 @@ export const getByExternalId = query({
 			// Profile fields: prefer profile data, fall back to user data for migration
 			name: profile?.name ?? user.name,
 			avatarUrl: profile?.avatarUrl ?? user.avatarUrl,
-			encryptedOpenRouterKey:
-				profile?.encryptedOpenRouterKey ?? user.encryptedOpenRouterKey,
 			fileUploadCount: profile?.fileUploadCount ?? user.fileUploadCount ?? 0,
 			aiUsageCents: user.aiUsageCents,
 			aiUsageDate: user.aiUsageDate,
@@ -289,8 +289,6 @@ export const getByExternalIdInternal = internalQuery({
 			// Profile fields: prefer profile data, fall back to user data for migration
 			name: profile?.name ?? user.name,
 			avatarUrl: profile?.avatarUrl ?? user.avatarUrl,
-			encryptedOpenRouterKey:
-				profile?.encryptedOpenRouterKey ?? user.encryptedOpenRouterKey,
 			fileUploadCount: profile?.fileUploadCount ?? user.fileUploadCount ?? 0,
 			aiUsageCents: user.aiUsageCents,
 			aiUsageDate: user.aiUsageDate,

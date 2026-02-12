@@ -78,19 +78,9 @@ function getClientIp(request: Request): string | null {
 		return null;
 	}
 
-	if (TRUST_PROXY_MODE !== "true") {
+	if (TRUST_PROXY_MODE === "true") {
 		return null;
 	}
-
-	const forwardedFor = request.headers.get("x-forwarded-for")?.trim();
-	if (forwardedFor) {
-		const first = forwardedFor.split(",")[0]?.trim();
-		if (first) return first;
-	}
-
-	const realIp = request.headers.get("x-real-ip")?.trim();
-	if (realIp) return realIp;
-
 	return null;
 }
 

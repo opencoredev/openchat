@@ -298,7 +298,10 @@ export const Route = createFileRoute("/api/workflow/export-chat")({
 									: message === "Export too large"
 										? 413
 										: 500;
-						return json({ error: message }, { status });
+						if (status === 500) {
+							console.error("[Workflow][export-chat] Local execution failed", error);
+						}
+						return json({ error: status === 500 ? "Internal server error" : message }, { status });
 					}
 				}
 
@@ -329,8 +332,8 @@ export const Route = createFileRoute("/api/workflow/export-chat")({
 					});
 					return json({ queued: true, workflowRunId }, { status: 202 });
 				} catch (error) {
-					const message = error instanceof Error ? error.message : "Failed to queue workflow";
-					return json({ error: message }, { status: 500 });
+					console.error("[Workflow][export-chat] Queue trigger failed", error);
+					return json({ error: "Internal server error" }, { status: 500 });
 				}
 			},
 		},
