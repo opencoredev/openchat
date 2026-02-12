@@ -10,6 +10,7 @@ function createWorkflowAuthTokenKey(): string {
 
 export async function storeWorkflowAuthToken(authToken: string): Promise<string | null> {
 	if (!upstashRedis) return null;
+	if (authToken.trim().length === 0) return null;
 	const key = createWorkflowAuthTokenKey();
 	const encrypted = encryptSecret(authToken);
 	await upstashRedis.set(key, encrypted, {
@@ -28,7 +29,8 @@ export async function getWorkflowAuthToken(key: string): Promise<string | null> 
 		return null;
 	}
 	try {
-		return decryptSecret(value);
+		const token = decryptSecret(value);
+		return token.trim().length > 0 ? token : null;
 	} catch {
 		return null;
 	}
