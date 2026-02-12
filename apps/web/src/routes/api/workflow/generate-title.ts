@@ -14,6 +14,7 @@ import { getWorkflowAuthToken, storeWorkflowAuthToken } from "@/lib/workflow-aut
 
 const TITLE_MODEL_ID = "google/gemini-2.5-flash-lite";
 const TITLE_MAX_LENGTH = 200;
+const OPENROUTER_CALL_TIMEOUT_MS = 30_000;
 
 type TitleLength = "short" | "standard" | "long";
 type TitleProvider = "osschat" | "openrouter";
@@ -228,28 +229,37 @@ const workflow = serve<GenerateTitlePayload>(async (context) => {
 		TITLE_STYLE_PROMPTS[length],
 	].join(" ");
 
-	const llmResponse = await context.call<{
-		choices?: Array<{ message?: { content?: string } }>;
-	}>("call-llm", {
-		url: "https://openrouter.ai/api/v1/chat/completions",
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			Authorization: `Bearer ${openRouterKey}`,
-			"HTTP-Referer": process.env.VITE_CONVEX_SITE_URL || "https://osschat.io",
-			"X-Title": "OSSChat",
-		},
-		body: JSON.stringify({
-			model: TITLE_MODEL_ID,
-			messages: [
-				{ role: "system", content: systemPrompt },
-				{ role: "user", content: normalizedSeed },
-			],
-			temperature: 0.2,
-			max_tokens: 32,
-		}),
-		retries: 2,
-		timeout: "30s",
+	const llmResponse = await context.run("call-llm", async () => {
+		const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${openRouterKey}`,
+				"HTTP-Referer": process.env.VITE_CONVEX_SITE_URL || "https://osschat.io",
+				"X-Title": "OSSChat",
+			},
+			body: JSON.stringify({
+				model: TITLE_MODEL_ID,
+				messages: [
+					{ role: "system", content: systemPrompt },
+					{ role: "user", content: normalizedSeed },
+				],
+				temperature: 0.2,
+				max_tokens: 32,
+			}),
+			signal: AbortSignal.timeout(OPENROUTER_CALL_TIMEOUT_MS),
+		});
+
+		let body: { choices?: Array<{ message?: { content?: string } }> } | null = null;
+		if (response.ok) {
+			try {
+				body = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+			} catch {
+				body = null;
+			}
+		}
+
+		return { status: response.status, body };
 	});
 	if (llmResponse.status < 200 || llmResponse.status >= 300) {
 		return {

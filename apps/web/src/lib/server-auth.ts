@@ -17,6 +17,8 @@ type AuthSessionResponse = {
 const CONVEX_SITE_URL =
 	process.env.VITE_CONVEX_SITE_URL || process.env.CONVEX_SITE_URL;
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
+const IS_LOCAL_DEV =
+	!IS_PRODUCTION && !process.env.VERCEL && !process.env.CONVEX_CLOUD_URL;
 
 function getCookieValue(cookieHeader: string, name: string): string | null {
 	const target = `${name}=`;
@@ -56,13 +58,13 @@ export async function getConvexAuthToken(request: Request): Promise<string | nul
 			if (response.status >= 400 && response.status < 500) {
 				return null;
 			}
-			if (IS_PRODUCTION) return null;
+			if (!IS_LOCAL_DEV) return null;
 		} catch {
-			if (IS_PRODUCTION) return null;
+			if (!IS_LOCAL_DEV) return null;
 		}
 	}
 
-	if (IS_PRODUCTION) return null;
+	if (!IS_LOCAL_DEV) return null;
 	return getCookieValue(cookie, "better-auth.convex_jwt");
 }
 
