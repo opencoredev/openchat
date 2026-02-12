@@ -450,7 +450,12 @@ export function AppSidebar({
       });
     } catch (error) {
       console.warn("[Chat] Title regeneration failed:", error);
-      toast.error("Failed to regenerate chat name");
+      const message = error instanceof Error ? error.message : "";
+      if (message.toLowerCase().includes("too many title generations")) {
+        toast.error(message);
+      } else {
+        toast.error("Failed to regenerate chat name");
+      }
     } finally {
       setTitleGenerating(chatId, false);
     }

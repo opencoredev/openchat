@@ -168,7 +168,7 @@ export async function adjustDailyUsageInUpstash(
 ): Promise<void> {
 	if (!getConfig()) return;
 	if (!Number.isFinite(usageCentsDelta) || usageCentsDelta === 0) return;
-	const roundedDelta = usageCentsDelta > 0 ? Math.ceil(usageCentsDelta) : Math.floor(usageCentsDelta);
+	const roundedDelta = Math.ceil(usageCentsDelta);
 	if (roundedDelta === 0) return;
 
 	const key = usageCounterKey(userId, dateKey);

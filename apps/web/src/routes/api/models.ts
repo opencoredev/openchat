@@ -14,6 +14,10 @@ if (TRUST_PROXY_MODE === "true") {
 	console.warn("[Models API] TRUST_PROXY=true uses shared rate-limit bucket");
 }
 
+if (!TRUST_PROXY_MODE) {
+	console.warn("[Models API] TRUST_PROXY is unset; models endpoint may use shared rate-limit behavior");
+}
+
 if (
 	TRUST_PROXY_MODE &&
 	TRUST_PROXY_MODE !== "cloudflare" &&

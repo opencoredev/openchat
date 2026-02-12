@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { json } from "@tanstack/react-start";
-import { serve } from "@upstash/workflow/tanstack";
 import { api } from "@server/convex/_generated/api";
 import type { Id } from "@server/convex/_generated/dataModel";
 import { createConvexServerClient } from "@/lib/convex-server";
@@ -9,7 +8,6 @@ import {
 	exportRatelimit,
 	shouldFailClosedForMissingUpstash,
 } from "@/lib/upstash";
-import { getWorkflowAuthToken } from "@/lib/workflow-auth-token";
 
 type ExportFormat = "markdown" | "json";
 const MAX_EXPORT_BYTES = 10 * 1024 * 1024;
@@ -76,12 +74,6 @@ function formatRole(role: string): string {
 	if (role === "tool") return "Tool";
 	if (role === "user") return "User";
 	return "Message";
-}
-
-function hasWorkflowSigningKeysConfigured(): boolean {
-	return Boolean(
-		process.env.QSTASH_CURRENT_SIGNING_KEY && process.env.QSTASH_NEXT_SIGNING_KEY,
-	);
 }
 
 function formatExportMarkdown(data: ChatExportData): string {
@@ -153,81 +145,10 @@ async function runExportChatInline(
 	};
 }
 
-const workflow = serve<ExportChatPayload>(async (context) => {
-	const { chatId, userId, format = "markdown" } = context.requestPayload;
-
-	const authTokenRef = context.requestPayload.authTokenRef;
-	if (!authTokenRef) {
-		return {
-			error: "Unauthorized",
-		};
-	}
-
-	const authToken = await context.run("resolve-auth", async () => {
-		return getWorkflowAuthToken(authTokenRef);
-	});
-	if (!authToken) {
-		return {
-			error: "Unauthorized",
-		};
-	}
-	if (!userId || userId.trim().length === 0) {
-		return {
-			error: "Unauthorized",
-		};
-	}
-
-	const convexClient = createConvexServerClient(authToken);
-	const chatExportData = await context.run("gather-messages", async () => {
-		return convexClient.query(api.chats.getChatExportData, {
-			chatId: chatId as Id<"chats">,
-			userId: userId as Id<"users">,
-		});
-	});
-	if (!chatExportData) {
-		return {
-			error: "Chat not found",
-		};
-	}
-
-	const formattedExport = await context.run("format-export", async () => {
-		if (format === "json") {
-			return JSON.stringify(chatExportData, null, 2);
-		}
-		return formatExportMarkdown(chatExportData);
-	});
-
-	const uploadResult = await context.run("upload", async () => {
-		const byteLength = Buffer.byteLength(formattedExport, "utf8");
-		if (byteLength > MAX_EXPORT_BYTES) {
-			throw new Error("Export too large");
-		}
-		const mimeType = format === "json" ? "application/json" : "text/markdown";
-		const base64 = Buffer.from(formattedExport, "utf8").toString("base64");
-		return {
-			downloadUrl: `data:${mimeType};base64,${base64}`,
-			byteLength,
-			fileName: `chat-export-${chatId}.${format === "json" ? "json" : "md"}`,
-		};
-	});
-
-	return context.run("notify", async () => {
-		return uploadResult;
-	});
-});
-
 export const Route = createFileRoute("/api/workflow/export-chat")({
 	server: {
 		handlers: {
 			POST: async ({ request }) => {
-				const isWorkflowCallback = Boolean(request.headers.get("upstash-signature"));
-				if (isWorkflowCallback) {
-					if (!hasWorkflowSigningKeysConfigured()) {
-						return json({ error: "Workflow signing not configured" }, { status: 500 });
-					}
-					return workflow.POST({ request });
-				}
-
 				if (!isSameOrigin(request)) {
 					return json({ error: "Invalid origin" }, { status: 403 });
 				}
