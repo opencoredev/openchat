@@ -35,13 +35,12 @@ function createSlidingWindowRatelimit(
 ): RatelimitLike | null {
 	if (!upstashRedis) {
 		if (!IS_PRODUCTION) return null;
-		const reset = Date.now() + 60_000;
 		return {
 			limit: async () => ({
 				success: false,
 				limit: 0,
 				remaining: 0,
-				reset,
+				reset: Date.now() + 60_000,
 				pending: Promise.resolve(),
 			}),
 		};
