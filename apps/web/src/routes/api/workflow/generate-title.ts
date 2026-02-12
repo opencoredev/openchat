@@ -219,7 +219,7 @@ const workflow = serve<GenerateTitlePayload>(async (context) => {
 
 	const openRouterKey = process.env.OPENROUTER_API_KEY ?? null;
 	if (!openRouterKey) {
-		return { saved: false, reason: "missing_openrouter_key" } as const;
+		return { saved: false, reason: "server_api_key_not_configured" } as const;
 	}
 
 	const systemPrompt = [

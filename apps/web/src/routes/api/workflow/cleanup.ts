@@ -83,7 +83,7 @@ async function runCleanupInline(payload: CleanupPayload): Promise<{
 	totalDeleted: number;
 	limitReached: boolean;
 }> {
-	const workflowToken = process.env.WORKFLOW_CLEANUP_TOKEN;
+	const workflowToken = process.env.WORKFLOW_CLEANUP_TOKEN?.trim();
 	if (!workflowToken) {
 		throw new Error("WORKFLOW_CLEANUP_TOKEN is not configured");
 	}
@@ -174,7 +174,7 @@ const workflow = serve<CleanupPayload>(async (context) => {
 		throw new Error("Invalid cleanup payload");
 	}
 
-	const workflowToken = process.env.WORKFLOW_CLEANUP_TOKEN;
+	const workflowToken = process.env.WORKFLOW_CLEANUP_TOKEN?.trim();
 	if (!workflowToken) {
 		throw new Error("WORKFLOW_CLEANUP_TOKEN is not configured");
 	}

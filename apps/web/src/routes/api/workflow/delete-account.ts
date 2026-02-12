@@ -184,6 +184,7 @@ const workflow = serve<DeleteAccountPayload>(async (context) => {
 	}
 	const authTokenRef = context.requestPayload.authTokenRef;
 	if (!authTokenRef) {
+		console.error("[Workflow][delete-account] Missing auth token reference");
 		return EMPTY_DELETE_RESULT;
 	}
 
@@ -191,6 +192,7 @@ const workflow = serve<DeleteAccountPayload>(async (context) => {
 		return getWorkflowAuthToken(authTokenRef);
 	});
 	if (!authToken) {
+		console.error("[Workflow][delete-account] Failed to resolve auth token");
 		return EMPTY_DELETE_RESULT;
 	}
 

@@ -165,29 +165,15 @@ export async function adjustDailyUsageInUpstash(
 ): Promise<void> {
 	if (!getConfig()) return;
 	if (!Number.isFinite(usageCentsDelta) || usageCentsDelta === 0) return;
-	const roundedDelta = Math.ceil(usageCentsDelta);
+	const roundedDelta = usageCentsDelta > 0 ? Math.ceil(usageCentsDelta) : Math.floor(usageCentsDelta);
 	if (roundedDelta === 0) return;
 
 	const key = usageCounterKey(userId, dateKey);
 
 	try {
 		const expiresAt = getMidnightUtcEpochSeconds(dateKey);
-		let effectiveDelta = roundedDelta;
-		if (roundedDelta < 0) {
-			const current = await executePipeline([["GET", key]]);
-			const rawCurrent = current?.[0]?.result;
-			const parsedCurrent =
-				typeof rawCurrent === "number"
-					? rawCurrent
-					: typeof rawCurrent === "string"
-						? Number.parseInt(rawCurrent, 10)
-						: 0;
-			const safeCurrent = Number.isFinite(parsedCurrent) ? Math.max(0, parsedCurrent) : 0;
-			effectiveDelta = Math.max(roundedDelta, -safeCurrent);
-			if (effectiveDelta === 0) return;
-		}
 		await executePipeline([
-			["INCRBY", key, effectiveDelta],
+			["INCRBY", key, roundedDelta],
 			["EXPIREAT", key, expiresAt],
 		]);
 	} catch (error) {

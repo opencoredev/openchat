@@ -10,6 +10,19 @@ const OPENROUTER_FETCH_TIMEOUT_MS = 10_000;
 const TRUST_PROXY_MODE = process.env.TRUST_PROXY?.trim().toLowerCase();
 const UNKNOWN_CLIENT_IP = "unknown";
 
+if (TRUST_PROXY_MODE === "true") {
+	console.warn("[Models API] TRUST_PROXY=true uses shared rate-limit bucket");
+}
+
+if (
+	TRUST_PROXY_MODE &&
+	TRUST_PROXY_MODE !== "cloudflare" &&
+	TRUST_PROXY_MODE !== "vercel" &&
+	TRUST_PROXY_MODE !== "true"
+) {
+	console.warn("[Models API] Unrecognized TRUST_PROXY value, using shared rate-limit bucket");
+}
+
 const modelsIpRatelimit = upstashRedis
 	? new Ratelimit({
 			redis: upstashRedis,
@@ -79,10 +92,9 @@ function getClientIp(request: Request): string | null {
 	}
 
 	if (TRUST_PROXY_MODE === "true") {
-		console.warn("[Models API] TRUST_PROXY=true uses shared rate-limit bucket");
 		return UNKNOWN_CLIENT_IP;
 	}
-	console.warn("[Models API] Unrecognized TRUST_PROXY value, using shared rate-limit bucket");
+
 	return UNKNOWN_CLIENT_IP;
 }
 
