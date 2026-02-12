@@ -61,7 +61,7 @@ async function fetchModelsFromOpenRouter(): Promise<Response> {
 
 function getClientIp(request: Request): string | null {
 	if (!TRUST_PROXY) {
-		return "untrusted-proxy";
+		return null;
 	}
 
 	const cfConnectingIp = request.headers.get("cf-connecting-ip")?.trim();
@@ -96,7 +96,10 @@ export const Route = createFileRoute("/api/models")({
 				if (modelsIpRatelimit) {
 					const ip = getClientIp(request);
 					if (!ip) {
-						return json({ error: "Unable to identify client" }, { status: 400 });
+						return json(
+							{ error: "Rate limiting unavailable: configure TRUST_PROXY" },
+							{ status: 503 },
+						);
 					}
 					const rl = await modelsIpRatelimit.limit(ip);
 					if (!rl.success) {

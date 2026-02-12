@@ -39,7 +39,7 @@ function loadLocalEnvDefaults(): void {
 		if (!existsSync(filePath)) continue;
 		const parsed = parseEnvFile(readFileSync(filePath, "utf8"));
 		for (const [key, value] of Object.entries(parsed)) {
-			if (!process.env[key]) {
+			if (process.env[key] === undefined) {
 				process.env[key] = value;
 			}
 		}
@@ -60,7 +60,8 @@ async function main() {
 	}
 
 	try {
-		const response = await fetch(`${url}/pipeline`, {
+		const normalizedUrl = url.replace(/\/+$/, "");
+		const response = await fetch(`${normalizedUrl}/pipeline`, {
 			method: "POST",
 			headers: {
 				Authorization: `Bearer ${token}`,

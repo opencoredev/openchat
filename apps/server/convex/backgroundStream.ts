@@ -1460,7 +1460,11 @@ export const executeStream = internalAction({
 			});
 		} catch (error) {
 			if (reservedDateKey && reservedUsageCents > 0) {
-				await adjustDailyUsageInUpstash(job.userId, reservedDateKey, -reservedUsageCents);
+				try {
+					await adjustDailyUsageInUpstash(job.userId, reservedDateKey, -reservedUsageCents);
+				} catch (adjustError) {
+					console.warn("[Usage] Upstash refund adjustment failed", adjustError);
+				}
 			}
 			const errorMessage = error instanceof Error ? error.message : "Unknown error";
 			await ctx.runMutation(internal.backgroundStream.failStream, {

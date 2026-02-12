@@ -185,7 +185,9 @@ const workflow = serve<GenerateTitlePayload>(async (context) => {
 		return { saved: false, reason: "unauthorized" } as const;
 	}
 
-	const authToken = await getWorkflowAuthToken(authTokenRef);
+	const authToken = await context.run("resolve-auth", async () => {
+		return getWorkflowAuthToken(authTokenRef);
+	});
 	if (!authToken) {
 		return { saved: false, reason: "unauthorized" } as const;
 	}

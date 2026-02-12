@@ -79,6 +79,13 @@ http.route({
       });
     }
 
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return new Response(JSON.stringify({ error: "Invalid JSON payload" }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }
+
     const payload = body as {
       workflowToken?: unknown;
       retentionDays?: unknown;

@@ -184,6 +184,8 @@ export async function readStream(
 		timestamp:
 			typeof message.ts === "string"
 				? Number.parseInt(message.ts, 10)
+				: typeof message.ts === "number"
+					? message.ts
 				: Date.now(),
 	}));
 }

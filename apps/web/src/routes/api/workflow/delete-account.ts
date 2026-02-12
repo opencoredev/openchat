@@ -184,7 +184,9 @@ const workflow = serve<DeleteAccountPayload>(async (context) => {
 		return EMPTY_DELETE_RESULT;
 	}
 
-	const authToken = await getWorkflowAuthToken(authTokenRef);
+	const authToken = await context.run("resolve-auth", async () => {
+		return getWorkflowAuthToken(authTokenRef);
+	});
 	if (!authToken) {
 		return EMPTY_DELETE_RESULT;
 	}

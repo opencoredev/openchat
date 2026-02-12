@@ -1247,7 +1247,11 @@ describe('chats.generateAndSetTitleInternal', () => {
 	});
 
 	afterEach(() => {
-		process.env.OPENROUTER_API_KEY = originalApiKey;
+		if (originalApiKey === undefined) {
+			delete process.env.OPENROUTER_API_KEY;
+		} else {
+			process.env.OPENROUTER_API_KEY = originalApiKey;
+		}
 		vi.restoreAllMocks();
 	});
 

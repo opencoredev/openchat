@@ -72,6 +72,10 @@ if (!upstashRedis) {
 	}
 }
 
+if (!workflowClient && IS_PRODUCTION) {
+	console.error("[Upstash] QStash not configured in production");
+}
+
 export function isUpstashRedisConfigured(): boolean {
 	return upstashRedis !== null;
 }

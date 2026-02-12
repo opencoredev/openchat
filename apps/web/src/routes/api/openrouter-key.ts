@@ -68,9 +68,13 @@ export const Route = createFileRoute("/api/openrouter-key")({
 					if (authRatelimit) {
 						const rate = await authRatelimit.limit(`openrouter-key:post:${convexUserId}`);
 						if (!rate.success) {
+							const retryAfterSeconds = Math.max(
+								1,
+								Math.ceil((rate.reset - Date.now()) / 1000),
+							);
 							return json(
 								{ error: "Too many key update attempts. Please try again shortly." },
-								{ status: 429 },
+								{ status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
 							);
 						}
 					}
@@ -110,9 +114,13 @@ export const Route = createFileRoute("/api/openrouter-key")({
 					if (authRatelimit) {
 						const rate = await authRatelimit.limit(`openrouter-key:delete:${convexUserId}`);
 						if (!rate.success) {
+							const retryAfterSeconds = Math.max(
+								1,
+								Math.ceil((rate.reset - Date.now()) / 1000),
+							);
 							return json(
 								{ error: "Too many key update attempts. Please try again shortly." },
-								{ status: 429 },
+								{ status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
 							);
 						}
 					}
