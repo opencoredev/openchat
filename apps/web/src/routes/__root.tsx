@@ -120,6 +120,8 @@ export const Route = createRootRoute({
       {
         src: "https://assets.onedollarstats.com/stonks.js",
         defer: true,
+        integrity: "sha384-JKNAwAZy8iZWcJrexWvQf3rNcosuH0th/rwqZoiM84ea7fMGTt2eq8ddZb//nd9H",
+        crossOrigin: "anonymous",
       },
     ],
   }),
