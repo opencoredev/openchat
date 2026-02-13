@@ -9,8 +9,35 @@ const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 const OPENROUTER_FETCH_TIMEOUT_MS = 10_000;
 const TRUST_PROXY_MODE = process.env.TRUST_PROXY?.trim().toLowerCase();
 
-if (TRUST_PROXY_MODE === "true") {
-	console.warn("[Models API] TRUST_PROXY=true requires x-forwarded-for for rate limiting");
+/**
+ * TRUSTED_PROXIES: comma-separated list of trusted proxy IPs.
+ * Required when TRUST_PROXY=true to prevent x-forwarded-for spoofing.
+ * When set, only x-forwarded-for values from requests are accepted if
+ * the deployment is explicitly configured to trust the reverse proxy chain.
+ * Platform-specific modes (cloudflare, vercel) use tamper-resistant headers
+ * and do not require this setting.
+ */
+const TRUSTED_PROXY_IPS: ReadonlySet<string> = new Set(
+	(process.env.TRUSTED_PROXIES ?? "")
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean),
+);
+
+if (TRUST_PROXY_MODE === "true" && TRUSTED_PROXY_IPS.size === 0) {
+	console.warn(
+		"[Models API] SECURITY WARNING: TRUST_PROXY=true without TRUSTED_PROXIES is unsafe. " +
+			"The x-forwarded-for header can be spoofed by clients. " +
+			"Set TRUSTED_PROXIES to a comma-separated list of trusted proxy IPs, " +
+			"or use a platform-specific mode (cloudflare, vercel). " +
+			"Rate limiting will fall back to rejecting requests when client IP cannot be verified.",
+	);
+}
+
+if (TRUST_PROXY_MODE === "true" && TRUSTED_PROXY_IPS.size > 0) {
+	console.info(
+		`[Models API] TRUST_PROXY=true with ${TRUSTED_PROXY_IPS.size} trusted proxy IP(s) configured`,
+	);
 }
 
 if (!TRUST_PROXY_MODE) {
@@ -95,6 +122,13 @@ function getClientIp(request: Request): string | null {
 	}
 
 	if (TRUST_PROXY_MODE === "true") {
+		// Without TRUSTED_PROXIES configured, x-forwarded-for is spoofable.
+		// Fail closed: return null so the request is rejected with a 400,
+		// preventing rate-limit bypass via header spoofing.
+		if (TRUSTED_PROXY_IPS.size === 0) {
+			return null;
+		}
+
 		const forwardedFor = request.headers.get("x-forwarded-for")?.trim();
 		if (forwardedFor) {
 			const first = forwardedFor.split(",")[0]?.trim();
