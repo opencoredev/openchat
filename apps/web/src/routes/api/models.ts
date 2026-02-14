@@ -10,6 +10,131 @@ const OPENROUTER_FETCH_TIMEOUT_MS = 10_000;
 const TRUST_PROXY_MODE = process.env.TRUST_PROXY?.trim().toLowerCase();
 
 <<<<<<< HEAD
+/**
+ * Basic IPv4/IPv6 format validation.
+ * Rejects obviously spoofed or malformed values used in x-forwarded-for.
+ */
+const IPV4_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/;
+const IPV6_REGEX = /^[0-9a-fA-F:]+$/;
+
+function isValidIpFormat(ip: string): boolean {
+	return IPV4_REGEX.test(ip) || IPV6_REGEX.test(ip);
+}
+
+if (TRUST_PROXY_MODE === "true") {
+	console.warn(
+		"[Models API] TRUST_PROXY=true uses x-forwarded-for for rate limiting. " +
+		"This is INSECURE unless the app is behind a trusted reverse proxy that overwrites x-forwarded-for. " +
+		"Prefer TRUST_PROXY=cloudflare or TRUST_PROXY=vercel for production deployments.",
+	);
+}
+
+if (!TRUST_PROXY_MODE) {
+	console.warn("[Models API] TRUST_PROXY is unset; models endpoint will reject requests when IP is unavailable");
+}
+
+if (
+	TRUST_PROXY_MODE &&
+	TRUST_PROXY_MODE !== "cloudflare" &&
+	TRUST_PROXY_MODE !== "vercel" &&
+	TRUST_PROXY_MODE !== "true"
+) {
+	console.warn("[Models API] Unrecognized TRUST_PROXY value; models endpoint will reject requests when IP is unavailable");
+}
+
+const modelsIpRatelimit = upstashRedis
+	? new Ratelimit({
+			redis: upstashRedis,
+			limiter: Ratelimit.slidingWindow(30, "60 s"),
+			prefix: "ratelimit:models:ip",
+		})
+	: null;
+
+async function fetchModelsFromOpenRouter(): Promise<Response> {
+	try {
+		const response = await fetch(OPENROUTER_MODELS_URL, {
+			headers: {
+				Accept: "application/json",
+			},
+			signal: AbortSignal.timeout(OPENROUTER_FETCH_TIMEOUT_MS),
+		});
+
+		if (!response.ok) {
+			return json(
+				{ error: "Upstream service error" },
+				{ status: 502 },
+			);
+		}
+
+		const payload = await response.text();
+
+		if (upstashRedis) {
+			try {
+				await upstashRedis.set(MODELS_CACHE_KEY, payload, {
+					ex: MODELS_CACHE_TTL_SECONDS,
+				});
+			} catch (error) {
+				console.warn("[Models API] Failed to write cache:", error);
+			}
+		}
+
+		return new Response(payload, {
+			status: 200,
+			headers: {
+				"Content-Type": "application/json",
+				"Cache-Control": "no-store",
+			},
+		});
+	} catch (error) {
+		console.warn("[Models API] OpenRouter fetch failed:", error);
+		return json({ error: "Upstream service unavailable" }, { status: 502 });
+	}
+}
+
+function getClientIp(request: Request): string | null {
+	if (!TRUST_PROXY_MODE) {
+		return null;
+	}
+
+	if (TRUST_PROXY_MODE === "cloudflare") {
+		const cfConnectingIp = request.headers.get("cf-connecting-ip")?.trim();
+		if (cfConnectingIp && isValidIpFormat(cfConnectingIp)) return cfConnectingIp;
+		return null;
+	}
+
+	if (TRUST_PROXY_MODE === "vercel") {
+		const vercelForwardedFor = request.headers.get("x-vercel-forwarded-for")?.trim();
+		if (vercelForwardedFor) {
+			const first = vercelForwardedFor.split(",")[0]?.trim();
+			if (first && isValidIpFormat(first)) return first;
+		}
+		return null;
+	}
+
+	if (TRUST_PROXY_MODE === "true") {
+		// Prefer platform-specific headers that are harder to spoof, as they
+		// are typically set/overwritten by the edge proxy itself.
+		const cfIp = request.headers.get("cf-connecting-ip")?.trim();
+		if (cfIp && isValidIpFormat(cfIp)) return cfIp;
+
+		const vercelIp = request.headers.get("x-vercel-forwarded-for")?.trim();
+		if (vercelIp) {
+			const first = vercelIp.split(",")[0]?.trim();
+			if (first && isValidIpFormat(first)) return first;
+		}
+
+		const realIp = request.headers.get("x-real-ip")?.trim();
+		if (realIp && isValidIpFormat(realIp)) return realIp;
+
+		// Fall back to x-forwarded-for only as last resort, with IP validation.
+		// WARNING: This header is user-controlled unless the proxy overwrites it.
+		const forwardedFor = request.headers.get("x-forwarded-for")?.trim();
+		if (forwardedFor) {
+			const first = forwardedFor.split(",")[0]?.trim();
+			if (first && isValidIpFormat(first)) return first;
+||||||| 54e09ce
+=======
+<<<<<<< HEAD
 if (TRUST_PROXY_MODE === "true") {
 	console.warn("[Models API] TRUST_PROXY=true requires x-forwarded-for for rate limiting");
 }
@@ -709,6 +834,7 @@ function getClientIp(request: Request): string | null {
 		if (forwardedFor) {
 			const first = forwardedFor.split(",")[0]?.trim();
 			if (first) return first;
+>>>>>>> main
 >>>>>>> main
 >>>>>>> main
 >>>>>>> main

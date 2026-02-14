@@ -95,6 +95,11 @@ export const ensure = mutation({
 		// MIGRATION: Link WorkOS users to Better Auth by email
 		// Uses .first() since duplicate emails may exist from prior migrations
 <<<<<<< HEAD
+		if (!existing && args.email && Date.now() < EMAIL_LINK_MIGRATION_DEADLINE_MS) {
+||||||| 54e09ce
+		if (!existing && args.email) {
+=======
+<<<<<<< HEAD
 		// SECURITY: Only link if the caller's email is verified to prevent account takeover
 		// via unverified email registration (see OSS-37)
 		const isEmailVerified = identity.emailVerified ?? false;
@@ -103,6 +108,7 @@ export const ensure = mutation({
 		if (!existing && args.email) {
 =======
 		if (!existing && args.email && Date.now() < EMAIL_LINK_MIGRATION_DEADLINE_MS) {
+>>>>>>> main
 >>>>>>> main
 			const existingByEmail = await ctx.db
 				.query("users")
@@ -285,7 +291,13 @@ export const getByExternalId = query({
 			encryptedOpenRouterKey:
 				profile?.encryptedOpenRouterKey ?? user.encryptedOpenRouterKey,
 =======
+<<<<<<< HEAD
+||||||| 54e09ce
+			encryptedOpenRouterKey:
+				profile?.encryptedOpenRouterKey ?? user.encryptedOpenRouterKey,
+=======
 			hasOpenRouterKey: !!(profile?.encryptedOpenRouterKey ?? user.encryptedOpenRouterKey),
+>>>>>>> main
 >>>>>>> main
 >>>>>>> main
 >>>>>>> main
@@ -405,7 +417,13 @@ export const getByExternalIdInternal = internalQuery({
 			encryptedOpenRouterKey:
 				profile?.encryptedOpenRouterKey ?? user.encryptedOpenRouterKey,
 =======
+<<<<<<< HEAD
+||||||| 54e09ce
+			encryptedOpenRouterKey:
+				profile?.encryptedOpenRouterKey ?? user.encryptedOpenRouterKey,
+=======
 			hasOpenRouterKey: !!(profile?.encryptedOpenRouterKey ?? user.encryptedOpenRouterKey),
+>>>>>>> main
 >>>>>>> main
 >>>>>>> main
 >>>>>>> main
