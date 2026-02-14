@@ -33,6 +33,7 @@ const getSessionOnServer = createServerFn({ method: "GET" }).handler(
 
       const response = await fetch(`${CONVEX_SITE_URL}/api/auth/session`, {
         headers: { cookie },
+        signal: AbortSignal.timeout(3000),
       });
       if (!response.ok) return null;
 

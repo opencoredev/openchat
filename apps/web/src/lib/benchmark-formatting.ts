@@ -30,7 +30,7 @@ export function formatIndex(value: number | null | undefined): string {
 
 /**
  * Returns a Tailwind color class for a benchmark score.
- * Uses discrete color buckets: green (≥70), amber (40-69), red (<40), gray (null).
+ * Uses discrete color buckets: emerald (≥30), amber (15-29), rose (<15), gray (null).
  * @param score - A numeric score or null
  * @returns Tailwind text color class
  */

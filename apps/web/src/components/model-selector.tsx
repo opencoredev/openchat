@@ -237,32 +237,30 @@ function ModelItem({
           </span>
         )}
 
-        <TooltipProvider delay={100}>
-          {hasVision && (
-            <Tooltip>
-              <TooltipTrigger render={<span />} className="flex size-6 items-center justify-center rounded-lg bg-sky-500/15 text-sky-400">
-                <EyeIcon className="size-3.5" />
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6} positionerClassName="z-[10000]">Vision</TooltipContent>
-            </Tooltip>
-          )}
-          {hasReasoning && (
-            <Tooltip>
-              <TooltipTrigger render={<span />} className="flex size-6 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400">
-                <ThinkingIcon className="size-3.5" />
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6} positionerClassName="z-[10000]">Reasoning</TooltipContent>
-            </Tooltip>
-          )}
-          {model.toolCall && (
-            <Tooltip>
-              <TooltipTrigger render={<span />} className="flex size-6 items-center justify-center rounded-lg bg-violet-500/15 text-violet-400">
-                <ToolIcon className="size-3.5" />
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6} positionerClassName="z-[10000]">Tool Use</TooltipContent>
-            </Tooltip>
-          )}
-        </TooltipProvider>
+        {hasVision && (
+          <Tooltip>
+            <TooltipTrigger render={<span />} className="flex size-6 items-center justify-center rounded-lg bg-sky-500/15 text-sky-400">
+              <EyeIcon className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6} positionerClassName="z-[10000]">Vision</TooltipContent>
+          </Tooltip>
+        )}
+        {hasReasoning && (
+          <Tooltip>
+            <TooltipTrigger render={<span />} className="flex size-6 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400">
+              <ThinkingIcon className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6} positionerClassName="z-[10000]">Reasoning</TooltipContent>
+          </Tooltip>
+        )}
+        {model.toolCall && (
+          <Tooltip>
+            <TooltipTrigger render={<span />} className="flex size-6 items-center justify-center rounded-lg bg-violet-500/15 text-violet-400">
+              <ToolIcon className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6} positionerClassName="z-[10000]">Tool Use</TooltipContent>
+          </Tooltip>
+        )}
 
         <button
           type="button"
@@ -716,22 +714,24 @@ export function ModelSelector({
                     ) : null}
                   </div>
                 ) : (
-                  flatList.map((model, index) => (
-                    <ModelItem
-                      key={model.id}
-                      model={model}
-                      isSelected={model.id === value}
-                      isHighlighted={index === highlightedIndex}
-                      isFavorite={isFavorite(model.id)}
-                      onSelect={() => handleSelect(model.id)}
-                      onHover={() => setHighlightedIndex(index)}
-                      onInfoClick={() => onInfoOpen?.(model)}
-                      onInfoHover={() => {}}
-                      onInfoClear={() => {}}
-                      onToggleFavorite={(e) => handleToggleFavorite(e, model.id)}
-                      dataIndex={index}
-                    />
-                  ))
+                  <TooltipProvider delay={100}>
+                    {flatList.map((model, index) => (
+                      <ModelItem
+                        key={model.id}
+                        model={model}
+                        isSelected={model.id === value}
+                        isHighlighted={index === highlightedIndex}
+                        isFavorite={isFavorite(model.id)}
+                        onSelect={() => handleSelect(model.id)}
+                        onHover={() => setHighlightedIndex(index)}
+                        onInfoClick={() => onInfoOpen?.(model)}
+                        onInfoHover={() => {}}
+                        onInfoClear={() => {}}
+                        onToggleFavorite={(e) => handleToggleFavorite(e, model.id)}
+                        dataIndex={index}
+                      />
+                    ))}
+                  </TooltipProvider>
                 )}
               </div>
 
@@ -899,22 +899,24 @@ export function ModelSelector({
                     ) : null}
                   </div>
                 ) : (
-                  flatList.map((model, index) => (
-                    <ModelItem
-                      key={model.id}
-                      model={model}
-                      isSelected={model.id === value}
-                      isHighlighted={index === highlightedIndex}
-                      isFavorite={isFavorite(model.id)}
-                      onSelect={() => handleSelect(model.id)}
-                      onHover={() => setHighlightedIndex(index)}
-                      onInfoClick={() => onInfoOpen?.(model)}
-                       onInfoHover={() => showInfoPanel(model)}
-                       onInfoClear={hideInfoPanel}
-                      onToggleFavorite={(e) => handleToggleFavorite(e, model.id)}
-                      dataIndex={index}
-                    />
-                  ))
+                  <TooltipProvider delay={100}>
+                    {flatList.map((model, index) => (
+                      <ModelItem
+                        key={model.id}
+                        model={model}
+                        isSelected={model.id === value}
+                        isHighlighted={index === highlightedIndex}
+                        isFavorite={isFavorite(model.id)}
+                        onSelect={() => handleSelect(model.id)}
+                        onHover={() => setHighlightedIndex(index)}
+                        onInfoClick={() => onInfoOpen?.(model)}
+                        onInfoHover={() => showInfoPanel(model)}
+                        onInfoClear={hideInfoPanel}
+                        onToggleFavorite={(e) => handleToggleFavorite(e, model.id)}
+                        dataIndex={index}
+                      />
+                    ))}
+                  </TooltipProvider>
                 )}
               </div>
 

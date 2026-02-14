@@ -86,7 +86,7 @@ export function StableAuthProvider({
     }
     return { user: null, session: null };
   });
-  const [loading, setLoading] = useState(!initialUser);
+  const [loading, setLoading] = useState(true);
   const fetchedRef = useRef(false);
   const fetchingRef = useRef(false);
 
