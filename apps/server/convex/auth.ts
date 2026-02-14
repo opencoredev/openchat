@@ -94,15 +94,26 @@ export const createAuth = (
 			requireEmailVerification: true,
 			sendResetPassword: async ({ user, url }: { user: { email: string }; url: string }) => {
 				// TODO: integrate with email provider (e.g., Resend, SendGrid)
-				console.log(`[Auth] Password reset requested for ${user.email}: ${url}`);
+				// SECURITY: Never log sensitive reset URLs in production (OSS-44)
+				if (process.env.NODE_ENV !== "production") {
+					console.log(`[Auth] Password reset requested for ${user.email} (dev only, URL omitted from logs)`);
+					console.log(`[Auth] Reset URL: ${url}`);
+				} else {
+					console.log(`[Auth] Password reset requested for ${user.email}`);
+				}
 			},
 		},
 		emailVerification: {
 			sendOnSignUp: true,
 			sendVerificationEmail: async ({ user, url }: { user: { email: string }; url: string }) => {
 				// TODO: integrate with email provider (e.g., Resend, SendGrid)
-				// For now, log the verification URL for development/debugging
-				console.log(`[Auth] Verification email for ${user.email}: ${url}`);
+				// SECURITY: Never log sensitive verification URLs in production (OSS-44)
+				if (process.env.NODE_ENV !== "production") {
+					console.log(`[Auth] Verification email for ${user.email} (dev only, URL omitted from logs)`);
+					console.log(`[Auth] Verification URL: ${url}`);
+				} else {
+					console.log(`[Auth] Verification email sent for ${user.email}`);
+				}
 			},
 		},
 		socialProviders: {
