@@ -30,7 +30,7 @@ export function formatIndex(value: number | null | undefined): string {
 
 /**
  * Returns a Tailwind color class for a benchmark score.
- * Uses discrete color buckets: green (≥70), amber (40-69), red (<40), gray (null).
+ * Uses discrete color buckets: emerald (≥30), amber (15-29), rose (<15), gray (null).
  * @param score - A numeric score or null
  * @returns Tailwind text color class
  */
@@ -38,13 +38,13 @@ export function getBenchmarkColor(score: number | null): string {
 	if (score === null) {
 		return "text-muted-foreground";
 	}
-	if (score >= 70) {
+	if (score >= 30) {
 		return "text-emerald-500";
 	}
-	if (score >= 40) {
+	if (score >= 15) {
 		return "text-amber-500";
 	}
-	return "text-red-500";
+	return "text-rose-500";
 }
 
 /**
