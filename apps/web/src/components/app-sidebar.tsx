@@ -270,12 +270,12 @@ export function AppSidebar({
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
-      const stored = localStorage.getItem(CHATS_CACHE_KEY);
+      const stored = sessionStorage.getItem(CHATS_CACHE_KEY);
       if (stored && !cachedChatsRef.current) {
         cachedChatsRef.current = JSON.parse(stored);
       }
     } catch (e) {
-      console.warn("Failed to load chats from localStorage:", e);
+      console.warn("Failed to load chats from sessionStorage:", e);
     }
   }, []);
 
@@ -283,9 +283,11 @@ export function AppSidebar({
     if (chatsResult?.chats && chatsResult.chats.length > 0) {
       cachedChatsRef.current = chatsResult.chats;
       try {
-        localStorage.setItem(CHATS_CACHE_KEY, JSON.stringify(chatsResult.chats));
+        // Only cache minimal fields needed for sidebar rendering
+        const minimal = chatsResult.chats.map(({ _id, title, updatedAt }) => ({ _id, title, updatedAt }));
+        sessionStorage.setItem(CHATS_CACHE_KEY, JSON.stringify(minimal));
       } catch (e) {
-        console.warn("Failed to save chats to localStorage:", e);
+        console.warn("Failed to save chats to sessionStorage:", e);
       }
     }
   }, [chatsResult?.chats]);
