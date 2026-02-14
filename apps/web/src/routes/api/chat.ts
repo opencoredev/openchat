@@ -156,6 +156,19 @@ export const Route = createFileRoute("/api/chat")({
 					return json({ error: "chatId is required" }, { status: 400 });
 				}
 
+				// Validate chat ownership via Convex (authoritative source)
+				const convexClient = await getConvexClientForRequest(request);
+				if (!convexClient) {
+					return json({ error: "Unauthorized" }, { status: 401 });
+				}
+				const chat = await convexClient.query(api.chats.get, {
+					chatId: chatId as Id<"chats">,
+					userId,
+				});
+				if (!chat) {
+					return json({ error: "Unauthorized" }, { status: 403 });
+				}
+
 				const redisReady = await redis.ensureConnected();
 				if (!redisReady) {
 					console.log("[Chat API GET] Redis not available");
@@ -345,27 +358,35 @@ export const Route = createFileRoute("/api/chat")({
 					const messageId = generateId();
 					const streamId = `${chatId}-${messageId}`;
 
-					if (chatId && redisReady) {
-						console.log("[Chat API POST] Initializing Redis stream for chat:", chatId);
-						await redis.stream.init(chatId, convexUserId, messageId);
-					}
-
+					// Validate chat ownership before initializing Redis stream or setting active stream
 					if (chatId) {
 						const convexClient = await getConvexClientForRequest(request);
 						if (!convexClient) {
-							console.error("[Chat API] Convex auth token unavailable");
-						} else {
-							try {
-								console.log("[Chat API] Setting active stream:", streamId);
-								await convexClient.mutation(api.chats.setActiveStream, {
-									chatId: chatId as Id<"chats">,
-									userId: convexUserId,
-									streamId,
-								});
-								console.log("[Chat API] Active stream set successfully");
-							} catch (err) {
-								console.error("[Chat API] Failed to set active stream:", err);
-							}
+							return json({ error: "Unauthorized" }, { status: 401 });
+						}
+						const ownedChat = await convexClient.query(api.chats.get, {
+							chatId: chatId as Id<"chats">,
+							userId: convexUserId,
+						});
+						if (!ownedChat) {
+							return json({ error: "Unauthorized" }, { status: 403 });
+						}
+
+						if (redisReady) {
+							console.log("[Chat API POST] Initializing Redis stream for chat:", chatId);
+							await redis.stream.init(chatId, convexUserId, messageId);
+						}
+
+						try {
+							console.log("[Chat API] Setting active stream:", streamId);
+							await convexClient.mutation(api.chats.setActiveStream, {
+								chatId: chatId as Id<"chats">,
+								userId: convexUserId,
+								streamId,
+							});
+							console.log("[Chat API] Active stream set successfully");
+						} catch (err) {
+							console.error("[Chat API] Failed to set active stream:", err);
 						}
 					}
 
