@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 
 export type ChatTitleLength = "short" | "standard" | "long";
-export type ChatTitleGenerationMode = "auto" | "manual";
+type ChatTitleGenerationMode = "auto" | "manual";
 
 interface ChatTitleState {
 	length: ChatTitleLength;

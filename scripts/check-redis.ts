@@ -87,7 +87,10 @@ async function main() {
 		process.stderr.write(
 			"Check UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.\n",
 		);
-		process.exit(1);
+		if (process.env.NODE_ENV === "production") {
+			process.exit(1);
+		}
+		process.stderr.write("[check-redis] Dev mode — continuing without Redis. Rate limiting is disabled.\n");
 	}
 }
 

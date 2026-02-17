@@ -12,5 +12,4 @@ export const convexClient =
     ? new ConvexReactClient(env.CONVEX_URL, { expectAuth: true })
     : null;
 
-// Helper to check if Convex is available (for conditional hook usage)
-export const isConvexAvailable = () => convexClient !== null;
+

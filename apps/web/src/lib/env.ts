@@ -11,19 +11,6 @@ export const env = {
   POSTHOG_HOST: import.meta.env.VITE_POSTHOG_HOST,
 } as const;
 
-// Validate required env vars
-export function validateEnv(): void {
-	const errors: Array<string> = [];
-	if (!env.CONVEX_URL) {
-		errors.push("VITE_CONVEX_URL is required");
-	}
-	if (!env.CONVEX_SITE_URL) {
-		errors.push("VITE_CONVEX_SITE_URL is required");
-	}
-	if (errors.length > 0) {
-		throw new Error(`Missing required environment variables: ${errors.join(", ")}`);
-	}
-}
 
 const PRODUCTION_HOSTS = ["osschat.dev", "www.osschat.dev"];
 
