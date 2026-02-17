@@ -166,40 +166,40 @@ export const useStreamStore = create<StreamState>()(
             "stream/error",
           ),
 
-		setResuming: () => set({ status: "resuming" }, false, "stream/resuming"),
+        setResuming: () => set({ status: "resuming" }, false, "stream/resuming"),
 
 
-		reset: () => set(initialState, false, "stream/reset"),
+        reset: () => set(initialState, false, "stream/reset"),
 
-		setPendingUserMessage: (message) =>
-			set({ pendingUserMessage: message }, false, "stream/pending/set"),
+        setPendingUserMessage: (message) =>
+          set({ pendingUserMessage: message }, false, "stream/pending/set"),
 
-		consumePendingUserMessage: (chatId: string) => {
-			const pending = get().pendingUserMessage;
-			if (pending && pending.chatId === chatId) {
-				set({ pendingUserMessage: null }, false, "stream/pending/consume");
-				return pending;
-			}
-			return null;
-		},
+        consumePendingUserMessage: (chatId: string) => {
+          const pending = get().pendingUserMessage;
+          if (pending && pending.chatId === chatId) {
+            set({ pendingUserMessage: null }, false, "stream/pending/consume");
+            return pending;
+          }
+          return null;
+        },
 
-		clearPendingUserMessage: (chatId: string) => {
-			const pending = get().pendingUserMessage;
-			if (pending && pending.chatId === chatId) {
-				set({ pendingUserMessage: null }, false, "stream/pending/clear");
-			}
-		},
+        clearPendingUserMessage: (chatId: string) => {
+          const pending = get().pendingUserMessage;
+          if (pending && pending.chatId === chatId) {
+            set({ pendingUserMessage: null }, false, "stream/pending/clear");
+          }
+        },
 
-		getActiveStreamForChat: (chatId: string) => {
-			const stream = get().activeStream;
-			if (!stream) return null;
-			if (stream.chatId !== chatId) return null;
-			if (Date.now() - stream.startedAt > 10 * 60 * 1000) {
-				set({ activeStream: null }, false, "stream/expired");
-				return null;
-			}
-			return stream;
-		},
+        getActiveStreamForChat: (chatId: string) => {
+          const stream = get().activeStream;
+          if (!stream) return null;
+          if (stream.chatId !== chatId) return null;
+          if (Date.now() - stream.startedAt > 10 * 60 * 1000) {
+            set({ activeStream: null }, false, "stream/expired");
+            return null;
+          }
+          return stream;
+        },
 
       }),
 		{
