@@ -1,4 +1,4 @@
-export type GenerateTitleResponse = {
+type GenerateTitleResponse = {
 	queued?: boolean;
 	saved?: boolean;
 	reason?: string;

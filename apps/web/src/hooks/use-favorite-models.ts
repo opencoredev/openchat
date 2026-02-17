@@ -3,7 +3,7 @@ import { api } from "@server/convex/_generated/api";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-client";
 
-export const DEFAULT_FAVORITES = [
+const DEFAULT_FAVORITES = [
   "anthropic/claude-opus-4.5",
   "anthropic/claude-sonnet-4.5",
   "anthropic/claude-haiku-4.5",

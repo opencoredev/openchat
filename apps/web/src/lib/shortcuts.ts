@@ -213,7 +213,7 @@ const DISPLAY_TOKENS: Record<string, { mac: string; other: string }> = {
 
 const MODIFIER_ORDER = ["meta", "ctrl", "alt", "shift"];
 
-export const RESERVED_SHORTCUT_BINDINGS = new Set([
+const RESERVED_SHORTCUT_BINDINGS = new Set([
 	"meta+n",
 	"ctrl+n",
 	"meta+t",
@@ -258,7 +258,7 @@ export function normalizeBinding(rawBinding: string): string {
 	return [...modifiers, primary].join("+");
 }
 
-export function getDefaultShortcutBinding(shortcut: ShortcutDefinition, isMac: boolean): string {
+function getDefaultShortcutBinding(shortcut: ShortcutDefinition, isMac: boolean): string {
 	const raw = isMac ? shortcut.defaultBinding.mac : shortcut.defaultBinding.other;
 	if (!raw) return "";
 	return normalizeBinding(raw);

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, devtools, persist } from "zustand/middleware";
 
-export type StreamStatus = "idle" | "connecting" | "streaming" | "stopping" | "error" | "resuming";
+type StreamStatus = "idle" | "connecting" | "streaming" | "stopping" | "error" | "resuming";
 
 interface ActiveStream {
   chatId: string;
@@ -238,14 +238,3 @@ export const useStreamStore = create<StreamState>()(
   ),
 );
 
-export const useIsStreaming = () =>
-  useStreamStore(
-    (s) => s.status === "streaming" || s.status === "connecting" || s.status === "resuming",
-  );
-
-export const useStreamContent = () =>
-  useStreamStore((s) => ({ content: s.content, reasoning: s.reasoning }));
-
-export const useStreamError = () => useStreamStore((s) => s.error);
-
-export const useActiveStream = () => useStreamStore((s) => s.activeStream);

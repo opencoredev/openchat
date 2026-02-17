@@ -9,7 +9,6 @@
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { initPricingLookup } from "./provider";
 import { analytics } from "@/lib/analytics";
 
 // ============================================================================
@@ -369,10 +368,6 @@ async function fetchAllModels(): Promise<Array<Model>> {
 
       saveToStorage(models, cache.timestamp);
 
-      initPricingLookup((modelId: string) => {
-        const model = models.find((m) => m.id === modelId);
-        return model?.pricing;
-      });
 
       return models;
     } catch (e) {
@@ -388,8 +383,7 @@ async function fetchAllModels(): Promise<Array<Model>> {
   return cache.promise;
 }
 
-// Clear cache and refetch
-export function clearModelCache() {
+function clearModelCache() {
   cache = {
     models: null,
     timestamp: 0,
@@ -400,8 +394,7 @@ export function clearModelCache() {
   notifyListeners();
 }
 
-// Reload models (clear cache + fetch)
-export async function reloadModels(): Promise<Array<Model>> {
+async function reloadModels(): Promise<Array<Model>> {
   clearModelCache();
   return fetchAllModels();
 }
@@ -475,19 +468,19 @@ function getFallbackModels(): Array<Model> {
   ];
 }
 
-export const fallbackModels = getFallbackModels();
+
 
 // ============================================================================
 // Reasoning Effort Types
 // ============================================================================
 
-export type ReasoningEffort = "none" | "low" | "medium" | "high";
+type ReasoningEffort = "none" | "low" | "medium" | "high";
 
 // ============================================================================
 // Dynamic Model Capabilities (API-driven, no hardcoded model lists)
 // ============================================================================
 
-export interface ModelCapabilities {
+interface ModelCapabilities {
   supportsReasoning: boolean;
   supportsEffortLevels: boolean;
   alwaysReasons: boolean;

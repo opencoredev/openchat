@@ -5,7 +5,7 @@
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 
-export type FilterStyle = "company" | "model";
+type FilterStyle = "company" | "model";
 
 interface UIState {
   // Sidebar

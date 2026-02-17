@@ -81,5 +81,4 @@ export function usePostHogPageView(pathname: string) {
   }, [pathname]);
 }
 
-// Export posthog instance for manual event capture
-export { posthog };
+

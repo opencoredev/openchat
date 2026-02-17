@@ -15,41 +15,8 @@ import { isPreviewDeployment } from "@/lib/env";
 
 export { isPreviewDeployment };
 
-// Provider types - both use OpenRouter, just different API keys
-export type ProviderType = "osschat" | "openrouter";
+type ProviderType = "osschat" | "openrouter";
 
-// Import model cache to get pricing dynamically
-// We use dynamic import to avoid circular dependencies
-let getModelPricing: ((modelId: string) => { input: number; output: number } | undefined) | null =
-  null;
-
-// Initialize the pricing lookup (called from model store)
-export function initPricingLookup(
-  lookup: (modelId: string) => { input: number; output: number } | undefined,
-) {
-  getModelPricing = lookup;
-}
-
-/**
- * Calculate cost in cents for a given model and token usage
- * Uses live pricing from OpenRouter API (fetched in model store)
- */
-export function calculateCost(modelId: string, inputTokens: number, outputTokens: number): number {
-  // Try to get live pricing from model cache
-  const pricing = getModelPricing?.(modelId);
-
-  if (pricing) {
-    // Pricing from OpenRouter is already in USD per 1M tokens
-    const inputCost = (inputTokens / 1_000_000) * pricing.input;
-    const outputCost = (outputTokens / 1_000_000) * pricing.output;
-    return (inputCost + outputCost) * 100; // Return in cents
-  }
-
-  // Fallback: estimate based on typical pricing ($1/1M input, $4/1M output)
-  const fallbackInputCost = (inputTokens / 1_000_000) * 1;
-  const fallbackOutputCost = (outputTokens / 1_000_000) * 4;
-  return (fallbackInputCost + fallbackOutputCost) * 100;
-}
 
 interface ProviderState {
   // Active provider
@@ -82,9 +49,8 @@ interface ProviderState {
   isSearchLimitReached: () => boolean;
 }
 
-// Daily limits
 export const DAILY_LIMIT_CENTS = 10;
-export const DAILY_SEARCH_LIMIT = 50;
+const DAILY_SEARCH_LIMIT = 50;
 
 function getTodayDate(): string {
   return new Date().toISOString().split("T")[0];
@@ -258,15 +224,6 @@ export const useProviderStore = create<ProviderState>()(
   ),
 );
 
-/**
- * Hook to check if user can use OSSChat Cloud
- */
-export function useCanUseOSSChat(): boolean {
-  const activeProvider = useProviderStore((s) => s.activeProvider);
-  const isOverLimit = useProviderStore((s) => s.isOverLimit());
-
-  return activeProvider === "osschat" && !isOverLimit;
-}
 
 /**
  * Hook for web search functionality
