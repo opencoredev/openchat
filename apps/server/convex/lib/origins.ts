@@ -12,6 +12,7 @@ const PRODUCTION_ORIGINS = [
 
 const DEV_ORIGINS = [
 	"http://localhost:3000",
+	"http://openchat.localhost:1355",
 ];
 
 function getBaseOrigins(): string[] {
