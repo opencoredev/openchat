@@ -192,7 +192,7 @@ vi.mock("sonner", () => ({
 	toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-import { AppSidebar } from "../app-sidebar";
+import { AppSidebar } from "../sidebar";
 import { useAuth } from "@/lib/auth-client";
 import { useBulkSelectionStore } from "@/stores/bulk-selection";
 

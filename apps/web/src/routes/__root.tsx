@@ -11,7 +11,7 @@ import { getRequest } from "@tanstack/react-start/server";
 import { Providers } from "../providers";
 import { SidebarInset, SidebarProvider } from "../components/ui/sidebar";
 import { NavigationProgress } from "../components/navigation-progress";
-import { AppSidebar } from "../components/app-sidebar";
+import { AppSidebar } from "../components/sidebar";
 import { useAuth } from "../lib/auth-client";
 import { usePostHogPageView } from "../providers/posthog";
 import { convexClient } from "../lib/convex";

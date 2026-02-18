@@ -108,7 +108,7 @@ vi.mock("streamdown", () => ({
 }));
 
 // Mock StartScreen — simple stub
-vi.mock("@/components/start-screen", () => ({
+vi.mock("@/components/chat/start-screen", () => ({
 	StartScreen: ({ onPromptSelect }: { onPromptSelect: (p: string) => void }) =>
 		React.createElement(
 			"div",

@@ -10,7 +10,7 @@
  * - cleanupStaleJobs: cleans old pending/running jobs
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { convexTest } from "convex-test";
 import schema from "./schema";
 import { api, internal } from "./_generated/api";
@@ -65,10 +65,18 @@ describe("backgroundStream.startStream", () => {
 	let chatId: Id<"chats">;
 
 	beforeEach(async () => {
+		// startStream calls ctx.scheduler.runAfter() which uses setTimeout in convex-test.
+		// Use fake timers so scheduled work doesn't fire after the transaction closes,
+		// preventing "Write outside of transaction" unhandled rejections.
+		vi.useFakeTimers();
 		t = createConvexTest();
 		const seed = await seedUserAndChat(t);
 		userId = seed.userId;
 		chatId = seed.chatId;
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	it("creates a stream job and returns a jobId", async () => {

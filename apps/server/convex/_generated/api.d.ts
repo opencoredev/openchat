@@ -11,6 +11,8 @@
 import type * as auth from "../auth.js";
 import type * as backgroundStream from "../backgroundStream.js";
 import type * as benchmarks from "../benchmarks.js";
+import type * as chatFork from "../chatFork.js";
+import type * as chatTitle from "../chatTitle.js";
 import type * as chats from "../chats.js";
 import type * as cleanupAction from "../cleanupAction.js";
 import type * as config_constants from "../config/constants.js";
@@ -37,6 +39,12 @@ import type * as previewSeed from "../previewSeed.js";
 import type * as promptTemplates from "../promptTemplates.js";
 import type * as search from "../search.js";
 import type * as stats from "../stats.js";
+import type * as streamContent from "../streamContent.js";
+import type * as streamExecution from "../streamExecution.js";
+import type * as streamJobs from "../streamJobs.js";
+import type * as userApiKeys from "../userApiKeys.js";
+import type * as userAuth from "../userAuth.js";
+import type * as userProfile from "../userProfile.js";
 import type * as users from "../users.js";
 
 import type {
@@ -49,6 +57,8 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   backgroundStream: typeof backgroundStream;
   benchmarks: typeof benchmarks;
+  chatFork: typeof chatFork;
+  chatTitle: typeof chatTitle;
   chats: typeof chats;
   cleanupAction: typeof cleanupAction;
   "config/constants": typeof config_constants;
@@ -75,6 +85,12 @@ declare const fullApi: ApiFromModules<{
   promptTemplates: typeof promptTemplates;
   search: typeof search;
   stats: typeof stats;
+  streamContent: typeof streamContent;
+  streamExecution: typeof streamExecution;
+  streamJobs: typeof streamJobs;
+  userApiKeys: typeof userApiKeys;
+  userAuth: typeof userAuth;
+  userProfile: typeof userProfile;
   users: typeof users;
 }>;
 
