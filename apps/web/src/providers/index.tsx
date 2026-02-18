@@ -101,7 +101,6 @@ function UserSyncProvider({ children }: { children: React.ReactNode }) {
     })
       .then(() => {
         syncedRef.current = true;
-        console.log("[UserSync] User synced to Convex successfully");
       })
       .catch((error) => {
         console.error("[UserSync] Failed to sync user to Convex:", error);
@@ -165,7 +164,6 @@ function OpenRouterKeyStatusProvider({ children }: { children: React.ReactNode }
 		initialize()
 			.then(() => {
 				checkedRef.current = true;
-				console.log("[OpenRouterKeyStatus] API key status checked successfully");
 			})
       .catch((error: unknown) => {
         console.error("[OpenRouterKeyStatus] Failed to check API key status:", error);
