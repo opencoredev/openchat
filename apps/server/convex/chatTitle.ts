@@ -9,10 +9,11 @@ import { sanitizeTitle } from "./lib/sanitize";
 import { requireAuthUserId, requireAuthUserIdFromAction } from "./lib/auth";
 import { decryptSecret } from "./lib/crypto";
 import { createLogger } from "./lib/logger";
+import { OSSCHAT_IO_URL, TITLE_GENERATION_MODEL_ID } from "./lib/constants";
 
 const logger = createLogger("chatTitle");
 
-const TITLE_MODEL_ID = "google/gemini-2.5-flash-lite";
+const TITLE_MODEL_ID = TITLE_GENERATION_MODEL_ID;
 const TITLE_MAX_LENGTH = 200;
 
 const TITLE_STYLE_PROMPTS: Record<"short" | "standard" | "long", string> = {
@@ -60,7 +61,7 @@ async function generateTitleFromSeed(
 			headers: {
 				"Content-Type": "application/json",
 				Authorization: `Bearer ${openRouterKey}`,
-				"HTTP-Referer": process.env.CONVEX_SITE_URL || "https://osschat.io",
+				"HTTP-Referer": process.env.CONVEX_SITE_URL || OSSCHAT_IO_URL,
 				"X-Title": "OSSChat",
 			},
 		body: JSON.stringify({
