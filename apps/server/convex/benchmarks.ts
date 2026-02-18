@@ -135,10 +135,33 @@ export const getBenchmarkByOpenRouterId = query({
 	},
 });
 
+const MAX_BENCHMARK_LIMIT = 500;
+const DEFAULT_BENCHMARK_LIMIT = 200;
+
 export const getAllBenchmarks = query({
-	args: {},
-	handler: async (ctx) => {
-		return await ctx.db.query("benchmarks").collect();
+	args: {
+		cursor: v.optional(v.string()),
+		limit: v.optional(v.number()),
+	},
+	handler: async (ctx, args) => {
+		let limit = args.limit ?? DEFAULT_BENCHMARK_LIMIT;
+		if (!Number.isFinite(limit) || limit <= 0) {
+			limit = DEFAULT_BENCHMARK_LIMIT;
+		} else if (limit > MAX_BENCHMARK_LIMIT) {
+			limit = MAX_BENCHMARK_LIMIT;
+		}
+
+		const results = await ctx.db
+			.query("benchmarks")
+			.paginate({
+				cursor: args.cursor ?? null,
+				numItems: limit,
+			});
+
+		return {
+			benchmarks: results.page,
+			nextCursor: results.continueCursor ?? null,
+		};
 	},
 });
 
