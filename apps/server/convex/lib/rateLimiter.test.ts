@@ -53,21 +53,23 @@ describe("rateLimiter - user operations", () => {
 		const t = createConvexTest();
 
 		// Try to exceed the rate limit for a single user (100/min with 20 burst)
-		// Use the same user to hit the per-user rate limit
+		// Use sequential requests to avoid leaving open transactions
 		const externalId = "user_burst_same";
-		const promises: Promise<unknown>[] = [];
+		let rateLimitHit = false;
+
 		for (let i = 0; i < 150; i++) {
-			promises.push(
-				asUser(t, externalId).mutation(api.users.ensure, {
-					externalId,
-				})
-			);
+			try {
+				await asUser(t, externalId).mutation(api.users.ensure, { externalId });
+			} catch (error: unknown) {
+				if ((error as Error).message?.includes("Too many authentication attempts")) {
+					rateLimitHit = true;
+					break;
+				}
+				throw error;
+			}
 		}
 
-		// Some should fail with rate limit error
-		await expect(async () => {
-			await Promise.all(promises);
-		}).rejects.toThrowError(/Too many authentication attempts/);
+		expect(rateLimitHit).toBe(true);
 	});
 
 	test("should provide retry-after time in error message", async () => {
@@ -75,23 +77,19 @@ describe("rateLimiter - user operations", () => {
 
 		// Exhaust the rate limit for a single user
 		const externalId = "user_retry_same";
-		const promises: Promise<unknown>[] = [];
+		let rateLimitError: Error | null = null;
+
 		for (let i = 0; i < 150; i++) {
-			promises.push(
-				asUser(t, externalId).mutation(api.users.ensure, {
-					externalId,
-				})
-			);
+			try {
+				await asUser(t, externalId).mutation(api.users.ensure, { externalId });
+			} catch (error: unknown) {
+				rateLimitError = error as Error;
+				break;
+			}
 		}
 
-		try {
-			await Promise.all(promises);
-			// If no error, test fails
-			expect(true).toBe(false);
-		} catch (error: unknown) {
-			// Check that error message includes retry information
-			expect((error as Error).message).toMatch(/try again/i);
-		}
+		expect(rateLimitError).not.toBeNull();
+		expect(rateLimitError!.message).toMatch(/try again/i);
 	});
 
 	test("should enforce rate limit on API key saves", async () => {
@@ -100,20 +98,24 @@ describe("rateLimiter - user operations", () => {
 		const externalId = "user_api_key_rate";
 		const userId = await createUser(t, externalId);
 
-		// Try to save many keys (limit: 5/min with 2 burst)
-		const promises: Promise<unknown>[] = [];
+		// Try to save many keys sequentially (limit: 5/min with 2 burst)
+		let rateLimitHit = false;
 		for (let i = 0; i < 10; i++) {
-			promises.push(
-				asUser(t, externalId).mutation(api.users.saveOpenRouterKey, {
+			try {
+				await asUser(t, externalId).mutation(api.users.saveOpenRouterKey, {
 					userId,
 					encryptedKey: `key_${i}`,
-				})
-			);
+				});
+			} catch (error: unknown) {
+				if ((error as Error).message?.includes("Too many API key updates")) {
+					rateLimitHit = true;
+					break;
+				}
+				throw error;
+			}
 		}
 
-		await expect(async () => {
-			await Promise.all(promises);
-		}).rejects.toThrowError(/Too many API key updates/);
+		expect(rateLimitHit).toBe(true);
 	});
 
 	test("should enforce rate limit on API key removals", async () => {
@@ -122,17 +124,21 @@ describe("rateLimiter - user operations", () => {
 		const externalId = "user_api_remove_rate";
 		const userId = await createUser(t, externalId);
 
-		// Try to remove many times (limit: 5/min with 2 burst)
-		const promises: Promise<unknown>[] = [];
+		// Try to remove many times sequentially (limit: 5/min with 2 burst)
+		let rateLimitHit = false;
 		for (let i = 0; i < 10; i++) {
-			promises.push(
-				asUser(t, externalId).mutation(api.users.removeOpenRouterKey, { userId })
-			);
+			try {
+				await asUser(t, externalId).mutation(api.users.removeOpenRouterKey, { userId });
+			} catch (error: unknown) {
+				if ((error as Error).message?.includes("Too many API key removals")) {
+					rateLimitHit = true;
+					break;
+				}
+				throw error;
+			}
 		}
 
-		await expect(async () => {
-			await Promise.all(promises);
-		}).rejects.toThrowError(/Too many API key removals/);
+		expect(rateLimitHit).toBe(true);
 	});
 });
 
@@ -161,22 +167,26 @@ describe("rateLimiter - template operations", () => {
 		const externalId = "user_template_rate_2";
 		const userId = await createUser(t, externalId);
 
-		// Try to exceed limit (20/min with 5 burst)
-		const promises: Promise<unknown>[] = [];
+		// Try to exceed limit sequentially (20/min with 5 burst)
+		let rateLimitHit = false;
 		for (let i = 0; i < 30; i++) {
-			promises.push(
-				asUser(t, externalId).mutation(api.promptTemplates.create, {
+			try {
+				await asUser(t, externalId).mutation(api.promptTemplates.create, {
 					userId,
 					name: `Template ${i}`,
 					command: `/cmd${i}`,
 					template: `Content ${i}`,
-				})
-			);
+				});
+			} catch (error: unknown) {
+				if ((error as Error).message?.includes("Too many templates created")) {
+					rateLimitHit = true;
+					break;
+				}
+				throw error;
+			}
 		}
 
-		await expect(async () => {
-			await Promise.all(promises);
-		}).rejects.toThrowError(/Too many templates created/);
+		expect(rateLimitHit).toBe(true);
 	});
 
 	test("should enforce rate limit on template updates", async () => {
@@ -192,21 +202,25 @@ describe("rateLimiter - template operations", () => {
 			template: "Content",
 		});
 
-		// Try to update many times (limit: 30/min with 10 burst)
-		const promises: Promise<unknown>[] = [];
+		// Try to update many times sequentially (limit: 30/min with 10 burst)
+		let rateLimitHit = false;
 		for (let i = 0; i < 50; i++) {
-			promises.push(
-				asUser(t, externalId).mutation(api.promptTemplates.update, {
+			try {
+				await asUser(t, externalId).mutation(api.promptTemplates.update, {
 					templateId,
 					userId,
 					name: `Update ${i}`,
-				})
-			);
+				});
+			} catch (error: unknown) {
+				if ((error as Error).message?.includes("Too many updates")) {
+					rateLimitHit = true;
+					break;
+				}
+				throw error;
+			}
 		}
 
-		await expect(async () => {
-			await Promise.all(promises);
-		}).rejects.toThrowError(/Too many updates/);
+		expect(rateLimitHit).toBe(true);
 	});
 
 	test("should enforce rate limit on template deletions", async () => {
@@ -215,26 +229,39 @@ describe("rateLimiter - template operations", () => {
 		const externalId = "user_template_delete_rate";
 		const userId = await createUser(t, externalId);
 
-		// Create many templates
-		const templateIds = [];
-		for (let i = 0; i < 20; i++) {
-			const { templateId } = await asUser(t, externalId).mutation(api.promptTemplates.create, {
-				userId,
-				name: `Template ${i}`,
-				command: `/del${i}`,
-				template: "Content",
-			});
-			templateIds.push(templateId);
+		// Insert templates directly into DB to bypass create rate limit
+		// (templateCreate burst=5, templateDelete burst=3)
+		const templateIds = await t.run(async (ctx) => {
+			const ids = [];
+			for (let i = 0; i < 10; i++) {
+				const id = await ctx.db.insert("promptTemplates", {
+					userId,
+					name: `Template ${i}`,
+					command: `/del${i}`,
+					template: "Content",
+					createdAt: Date.now(),
+					updatedAt: Date.now(),
+				});
+				ids.push(id);
+			}
+			return ids;
+		});
+
+		// Try to delete sequentially (limit: 15/min with 3 burst)
+		let rateLimitHit = false;
+		for (const templateId of templateIds) {
+			try {
+				await asUser(t, externalId).mutation(api.promptTemplates.remove, { templateId, userId });
+			} catch (error: unknown) {
+				if ((error as Error).message?.includes("Too many deletions")) {
+					rateLimitHit = true;
+					break;
+				}
+				throw error;
+			}
 		}
 
-		// Try to delete all (limit: 15/min with 3 burst)
-		const promises = templateIds.map((templateId) =>
-			asUser(t, externalId).mutation(api.promptTemplates.remove, { templateId, userId })
-		);
-
-		await expect(async () => {
-			await Promise.all(promises);
-		}).rejects.toThrowError(/Too many deletions/);
+		expect(rateLimitHit).toBe(true);
 	});
 });
 
@@ -323,22 +350,23 @@ describe("rateLimiter - token bucket behavior", () => {
 		const externalId = "user_burst_2";
 		const userId = await createUser(t, externalId);
 
-		// Exceed burst capacity
-		const promises: Promise<unknown>[] = [];
+		// Exceed burst capacity sequentially
+		let errorThrown = false;
 		for (let i = 0; i < 10; i++) {
-			promises.push(
-				asUser(t, externalId).mutation(api.promptTemplates.create, {
+			try {
+				await asUser(t, externalId).mutation(api.promptTemplates.create, {
 					userId,
 					name: `Burst Template ${i}`,
 					command: `/b${i}`,
 					template: "Content",
-				})
-			);
+				});
+			} catch {
+				errorThrown = true;
+				break;
+			}
 		}
 
-		await expect(async () => {
-			await Promise.all(promises);
-		}).rejects.toThrowError();
+		expect(errorThrown).toBe(true);
 	});
 });
 
@@ -462,7 +490,7 @@ describe("rateLimiter - edge cases", () => {
 		const externalId = "user_zero_delay";
 		const userId = await createUser(t, externalId);
 
-		// Launch all requests at exactly the same time
+		// Launch all requests and use allSettled to avoid leaving open transactions
 		const promises = Array.from({ length: 10 }, (_, i) =>
 			asUser(t, externalId).mutation(api.promptTemplates.create, {
 				userId,
@@ -472,7 +500,7 @@ describe("rateLimiter - edge cases", () => {
 			})
 		);
 
-		// Some should succeed, some should fail
+		// Use allSettled so all promises complete before test ends
 		const results = await Promise.allSettled(promises);
 
 		const successes = results.filter((r) => r.status === "fulfilled");
@@ -543,25 +571,26 @@ describe("rateLimiter - error messages", () => {
 		const externalId = "user_error_msg";
 		const userId = await createUser(t, externalId);
 
-		// Exhaust the limit
-		try {
-			const promises: Promise<unknown>[] = [];
-			for (let i = 0; i < 30; i++) {
-				promises.push(
-					asUser(t, externalId).mutation(api.promptTemplates.create, {
-						userId,
-						name: `Template ${i}`,
-						command: `/e${i}`,
-						template: "Content",
-					})
-				);
+		// Exhaust the limit sequentially
+		let rateLimitError: Error | null = null;
+		for (let i = 0; i < 30; i++) {
+			try {
+				await asUser(t, externalId).mutation(api.promptTemplates.create, {
+					userId,
+					name: `Template ${i}`,
+					command: `/e${i}`,
+					template: "Content",
+				});
+			} catch (error: unknown) {
+				rateLimitError = error as Error;
+				break;
 			}
-			await Promise.all(promises);
-		} catch (error: unknown) {
-			// Error should mention what was rate limited
-			expect((error as Error).message).toMatch(/too many/i);
-			expect((error as Error).message).toMatch(/template/i);
 		}
+
+		// Error should mention what was rate limited
+		expect(rateLimitError).not.toBeNull();
+		expect(rateLimitError!.message).toMatch(/too many/i);
+		expect(rateLimitError!.message).toMatch(/template/i);
 	});
 
 	test("should include retry timing in error for API key operations", async () => {
@@ -570,20 +599,22 @@ describe("rateLimiter - error messages", () => {
 		const externalId = "user_retry_timing";
 		const userId = await createUser(t, externalId);
 
-		try {
-			const promises: Promise<unknown>[] = [];
-			for (let i = 0; i < 10; i++) {
-				promises.push(
-					asUser(t, externalId).mutation(api.users.saveOpenRouterKey, {
-						userId,
-						encryptedKey: `key_${i}`,
-					})
-				);
+		// Exhaust the limit sequentially
+		let rateLimitError: Error | null = null;
+		for (let i = 0; i < 10; i++) {
+			try {
+				await asUser(t, externalId).mutation(api.users.saveOpenRouterKey, {
+					userId,
+					encryptedKey: `key_${i}`,
+				});
+			} catch (error: unknown) {
+				rateLimitError = error as Error;
+				break;
 			}
-			await Promise.all(promises);
-		} catch (error: unknown) {
-			// Should mention when to retry
-			expect((error as Error).message.toLowerCase()).toMatch(/try again/);
 		}
+
+		// Should mention when to retry
+		expect(rateLimitError).not.toBeNull();
+		expect(rateLimitError!.message.toLowerCase()).toMatch(/try again/);
 	});
 });
