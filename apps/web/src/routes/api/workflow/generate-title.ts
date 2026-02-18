@@ -11,8 +11,9 @@ import {
 	workflowClient,
 } from "@/lib/upstash";
 import { getWorkflowAuthToken, storeWorkflowAuthToken } from "@/lib/workflow-auth-token";
+import { OSSCHAT_IO_URL, TITLE_GENERATION_MODEL_ID } from "@/lib/constants";
 
-const TITLE_MODEL_ID = "google/gemini-2.5-flash-lite";
+const TITLE_MODEL_ID = TITLE_GENERATION_MODEL_ID;
 const TITLE_MAX_LENGTH = 200;
 const OPENROUTER_CALL_TIMEOUT_MS = 30_000;
 
@@ -251,7 +252,7 @@ const workflow = serve<GenerateTitlePayload>(async (context) => {
 			headers: {
 				"Content-Type": "application/json",
 				Authorization: `Bearer ${openRouterKey}`,
-				"HTTP-Referer": process.env.VITE_CONVEX_SITE_URL || "https://osschat.io",
+				"HTTP-Referer": process.env.VITE_CONVEX_SITE_URL || OSSCHAT_IO_URL,
 				"X-Title": "OSSChat",
 			},
 			body: JSON.stringify({

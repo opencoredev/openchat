@@ -23,6 +23,7 @@ import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_batchFileUrls from "../lib/batchFileUrls.js";
 import type * as lib_billingUtils from "../lib/billingUtils.js";
+import type * as lib_constants from "../lib/constants.js";
 import type * as lib_crypto from "../lib/crypto.js";
 import type * as lib_dbStats from "../lib/dbStats.js";
 import type * as lib_logger from "../lib/logger.js";
@@ -69,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/batchFileUrls": typeof lib_batchFileUrls;
   "lib/billingUtils": typeof lib_billingUtils;
+  "lib/constants": typeof lib_constants;
   "lib/crypto": typeof lib_crypto;
   "lib/dbStats": typeof lib_dbStats;
   "lib/logger": typeof lib_logger;
