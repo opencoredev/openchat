@@ -24,18 +24,26 @@ function createConvexTest() {
 	return t;
 }
 
+// Helper to run mutations as a specific user identity
+function asUser(t: ReturnType<typeof convexTest>, externalId: string) {
+	return t.withIdentity({ subject: externalId });
+}
 
-// SKIP: These tests require convex-test to find _generated directory
-// which is not working from the lib subdirectory. Tests pass when run
-// from the convex root directory. Functionality is covered by integration tests.
-describe.skip("rateLimiter - user operations", () => {
+// Helper to create a user with proper auth context and return userId
+async function createUser(t: ReturnType<typeof convexTest>, externalId: string) {
+	const result = await asUser(t, externalId).mutation(api.users.ensure, { externalId });
+	return result.userId;
+}
+
+describe("rateLimiter - user operations", () => {
 	test("should allow user creation within rate limit", async () => {
 		const t = createConvexTest();
 
 		// Create users within the limit (100/min with 20 burst capacity)
 		for (let i = 0; i < 10; i++) {
-			const result = await t.mutation(api.users.ensure, {
-				externalId: `user_rate_test_${i}`,
+			const externalId = `user_rate_test_${i}`;
+			const result = await asUser(t, externalId).mutation(api.users.ensure, {
+				externalId,
 			});
 			expect(result.userId).toBeDefined();
 		}
@@ -44,13 +52,14 @@ describe.skip("rateLimiter - user operations", () => {
 	test("should enforce rate limit on user authentication", async () => {
 		const t = createConvexTest();
 
-		// Try to exceed the rate limit (100/min with 20 burst)
-		// Create many requests simultaneously
-		const promises = [];
+		// Try to exceed the rate limit for a single user (100/min with 20 burst)
+		// Use the same user to hit the per-user rate limit
+		const externalId = "user_burst_same";
+		const promises: Promise<unknown>[] = [];
 		for (let i = 0; i < 150; i++) {
 			promises.push(
-				t.mutation(api.users.ensure, {
-					externalId: `user_burst_${i}`,
+				asUser(t, externalId).mutation(api.users.ensure, {
+					externalId,
 				})
 			);
 		}
@@ -64,12 +73,13 @@ describe.skip("rateLimiter - user operations", () => {
 	test("should provide retry-after time in error message", async () => {
 		const t = createConvexTest();
 
-		// Exhaust the rate limit
-		const promises = [];
+		// Exhaust the rate limit for a single user
+		const externalId = "user_retry_same";
+		const promises: Promise<unknown>[] = [];
 		for (let i = 0; i < 150; i++) {
 			promises.push(
-				t.mutation(api.users.ensure, {
-					externalId: `user_retry_${i}`,
+				asUser(t, externalId).mutation(api.users.ensure, {
+					externalId,
 				})
 			);
 		}
@@ -78,24 +88,23 @@ describe.skip("rateLimiter - user operations", () => {
 			await Promise.all(promises);
 			// If no error, test fails
 			expect(true).toBe(false);
-		} catch (error) {
+		} catch (error: unknown) {
 			// Check that error message includes retry information
-			expect(error.message).toMatch(/try again/i);
+			expect((error as Error).message).toMatch(/try again/i);
 		}
 	});
 
 	test("should enforce rate limit on API key saves", async () => {
 		const t = createConvexTest();
 
-		const { userId } = await t.mutation(api.users.ensure, {
-			externalId: "user_api_key_rate",
-		});
+		const externalId = "user_api_key_rate";
+		const userId = await createUser(t, externalId);
 
 		// Try to save many keys (limit: 5/min with 2 burst)
-		const promises = [];
+		const promises: Promise<unknown>[] = [];
 		for (let i = 0; i < 10; i++) {
 			promises.push(
-				t.mutation(api.users.saveOpenRouterKey, {
+				asUser(t, externalId).mutation(api.users.saveOpenRouterKey, {
 					userId,
 					encryptedKey: `key_${i}`,
 				})
@@ -110,15 +119,14 @@ describe.skip("rateLimiter - user operations", () => {
 	test("should enforce rate limit on API key removals", async () => {
 		const t = createConvexTest();
 
-		const { userId } = await t.mutation(api.users.ensure, {
-			externalId: "user_api_remove_rate",
-		});
+		const externalId = "user_api_remove_rate";
+		const userId = await createUser(t, externalId);
 
 		// Try to remove many times (limit: 5/min with 2 burst)
-		const promises = [];
+		const promises: Promise<unknown>[] = [];
 		for (let i = 0; i < 10; i++) {
 			promises.push(
-				t.mutation(api.users.removeOpenRouterKey, { userId })
+				asUser(t, externalId).mutation(api.users.removeOpenRouterKey, { userId })
 			);
 		}
 
@@ -128,17 +136,16 @@ describe.skip("rateLimiter - user operations", () => {
 	});
 });
 
-describe.skip("rateLimiter - template operations", () => {
+describe("rateLimiter - template operations", () => {
 	test("should allow template creation within rate limit", async () => {
 		const t = createConvexTest();
 
-		const { userId } = await t.mutation(api.users.ensure, {
-			externalId: "user_template_rate_1",
-		});
+		const externalId = "user_template_rate_1";
+		const userId = await createUser(t, externalId);
 
 		// Create templates within limit (20/min with 5 burst)
 		for (let i = 0; i < 5; i++) {
-			const result = await t.mutation(api.promptTemplates.create, {
+			const result = await asUser(t, externalId).mutation(api.promptTemplates.create, {
 				userId,
 				name: `Template ${i}`,
 				command: `/cmd${i}`,
@@ -151,15 +158,14 @@ describe.skip("rateLimiter - template operations", () => {
 	test("should enforce rate limit on template creation", async () => {
 		const t = createConvexTest();
 
-		const { userId } = await t.mutation(api.users.ensure, {
-			externalId: "user_template_rate_2",
-		});
+		const externalId = "user_template_rate_2";
+		const userId = await createUser(t, externalId);
 
 		// Try to exceed limit (20/min with 5 burst)
-		const promises = [];
+		const promises: Promise<unknown>[] = [];
 		for (let i = 0; i < 30; i++) {
 			promises.push(
-				t.mutation(api.promptTemplates.create, {
+				asUser(t, externalId).mutation(api.promptTemplates.create, {
 					userId,
 					name: `Template ${i}`,
 					command: `/cmd${i}`,
@@ -176,11 +182,10 @@ describe.skip("rateLimiter - template operations", () => {
 	test("should enforce rate limit on template updates", async () => {
 		const t = createConvexTest();
 
-		const { userId } = await t.mutation(api.users.ensure, {
-			externalId: "user_template_update_rate",
-		});
+		const externalId = "user_template_update_rate";
+		const userId = await createUser(t, externalId);
 
-		const { templateId } = await t.mutation(api.promptTemplates.create, {
+		const { templateId } = await asUser(t, externalId).mutation(api.promptTemplates.create, {
 			userId,
 			name: "Template",
 			command: "/test",
@@ -188,10 +193,10 @@ describe.skip("rateLimiter - template operations", () => {
 		});
 
 		// Try to update many times (limit: 30/min with 10 burst)
-		const promises = [];
+		const promises: Promise<unknown>[] = [];
 		for (let i = 0; i < 50; i++) {
 			promises.push(
-				t.mutation(api.promptTemplates.update, {
+				asUser(t, externalId).mutation(api.promptTemplates.update, {
 					templateId,
 					userId,
 					name: `Update ${i}`,
@@ -207,14 +212,13 @@ describe.skip("rateLimiter - template operations", () => {
 	test("should enforce rate limit on template deletions", async () => {
 		const t = createConvexTest();
 
-		const { userId } = await t.mutation(api.users.ensure, {
-			externalId: "user_template_delete_rate",
-		});
+		const externalId = "user_template_delete_rate";
+		const userId = await createUser(t, externalId);
 
 		// Create many templates
 		const templateIds = [];
 		for (let i = 0; i < 20; i++) {
-			const { templateId } = await t.mutation(api.promptTemplates.create, {
+			const { templateId } = await asUser(t, externalId).mutation(api.promptTemplates.create, {
 				userId,
 				name: `Template ${i}`,
 				command: `/del${i}`,
@@ -225,7 +229,7 @@ describe.skip("rateLimiter - template operations", () => {
 
 		// Try to delete all (limit: 15/min with 3 burst)
 		const promises = templateIds.map((templateId) =>
-			t.mutation(api.promptTemplates.remove, { templateId, userId })
+			asUser(t, externalId).mutation(api.promptTemplates.remove, { templateId, userId })
 		);
 
 		await expect(async () => {
@@ -234,21 +238,18 @@ describe.skip("rateLimiter - template operations", () => {
 	});
 });
 
-describe.skip("rateLimiter - per-user isolation", () => {
+describe("rateLimiter - per-user isolation", () => {
 	test("should enforce rate limits per user, not globally", async () => {
 		const t = createConvexTest();
 
-		const { userId: userId1 } = await t.mutation(api.users.ensure, {
-			externalId: "user_isolation_1",
-		});
-
-		const { userId: userId2 } = await t.mutation(api.users.ensure, {
-			externalId: "user_isolation_2",
-		});
+		const externalId1 = "user_isolation_1";
+		const externalId2 = "user_isolation_2";
+		const userId1 = await createUser(t, externalId1);
+		const userId2 = await createUser(t, externalId2);
 
 		// User 1 creates templates up to burst limit
 		for (let i = 0; i < 5; i++) {
-			await t.mutation(api.promptTemplates.create, {
+			await asUser(t, externalId1).mutation(api.promptTemplates.create, {
 				userId: userId1,
 				name: `User1 Template ${i}`,
 				command: `/u1cmd${i}`,
@@ -258,7 +259,7 @@ describe.skip("rateLimiter - per-user isolation", () => {
 
 		// User 2 should still be able to create templates
 		for (let i = 0; i < 5; i++) {
-			const result = await t.mutation(api.promptTemplates.create, {
+			const result = await asUser(t, externalId2).mutation(api.promptTemplates.create, {
 				userId: userId2,
 				name: `User2 Template ${i}`,
 				command: `/u2cmd${i}`,
@@ -271,27 +272,24 @@ describe.skip("rateLimiter - per-user isolation", () => {
 	test("should track API key save limits per user", async () => {
 		const t = createConvexTest();
 
-		const { userId: userId1 } = await t.mutation(api.users.ensure, {
-			externalId: "user_key_isolation_1",
-		});
-
-		const { userId: userId2 } = await t.mutation(api.users.ensure, {
-			externalId: "user_key_isolation_2",
-		});
+		const externalId1 = "user_key_isolation_1";
+		const externalId2 = "user_key_isolation_2";
+		const userId1 = await createUser(t, externalId1);
+		const userId2 = await createUser(t, externalId2);
 
 		// User 1 saves keys
-		await t.mutation(api.users.saveOpenRouterKey, {
+		await asUser(t, externalId1).mutation(api.users.saveOpenRouterKey, {
 			userId: userId1,
 			encryptedKey: "key1",
 		});
 
-		await t.mutation(api.users.saveOpenRouterKey, {
+		await asUser(t, externalId1).mutation(api.users.saveOpenRouterKey, {
 			userId: userId1,
 			encryptedKey: "key2",
 		});
 
 		// User 2 should not be affected
-		const result = await t.mutation(api.users.saveOpenRouterKey, {
+		const result = await asUser(t, externalId2).mutation(api.users.saveOpenRouterKey, {
 			userId: userId2,
 			encryptedKey: "key",
 		});
@@ -300,17 +298,16 @@ describe.skip("rateLimiter - per-user isolation", () => {
 	});
 });
 
-describe.skip("rateLimiter - token bucket behavior", () => {
+describe("rateLimiter - token bucket behavior", () => {
 	test("should allow burst capacity initially", async () => {
 		const t = createConvexTest();
 
-		const { userId } = await t.mutation(api.users.ensure, {
-			externalId: "user_burst_1",
-		});
+		const externalId = "user_burst_1";
+		const userId = await createUser(t, externalId);
 
 		// Should be able to create up to burst capacity (5) immediately
 		for (let i = 0; i < 5; i++) {
-			const result = await t.mutation(api.promptTemplates.create, {
+			const result = await asUser(t, externalId).mutation(api.promptTemplates.create, {
 				userId,
 				name: `Burst Template ${i}`,
 				command: `/burst${i}`,
@@ -323,15 +320,14 @@ describe.skip("rateLimiter - token bucket behavior", () => {
 	test("should deny requests exceeding burst capacity", async () => {
 		const t = createConvexTest();
 
-		const { userId } = await t.mutation(api.users.ensure, {
-			externalId: "user_burst_2",
-		});
+		const externalId = "user_burst_2";
+		const userId = await createUser(t, externalId);
 
 		// Exceed burst capacity
-		const promises = [];
+		const promises: Promise<unknown>[] = [];
 		for (let i = 0; i < 10; i++) {
 			promises.push(
-				t.mutation(api.promptTemplates.create, {
+				asUser(t, externalId).mutation(api.promptTemplates.create, {
 					userId,
 					name: `Burst Template ${i}`,
 					command: `/b${i}`,
@@ -346,17 +342,16 @@ describe.skip("rateLimiter - token bucket behavior", () => {
 	});
 });
 
-describe.skip("rateLimiter - action-specific limits", () => {
+describe("rateLimiter - action-specific limits", () => {
 	test("should have separate limits for different actions", async () => {
 		const t = createConvexTest();
 
-		const { userId } = await t.mutation(api.users.ensure, {
-			externalId: "user_action_specific",
-		});
+		const externalId = "user_action_specific";
+		const userId = await createUser(t, externalId);
 
 		// Create templates (uses templateCreate limit)
 		for (let i = 0; i < 5; i++) {
-			await t.mutation(api.promptTemplates.create, {
+			await asUser(t, externalId).mutation(api.promptTemplates.create, {
 				userId,
 				name: `Template ${i}`,
 				command: `/cmd${i}`,
@@ -365,7 +360,7 @@ describe.skip("rateLimiter - action-specific limits", () => {
 		}
 
 		// Should still be able to save API key (uses different limit)
-		const result = await t.mutation(api.users.saveOpenRouterKey, {
+		const result = await asUser(t, externalId).mutation(api.users.saveOpenRouterKey, {
 			userId,
 			encryptedKey: "key",
 		});
@@ -376,12 +371,11 @@ describe.skip("rateLimiter - action-specific limits", () => {
 	test("should enforce different rates for different operations", async () => {
 		const t = createConvexTest();
 
-		const { userId } = await t.mutation(api.users.ensure, {
-			externalId: "user_diff_rates",
-		});
+		const externalId = "user_diff_rates";
+		const userId = await createUser(t, externalId);
 
 		// Create a template
-		const { templateId } = await t.mutation(api.promptTemplates.create, {
+		const { templateId } = await asUser(t, externalId).mutation(api.promptTemplates.create, {
 			userId,
 			name: "Template",
 			command: "/test",
@@ -391,7 +385,7 @@ describe.skip("rateLimiter - action-specific limits", () => {
 		// Updates have higher limit (30/min) than creates (20/min)
 		// So we should be able to do more updates
 		for (let i = 0; i < 10; i++) {
-			const result = await t.mutation(api.promptTemplates.update, {
+			const result = await asUser(t, externalId).mutation(api.promptTemplates.update, {
 				templateId,
 				userId,
 				name: `Update ${i}`,
@@ -401,13 +395,12 @@ describe.skip("rateLimiter - action-specific limits", () => {
 	});
 });
 
-describe.skip("rateLimiter - edge cases", () => {
+describe("rateLimiter - edge cases", () => {
 	test("should handle rapid sequential requests", async () => {
 		const t = createConvexTest();
 
-		const { userId } = await t.mutation(api.users.ensure, {
-			externalId: "user_sequential",
-		});
+		const externalId = "user_sequential";
+		const userId = await createUser(t, externalId);
 
 		// Make requests sequentially (not in parallel)
 		let successCount = 0;
@@ -415,7 +408,7 @@ describe.skip("rateLimiter - edge cases", () => {
 
 		for (let i = 0; i < 10; i++) {
 			try {
-				await t.mutation(api.promptTemplates.create, {
+				await asUser(t, externalId).mutation(api.promptTemplates.create, {
 					userId,
 					name: `Sequential ${i}`,
 					command: `/seq${i}`,
@@ -434,46 +427,44 @@ describe.skip("rateLimiter - edge cases", () => {
 	test("should handle same user making different types of requests", async () => {
 		const t = createConvexTest();
 
-		const { userId } = await t.mutation(api.users.ensure, {
-			externalId: "user_mixed_requests",
-		});
+		const externalId = "user_mixed_requests";
+		const userId = await createUser(t, externalId);
 
 		// Mix of different operations
-		await t.mutation(api.users.saveOpenRouterKey, {
+		await asUser(t, externalId).mutation(api.users.saveOpenRouterKey, {
 			userId,
 			encryptedKey: "key1",
 		});
 
-		const { templateId } = await t.mutation(api.promptTemplates.create, {
+		const { templateId } = await asUser(t, externalId).mutation(api.promptTemplates.create, {
 			userId,
 			name: "Template",
 			command: "/mixed",
 			template: "Content",
 		});
 
-		await t.mutation(api.promptTemplates.update, {
+		await asUser(t, externalId).mutation(api.promptTemplates.update, {
 			templateId,
 			userId,
 			name: "Updated",
 		});
 
-		await t.mutation(api.users.removeOpenRouterKey, { userId });
+		await asUser(t, externalId).mutation(api.users.removeOpenRouterKey, { userId });
 
 		// All should succeed as they use different rate limit buckets
-		const key = await t.query(api.users.getOpenRouterKey, { userId });
+		const key = await asUser(t, externalId).query(api.users.getOpenRouterKey, { userId });
 		expect(key).toBeNull();
 	});
 
 	test("should handle zero-delay concurrent requests", async () => {
 		const t = createConvexTest();
 
-		const { userId } = await t.mutation(api.users.ensure, {
-			externalId: "user_zero_delay",
-		});
+		const externalId = "user_zero_delay";
+		const userId = await createUser(t, externalId);
 
 		// Launch all requests at exactly the same time
 		const promises = Array.from({ length: 10 }, (_, i) =>
-			t.mutation(api.promptTemplates.create, {
+			asUser(t, externalId).mutation(api.promptTemplates.create, {
 				userId,
 				name: `Concurrent ${i}`,
 				command: `/conc${i}`,
@@ -493,18 +484,19 @@ describe.skip("rateLimiter - edge cases", () => {
 	});
 });
 
-describe.skip("rateLimiter - configuration validation", () => {
+describe("rateLimiter - configuration validation", () => {
 	test("should have valid rate limit configuration for user operations", async () => {
 		const t = createConvexTest();
 
-		// Test that user ensure has appropriate limits
-		// It should allow reasonable authentication flows
+		// Test that user ensure has appropriate limits for a single user
+		// It should allow reasonable authentication flows (burst capacity of 20)
+		const externalId = "user_config_same";
 		let successCount = 0;
 
 		for (let i = 0; i < 20; i++) {
 			try {
-				await t.mutation(api.users.ensure, {
-					externalId: `user_config_${i}`,
+				await asUser(t, externalId).mutation(api.users.ensure, {
+					externalId,
 				});
 				successCount++;
 			} catch {
@@ -519,16 +511,15 @@ describe.skip("rateLimiter - configuration validation", () => {
 	test("should have restrictive limits for sensitive operations", async () => {
 		const t = createConvexTest();
 
-		const { userId } = await t.mutation(api.users.ensure, {
-			externalId: "user_sensitive",
-		});
+		const externalId = "user_sensitive";
+		const userId = await createUser(t, externalId);
 
 		// API key operations should have low limits
 		let successCount = 0;
 
 		for (let i = 0; i < 5; i++) {
 			try {
-				await t.mutation(api.users.saveOpenRouterKey, {
+				await asUser(t, externalId).mutation(api.users.saveOpenRouterKey, {
 					userId,
 					encryptedKey: `key_${i}`,
 				});
@@ -545,20 +536,19 @@ describe.skip("rateLimiter - configuration validation", () => {
 	});
 });
 
-describe.skip("rateLimiter - error messages", () => {
+describe("rateLimiter - error messages", () => {
 	test("should provide helpful error message on rate limit", async () => {
 		const t = createConvexTest();
 
-		const { userId } = await t.mutation(api.users.ensure, {
-			externalId: "user_error_msg",
-		});
+		const externalId = "user_error_msg";
+		const userId = await createUser(t, externalId);
 
 		// Exhaust the limit
 		try {
-			const promises = [];
+			const promises: Promise<unknown>[] = [];
 			for (let i = 0; i < 30; i++) {
 				promises.push(
-					t.mutation(api.promptTemplates.create, {
+					asUser(t, externalId).mutation(api.promptTemplates.create, {
 						userId,
 						name: `Template ${i}`,
 						command: `/e${i}`,
@@ -567,34 +557,33 @@ describe.skip("rateLimiter - error messages", () => {
 				);
 			}
 			await Promise.all(promises);
-		} catch (error) {
+		} catch (error: unknown) {
 			// Error should mention what was rate limited
-			expect(error.message).toMatch(/too many/i);
-			expect(error.message).toMatch(/template/i);
+			expect((error as Error).message).toMatch(/too many/i);
+			expect((error as Error).message).toMatch(/template/i);
 		}
 	});
 
 	test("should include retry timing in error for API key operations", async () => {
 		const t = createConvexTest();
 
-		const { userId } = await t.mutation(api.users.ensure, {
-			externalId: "user_retry_timing",
-		});
+		const externalId = "user_retry_timing";
+		const userId = await createUser(t, externalId);
 
 		try {
-			const promises = [];
+			const promises: Promise<unknown>[] = [];
 			for (let i = 0; i < 10; i++) {
 				promises.push(
-					t.mutation(api.users.saveOpenRouterKey, {
+					asUser(t, externalId).mutation(api.users.saveOpenRouterKey, {
 						userId,
 						encryptedKey: `key_${i}`,
 					})
 				);
 			}
 			await Promise.all(promises);
-		} catch (error) {
+		} catch (error: unknown) {
 			// Should mention when to retry
-			expect(error.message.toLowerCase()).toMatch(/try again/);
+			expect((error as Error).message.toLowerCase()).toMatch(/try again/);
 		}
 	});
 });
