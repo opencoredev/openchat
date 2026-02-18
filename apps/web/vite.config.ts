@@ -8,6 +8,7 @@ import tailwindcss from '@tailwindcss/vite'
 const config = defineConfig({
   server: {
     port: parseInt(process.env.PORT ?? '3000'),
+    host: '127.0.0.1',
   },
   plugins: [
     viteTsConfigPaths({
