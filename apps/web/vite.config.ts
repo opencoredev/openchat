@@ -7,8 +7,8 @@ import tailwindcss from '@tailwindcss/vite'
 
 const config = defineConfig({
   server: {
-    port: parseInt(process.env.PORT ?? '3000'),
-    host: '127.0.0.1',
+    port: parseInt(process.env.PORT ?? '3000', 10),
+    host: process.env.HOST ?? '127.0.0.1',
   },
   plugins: [
     viteTsConfigPaths({
@@ -16,7 +16,12 @@ const config = defineConfig({
     }),
     tailwindcss(),
     tanstackStart(),
-    nitro({ preset: process.env.VERCEL ? 'vercel' : 'bun' }),
+    nitro({
+      preset:
+        process.env.VERCEL === '1' || process.env.VERCEL === 'true'
+          ? 'vercel'
+          : 'bun',
+    }),
     viteReact(),
   ],
 })

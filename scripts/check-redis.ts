@@ -19,13 +19,34 @@ function parseEnvFile(content: string): Record<string, string> {
 			(value.startsWith("\"") && value.endsWith("\"")) ||
 			(value.startsWith("'") && value.endsWith("'"))
 		) {
+			const quoteChar = value[0];
 			value = value.slice(1, -1);
+
+			// Unescape the matching quote character and backslashes inside quoted values.
+			if (quoteChar === "\"") {
+				// For double-quoted values, interpret \" as " and \\ as \.
+				value = value.replace(/\\(["\\])/g, "$1");
+			} else if (quoteChar === "'") {
+				// For single-quoted values, interpret \' as ' and \\ as \.
+				value = value.replace(/\\(['\\])/g, "$1");
+			}
 		}
 
 		parsed[key] = value;
 	}
 
 	return parsed;
+}
+
+function isRedisPingResponse(
+	value: unknown,
+): value is Array<{ result?: string }> {
+	if (!Array.isArray(value)) return false;
+	const first = value[0];
+	if (first === undefined) return true;
+	if (typeof first !== "object" || first === null) return false;
+	const result = (first as { result?: unknown }).result;
+	return result === undefined || typeof result === "string";
 }
 
 function loadLocalEnvDefaults(): void {
@@ -60,8 +81,11 @@ async function main() {
 	}
 
 	try {
-		const normalizedUrl = url.replace(/\/+$/, "");
-		const response = await fetch(`${normalizedUrl}/pipeline`, {
+		const baseUrl = new URL(url);
+		// Remove trailing slashes from the pathname to avoid double slashes when appending "/pipeline"
+		baseUrl.pathname = baseUrl.pathname.replace(/\/+$/, "") || "/";
+		const pipelineUrl = new URL("/pipeline", baseUrl);
+		const response = await fetch(pipelineUrl, {
 			method: "POST",
 			headers: {
 				Authorization: `Bearer ${token}`,
@@ -76,7 +100,11 @@ async function main() {
 			throw new Error(`HTTP ${response.status} ${body}`);
 		}
 
-		const payload = (await response.json()) as Array<{ result?: string }>;
+		const rawPayload = await response.json();
+		if (!isRedisPingResponse(rawPayload)) {
+			throw new Error("Unexpected Redis response format");
+		}
+		const payload = rawPayload;
 		const result = payload[0]?.result;
 		if (result !== "PONG") {
 			throw new Error("Redis ping failed");
@@ -87,10 +115,16 @@ async function main() {
 		process.stderr.write(
 			"Check UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.\n",
 		);
-		if (process.env.NODE_ENV === "production") {
+		const nodeEnv = process.env.NODE_ENV;
+		if (nodeEnv !== "development") {
+			process.stderr.write(
+				"[check-redis] Redis is required for rate limiting in this environment. Failing fast.\n",
+			);
 			process.exit(1);
 		}
-		process.stderr.write("[check-redis] Dev mode — continuing without Redis. Rate limiting is disabled.\n");
+		process.stderr.write(
+			"[check-redis] Dev mode — continuing without Redis. Rate limiting is disabled.\n",
+		);
 	}
 }
 

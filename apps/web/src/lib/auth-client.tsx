@@ -1,5 +1,5 @@
 import {
-  
+
   createContext,
   useCallback,
   useContext,
@@ -15,7 +15,6 @@ import {
 import { env } from "./env";
 import { analytics } from "./analytics";
 import type {ReactNode} from "react";
-
 
 /**
  * Better Auth client with Convex integration.
