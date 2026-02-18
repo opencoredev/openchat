@@ -426,7 +426,6 @@ describe('saveFileMetadata - File Type Validation', () => {
 		['image/png', 'test.png'],
 		['image/gif', 'test.gif'],
 		['image/webp', 'test.webp'],
-		['image/svg+xml', 'test.svg'],
 		['image/bmp', 'test.bmp'],
 	];
 
@@ -451,6 +450,19 @@ describe('saveFileMetadata - File Type Validation', () => {
 				storageId,
 				filename: 'virus.exe',
 				contentType: 'application/x-msdownload',
+				size: 1024,
+			})
+		).rejects.toThrow(/File type.*is not allowed/);
+	});
+
+	it('should reject SVG file type (not in allowed list)', async () => {
+		await expect(
+			asIdentity(t, 'test-user').mutation(api.files.saveFileMetadata, {
+				userId,
+				chatId,
+				storageId,
+				filename: 'test.svg',
+				contentType: 'image/svg+xml',
 				size: 1024,
 			})
 		).rejects.toThrow(/File type.*is not allowed/);

@@ -364,7 +364,7 @@ describe("backgroundStream.startStream - daily limit enforcement", () => {
 		vi.useRealTimers();
 	});
 
-		test("rejects osschat stream when daily limit is reached", async () => {
+		test("allows osschat stream creation when daily limit is reached (limit enforced async in executeStream)", async () => {
 		await t.run(async (ctx) => {
 			const today = new Date().toISOString().split("T")[0];
 			await ctx.db.patch(userId, {
@@ -373,16 +373,16 @@ describe("backgroundStream.startStream - daily limit enforcement", () => {
 			});
 		});
 
-			await expect(
-				asExternalId(t, externalId).mutation(api.backgroundStream.startStream, {
-					chatId,
-					userId,
-					messageId: "msg_1",
-					model: "test/model",
-					provider: "osschat",
-				messages: [{ role: "user", content: "Hello" }],
-			}),
-		).rejects.toThrow("Daily usage limit reached");
+			const jobId = await asExternalId(t, externalId).mutation(api.backgroundStream.startStream, {
+				chatId,
+				userId,
+				messageId: "msg_1",
+				model: "test/model",
+				provider: "osschat",
+			messages: [{ role: "user", content: "Hello" }],
+		});
+
+		expect(jobId).toBeDefined();
 	});
 
 		test("allows osschat stream when under daily limit", async () => {

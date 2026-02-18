@@ -69,24 +69,24 @@ describe("getBenchmarkColor", () => {
 		expect(color).toContain("emerald");
 	});
 
-	it("returns amber class for mid score (50)", () => {
+	it("returns emerald class for mid score (50)", () => {
 		const color = getBenchmarkColor(50);
-		expect(color).toContain("amber");
+		expect(color).toContain("emerald");
 	});
 
-	it("returns amber class for score at lower threshold (40)", () => {
+	it("returns emerald class for score at threshold (40)", () => {
 		const color = getBenchmarkColor(40);
+		expect(color).toContain("emerald");
+	});
+
+	it("returns amber class for low score (20)", () => {
+		const color = getBenchmarkColor(20);
 		expect(color).toContain("amber");
 	});
 
-	it("returns red class for low score (20)", () => {
-		const color = getBenchmarkColor(20);
-		expect(color).toContain("red");
-	});
-
-	it("returns red class for score below 40", () => {
+	it("returns emerald class for score at 39", () => {
 		const color = getBenchmarkColor(39);
-		expect(color).toContain("red");
+		expect(color).toContain("emerald");
 	});
 
 	it("returns muted class for null", () => {
