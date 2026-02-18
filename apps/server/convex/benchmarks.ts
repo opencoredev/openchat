@@ -87,7 +87,7 @@ export const fetchAndStoreBenchmarks = internalAction({
 				}];
 			});
 
-			await ctx.runMutation((internal as any).benchmarks.storeBenchmarks, { benchmarks });
+			await ctx.runMutation(internal.benchmarks.storeBenchmarks, { benchmarks });
 		} catch (error) {
 			void logger.error("Failed to refresh Artificial Analysis benchmarks", error);
 		}

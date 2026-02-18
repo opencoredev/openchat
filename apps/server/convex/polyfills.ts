@@ -33,5 +33,5 @@ class MockMessageChannel {
 }
 
 if (typeof MessageChannel === "undefined") {
-	(globalThis as any).MessageChannel = MockMessageChannel;
+	(globalThis as Record<string, unknown>).MessageChannel = MockMessageChannel;
 }
