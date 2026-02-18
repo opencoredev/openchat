@@ -36,7 +36,24 @@ This directory contains automated workflows for OpenChat's CI/CD pipeline.
 - `AUTOCHANGELOG_SECRET` - Optional: AutoChangelog signing secret (preferred)
 - `AUTOCHANGELOG_WEBHOOK_SECRET` - Optional: Legacy secret name also supported
 
-### 3. Claude Code (`claude.yml`)
+### 3. Preview Deployment (`preview-deploy.yml`)
+
+**Trigger:** Pull request `opened`, `synchronize`, `reopened`
+
+**Purpose:** Creates/updates Convex preview backends for PRs and comments URLs on the PR.
+
+**Important:** Frontend preview deployments are built by Vercel. The repo-level `apps/web/vercel.json` uses `apps/web/scripts/vercel-build.sh` to:
+- create/update matching Convex preview deployments,
+- inject `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL` into the web build,
+- sync preview env vars (`SITE_URL`, `DEPLOYMENT_TYPE`, OAuth secrets) into Convex.
+
+### 4. Preview Cleanup (`preview-cleanup.yml`)
+
+**Trigger:** Pull request `closed` (merged or closed without merge)
+
+**Purpose:** Deletes the PR-scoped Convex preview deployment (`pr-<number>`). Vercel preview deployments are automatically cleaned up by Vercel when the PR closes.
+
+### 5. Claude Code (`claude.yml`)
 
 **Trigger:** Issue/PR comments with `@claude` mention
 
@@ -81,6 +98,21 @@ These enable automatic changelog generation after each deployment via [AutoChang
 Legacy compatibility: `AUTOCHANGELOG_WEBHOOK_SECRET` is also supported if you already use that name.
 
 The changelog will be auto-generated and published to [updates.osschat.dev](https://updates.osschat.dev/) after each successful deployment.
+
+#### Preview-related GitHub Secrets
+
+- `CONVEX_PREVIEW_DEPLOY_KEY` - Preview deploy key used by `preview-deploy.yml`.
+- `CONVEX_TEAM_ACCESS_TOKEN` - Team/admin token used by `preview-cleanup.yml` for deleting preview deployments.
+- `BETTER_AUTH_SECRET`, `AUTH_GITHUB_CLIENT_ID`, `AUTH_GITHUB_CLIENT_SECRET`, `VERCEL_CLIENT_ID`, `VERCEL_CLIENT_SECRET` - optional but recommended for preview auth parity.
+
+### Required Vercel Preview Environment Variables
+
+In the Vercel `web` project, set:
+- `CONVEX_DEPLOY_KEY` (or `CONVEX_PREVIEW_DEPLOY_KEY`) for **Preview** environment.
+- `PRODUCTION_CONVEX_SITE_URL` (optional, defaults to `https://outgoing-setter-201.convex.site`).
+- Optional auth secrets mirrored above if preview auth should be fully functional.
+
+If `CONVEX_DEPLOY_KEY` is missing in Vercel Preview env, preview builds will fail with `MissingAccessToken` when running `convex deploy`.
 
 ### Testing the Workflow
 
@@ -156,6 +188,16 @@ bun run convex:migrate --force
 1. Verify `CONVEX_DEPLOY_KEY` secret is set correctly
 2. Check the key hasn't expired in Convex dashboard
 3. Ensure you're using the key for the correct deployment (`outgoing-setter-201`)
+
+### PR Preview Fails with "MissingAccessToken"
+
+**Symptom:**
+- Vercel build logs show `401 Unauthorized: MissingAccessToken` from Convex API.
+
+**Solution:**
+1. In Vercel project settings, add `CONVEX_DEPLOY_KEY` (Preview environment).
+2. Redeploy the PR preview.
+3. Confirm logs now show Convex preview creation/update and successful web build.
 
 ### Canary Checks Fail Before Deployment
 

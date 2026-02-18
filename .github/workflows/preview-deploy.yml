@@ -66,20 +66,27 @@ jobs:
           VERCEL_CLIENT_ID: ${{ secrets.VERCEL_CLIENT_ID }}
           VERCEL_CLIENT_SECRET: ${{ secrets.VERCEL_CLIENT_SECRET }}
         run: |
+          set -euo pipefail
           PR_NUM=${{ github.event.pull_request.number }}
-          # Vercel preview URLs are not predictable at this point;
-          # auth won't work in previews (GitHub OAuth only allows osschat.dev)
-          PREVIEW_SITE_URL="https://pr-${PR_NUM}.osschat.dev"
+          PREVIEW_NAME="pr-${PR_NUM}"
 
-          bunx convex env set SITE_URL "$PREVIEW_SITE_URL" --preview-name "pr-${PR_NUM}"
-          bunx convex env set BETTER_AUTH_SECRET "$BETTER_AUTH_SECRET" --preview-name "pr-${PR_NUM}"
-          bunx convex env set GITHUB_CLIENT_ID "$GITHUB_CLIENT_ID" --preview-name "pr-${PR_NUM}"
-          bunx convex env set GITHUB_CLIENT_SECRET "$GITHUB_CLIENT_SECRET" --preview-name "pr-${PR_NUM}"
-          bunx convex env set VERCEL_CLIENT_ID "$VERCEL_CLIENT_ID" --preview-name "pr-${PR_NUM}"
-          bunx convex env set VERCEL_CLIENT_SECRET "$VERCEL_CLIENT_SECRET" --preview-name "pr-${PR_NUM}"
-          bunx convex env set PRODUCTION_CONVEX_SITE_URL "https://outgoing-setter-201.convex.site" --preview-name "pr-${PR_NUM}"
+          set_if_present() {
+            local key="$1"
+            local value="$2"
+            if [ -n "$value" ]; then
+              bunx convex env set "$key" "$value" --preview-name "$PREVIEW_NAME"
+            fi
+          }
 
-          echo "✅ Convex env vars set for pr-${PR_NUM}"
+          set_if_present "DEPLOYMENT_TYPE" "preview"
+          set_if_present "BETTER_AUTH_SECRET" "$BETTER_AUTH_SECRET"
+          set_if_present "GITHUB_CLIENT_ID" "$GITHUB_CLIENT_ID"
+          set_if_present "GITHUB_CLIENT_SECRET" "$GITHUB_CLIENT_SECRET"
+          set_if_present "VERCEL_CLIENT_ID" "$VERCEL_CLIENT_ID"
+          set_if_present "VERCEL_CLIENT_SECRET" "$VERCEL_CLIENT_SECRET"
+          set_if_present "PRODUCTION_CONVEX_SITE_URL" "https://outgoing-setter-201.convex.site"
+
+          echo "✅ Convex env vars set for ${PREVIEW_NAME}"
 
       - name: Comment on PR
         uses: actions/github-script@v7
@@ -97,7 +104,8 @@ jobs:
             - Cloud URL: \`${convexUrl}\`
             - Site URL: \`${convexSiteUrl}\`
 
-            > ⚠️ Auth (GitHub OAuth) only works on \`osschat.dev\` — login will not work in previews.
+            > ℹ️ Preview auth depends on preview env vars (\`SITE_URL\`, \`DEPLOYMENT_TYPE\`, OAuth secrets).
+            > The Vercel build step now syncs these per-preview deployment.
 
             ---
             <sub>🤖 Convex preview deployed automatically by GitHub Actions</sub>`;
