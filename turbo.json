@@ -4,7 +4,7 @@
 	"tasks": {
 		"build": {
 			"inputs": ["$TURBO_DEFAULT$", ".env*"],
-			"outputs": ["dist/**", ".output/**", ".next/**"],
+			"outputs": ["dist/**", ".output/**", ".next/**", ".vercel/output/**"],
 			"env": [
 				"DATABASE_URL",
 				"DATABASE_URL_UNPOOLED",
