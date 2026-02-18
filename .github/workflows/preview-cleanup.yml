@@ -51,6 +51,6 @@ jobs:
           echo "| Resource | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Convex Preview (pr-${PR_NUM}) | 🧹 Cleaned up |" >> $GITHUB_STEP_SUMMARY
-          echo "| Railway Preview | 🚂 Auto-cleaned by Railway |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend (Vercel) | 🧹 Auto-cleaned by Vercel |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "_Railway PR environments are automatically deleted when the PR is closed._" >> $GITHUB_STEP_SUMMARY
+          echo "_Vercel preview deployments are automatically deleted when the PR is closed._" >> $GITHUB_STEP_SUMMARY

@@ -67,9 +67,11 @@ jobs:
           VERCEL_CLIENT_SECRET: ${{ secrets.VERCEL_CLIENT_SECRET }}
         run: |
           PR_NUM=${{ github.event.pull_request.number }}
-          RAILWAY_URL="https://web-openchat-pr-${PR_NUM}.up.railway.app"
+          # Vercel preview URLs are not predictable at this point;
+          # auth won't work in previews (GitHub OAuth only allows osschat.dev)
+          PREVIEW_SITE_URL="https://pr-${PR_NUM}.osschat.dev"
 
-          bunx convex env set SITE_URL "$RAILWAY_URL" --preview-name "pr-${PR_NUM}"
+          bunx convex env set SITE_URL "$PREVIEW_SITE_URL" --preview-name "pr-${PR_NUM}"
           bunx convex env set BETTER_AUTH_SECRET "$BETTER_AUTH_SECRET" --preview-name "pr-${PR_NUM}"
           bunx convex env set GITHUB_CLIENT_ID "$GITHUB_CLIENT_ID" --preview-name "pr-${PR_NUM}"
           bunx convex env set GITHUB_CLIENT_SECRET "$GITHUB_CLIENT_SECRET" --preview-name "pr-${PR_NUM}"
@@ -79,69 +81,6 @@ jobs:
 
           echo "✅ Convex env vars set for pr-${PR_NUM}"
 
-      - name: Configure Railway Environment
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          REDIS_RAILWAY_REF: ${{ '${{Redis.REDIS_URL}}' }}
-        run: |
-          echo "🚂 Configuring Railway environment via GraphQL API..."
-
-          PR_NUM=${{ github.event.pull_request.number }}
-          CONVEX_URL="${{ steps.convex-deploy.outputs.convex_url }}"
-          CONVEX_SITE_URL="${{ steps.convex-deploy.outputs.convex_site_url }}"
-          ENV_NAME="openchat-pr-${PR_NUM}"
-          PROJECT_ID="e3803b5c-22bf-4cbe-a8b3-2e4c8a5fbe8a"
-          SERVICE_ID="f12f449e-b9d8-471b-94ea-7107b7c5da47"
-
-          # Wait for Railway to create the PR environment
-          echo "Waiting for Railway PR environment..."
-          sleep 20
-
-          # Get the environment ID
-          echo "Looking up environment ID for ${ENV_NAME}..."
-          ENV_RESPONSE=$(curl -s -X POST \
-            -H "Authorization: Bearer ${RAILWAY_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"query { project(id: \\\"${PROJECT_ID}\\\") { environments { edges { node { id name } } } } }\"}" \
-            https://backboard.railway.app/graphql/v2)
-
-          echo "Environment response: ${ENV_RESPONSE}"
-
-          ENV_ID=$(echo "$ENV_RESPONSE" | jq -r ".data.project.environments.edges[] | select(.node.name == \"${ENV_NAME}\") | .node.id")
-
-          if [ -z "$ENV_ID" ] || [ "$ENV_ID" == "null" ]; then
-            echo "⚠️ Could not find environment ${ENV_NAME}, skipping Railway config"
-            exit 0
-          fi
-
-          echo "Found environment ID: ${ENV_ID}"
-
-          # Set VITE_CONVEX_URL
-          echo "Setting VITE_CONVEX_URL..."
-          curl -s -X POST \
-            -H "Authorization: Bearer ${RAILWAY_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"mutation { variableUpsert(input: { projectId: \\\"${PROJECT_ID}\\\", environmentId: \\\"${ENV_ID}\\\", serviceId: \\\"${SERVICE_ID}\\\", name: \\\"VITE_CONVEX_URL\\\", value: \\\"${CONVEX_URL}\\\" }) }\"}" \
-            https://backboard.railway.app/graphql/v2
-
-          # Set VITE_CONVEX_SITE_URL
-          echo "Setting VITE_CONVEX_SITE_URL..."
-          curl -s -X POST \
-            -H "Authorization: Bearer ${RAILWAY_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"mutation { variableUpsert(input: { projectId: \\\"${PROJECT_ID}\\\", environmentId: \\\"${ENV_ID}\\\", serviceId: \\\"${SERVICE_ID}\\\", name: \\\"VITE_CONVEX_SITE_URL\\\", value: \\\"${CONVEX_SITE_URL}\\\" }) }\"}" \
-            https://backboard.railway.app/graphql/v2
-
-          # Set REDIS_URL (Railway service reference)
-          echo "Setting REDIS_URL..."
-          curl -s -X POST \
-            -H "Authorization: Bearer ${RAILWAY_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"mutation { variableUpsert(input: { projectId: \\\"${PROJECT_ID}\\\", environmentId: \\\"${ENV_ID}\\\", serviceId: \\\"${SERVICE_ID}\\\", name: \\\"REDIS_URL\\\", value: \\\"${REDIS_RAILWAY_REF}\\\" }) }\"}" \
-            https://backboard.railway.app/graphql/v2
-
-          echo "✅ Railway environment variables updated"
-
       - name: Comment on PR
         uses: actions/github-script@v7
         with:
@@ -149,21 +88,19 @@ jobs:
             const prNumber = context.payload.pull_request.number;
             const convexUrl = '${{ steps.convex-deploy.outputs.convex_url }}';
             const convexSiteUrl = '${{ steps.convex-deploy.outputs.convex_site_url }}';
-            const railwayUrl = `https://web-openchat-pr-${prNumber}.up.railway.app`;
 
             const body = `## 🚀 Preview Deployment Ready
 
-            | Environment | URL |
-            |------------|-----|
-            | **Frontend** | [${railwayUrl}](${railwayUrl}) |
-            | **Convex Dashboard** | [Dashboard](https://dashboard.convex.dev) |
+            Vercel will post the frontend preview URL automatically.
 
             ### Convex Preview Backend
             - Cloud URL: \`${convexUrl}\`
             - Site URL: \`${convexSiteUrl}\`
 
+            > ⚠️ Auth (GitHub OAuth) only works on \`osschat.dev\` — login will not work in previews.
+
             ---
-            <sub>🤖 Deployed automatically by GitHub Actions</sub>`;
+            <sub>🤖 Convex preview deployed automatically by GitHub Actions</sub>`;
 
             // Find existing comment
             const { data: comments } = await github.rest.issues.listComments({
@@ -202,7 +139,8 @@ jobs:
           echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Convex Preview | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend (Vercel) | ✅ Auto-deployed by Vercel |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### URLs" >> $GITHUB_STEP_SUMMARY
-          echo "- Frontend: https://web-openchat-pr-${PR_NUM}.up.railway.app" >> $GITHUB_STEP_SUMMARY
-          echo "- Convex: ${{ steps.convex-deploy.outputs.convex_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "### Convex URLs" >> $GITHUB_STEP_SUMMARY
+          echo "- Cloud: ${{ steps.convex-deploy.outputs.convex_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Site: ${{ steps.convex-deploy.outputs.convex_site_url }}" >> $GITHUB_STEP_SUMMARY
