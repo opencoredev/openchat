@@ -43,6 +43,9 @@ import { decrementStat, STAT_KEYS } from "./lib/dbStats";
 import { components, internal } from "./_generated/api";
 import { requireAuthUserId, requireAuthUserIdFromAction } from "./lib/auth";
 import { DAILY_AI_LIMIT_CENTS, getCurrentDateKey } from "./lib/billingUtils";
+import { createLogger } from "./lib/logger";
+
+const logger = createLogger("users");
 
 const MAX_SINGLE_REQUEST_CENTS = DAILY_AI_LIMIT_CENTS * 10; // 100¢ = $1
 
@@ -66,9 +69,11 @@ export const incrementAiUsage = internalMutation({
 		}
 
 		if (args.usageCents > MAX_SINGLE_REQUEST_CENTS) {
-			console.error(
-				`[Usage] Rejected suspiciously high usage: ${args.usageCents}¢ for user ${args.userId}`,
-			);
+		void logger.error(
+			`[Usage] Rejected suspiciously high usage: ${args.usageCents}¢`,
+			undefined,
+			{ userId: args.userId, usageCents: args.usageCents },
+		);
 			return {
 				usedCents: 0,
 				remainingCents: DAILY_AI_LIMIT_CENTS,
@@ -78,9 +83,10 @@ export const incrementAiUsage = internalMutation({
 
 		const user = await ctx.db.get(args.userId);
 		if (!user) {
-			console.warn(
-				`[Usage] User not found for usage recording: ${args.userId}, usage: ${args.usageCents}¢`,
-			);
+		void logger.warn(
+			`[Usage] User not found for usage recording, usage: ${args.usageCents}¢`,
+			{ userId: args.userId, usageCents: args.usageCents },
+		);
 			return {
 				usedCents: 0,
 				remainingCents: DAILY_AI_LIMIT_CENTS,
@@ -219,7 +225,7 @@ export const deleteUserFiles = internalMutation({
 			} catch (e) {
 				const message = e instanceof Error ? e.message : String(e);
 				if (!message.toLowerCase().includes("not found")) {
-					console.error("Unexpected error deleting storage file:", file.storageId, message);
+					void logger.error("Unexpected error deleting storage file", e, { storageId: file.storageId, errorMessage: message });
 				}
 			}
 			await ctx.db.delete(file._id);

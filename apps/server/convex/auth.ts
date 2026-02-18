@@ -8,6 +8,9 @@ import type { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 
 import { getAllowedOrigins } from "./lib/origins";
+import { createLogger } from "./lib/logger";
+
+const logger = createLogger("auth");
 
 /**
  * Production Convex site URL - used for OAuth callbacks.
@@ -94,7 +97,7 @@ export const createAuth = (
 			requireEmailVerification: true,
 			sendResetPassword: async ({ user, url }: { user: { email: string }; url: string }) => {
 				// TODO: integrate with email provider (e.g., Resend, SendGrid)
-				console.log(`[Auth] Password reset requested for ${user.email}: ${url}`);
+				void logger.info(`Password reset requested for user: ${url}`, { email: user.email });
 			},
 		},
 		emailVerification: {
@@ -102,7 +105,7 @@ export const createAuth = (
 			sendVerificationEmail: async ({ user, url }: { user: { email: string }; url: string }) => {
 				// TODO: integrate with email provider (e.g., Resend, SendGrid)
 				// For now, log the verification URL for development/debugging
-				console.log(`[Auth] Verification email for ${user.email}: ${url}`);
+				void logger.info(`Verification email for user: ${url}`, { email: user.email });
 			},
 		},
 		socialProviders: {

@@ -18,6 +18,9 @@ import {
 } from "./lib/upstashUsage";
 import { decryptSecret } from "./lib/crypto";
 import { isWebSearchToolName, type ChainOfThoughtPart } from "./streamJobs";
+import { createLogger } from "./lib/logger";
+
+const logger = createLogger("streamExecution");
 
 const UPDATE_INTERVAL = 5;
 const MAX_SEARCH_RESULTS_FOR_MODEL = 5;
@@ -891,15 +894,12 @@ export const executeStream = internalAction({
 					: undefined,
 			});
 		} catch (error) {
-			console.error("[BackgroundStream] executeStream failed", {
-				jobId: args.jobId,
-				error,
-			});
+			void logger.error("executeStream failed", error, { jobId: args.jobId });
 			if (reservedDateKey && reservedUsageCents > 0) {
 				try {
 					await adjustDailyUsageInUpstash(job.userId, reservedDateKey, -reservedUsageCents);
 				} catch (adjustError) {
-					console.warn("[Usage] Upstash refund adjustment failed", adjustError);
+					void logger.warn("Upstash refund adjustment failed", { error: String(adjustError) });
 				}
 			}
 			await ctx.runMutation(internal.backgroundStream.failStream, {

@@ -1,4 +1,7 @@
 import { internalAction } from "./_generated/server";
+import { createLogger } from "./lib/logger";
+
+const logger = createLogger("previewSeed");
 
 /**
  * Preview deployment seed function
@@ -16,18 +19,18 @@ export default internalAction(async (_ctx) => {
 	const nodeEnv = process.env.NODE_ENV;
 	const appUrl = process.env.APP_URL || "http://localhost:3000";
 
-	console.log(`[Preview Seed] Running in deployment: ${deployment}, NODE_ENV: ${nodeEnv}`);
-	console.log(`[Preview Seed] App URL: ${appUrl}`);
+	void logger.info(`Running in deployment: ${deployment}, NODE_ENV: ${nodeEnv}`);
+	void logger.info(`App URL: ${appUrl}`);
 
 	// Only seed in preview deployments
 	if (deployment !== "preview") {
-		console.log("[Preview Seed] Skipping - not a preview deployment");
+		void logger.info("Skipping - not a preview deployment");
 		return { success: false, message: "Not a preview deployment" };
 	}
 
 	// With Better Auth, user authentication is handled via GitHub OAuth.
-	console.log("[Preview Seed] Preview deployment ready");
-	console.log("[Preview Seed] Sign in using GitHub OAuth");
+	void logger.info("Preview deployment ready");
+	void logger.info("Sign in using GitHub OAuth");
 
 	return {
 		success: true,

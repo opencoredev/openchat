@@ -1,3 +1,7 @@
+import { createLogger } from "./logger";
+
+const logger = createLogger("upstashUsage");
+
 type PipelineEntry = {
 	result?: unknown;
 	error?: string;
@@ -94,7 +98,7 @@ export async function getDailyUsageFromUpstash(
 		return null;
 	} catch (error) {
 		if (shouldLogUpstashUsageErrors()) {
-			console.warn("[Usage] Upstash GET failed", error);
+			void logger.warn("Upstash GET failed", { error: String(error) });
 		}
 		return null;
 	}
@@ -119,11 +123,10 @@ export async function incrementDailyUsageInUpstash(
 			["EXPIREAT", key, expiresAt],
 		]);
 	} catch (error) {
-		console.error("[Usage] Upstash INCRBY failed — usage not recorded", {
+		void logger.error("Upstash INCRBY failed — usage not recorded", error, {
 			userId,
 			dateKey,
 			usageCents,
-			error,
 		});
 	}
 }
@@ -155,7 +158,7 @@ export async function reserveDailyUsageInUpstash(
 		return null;
 	} catch (error) {
 		if (shouldLogUpstashUsageErrors()) {
-			console.warn("[Usage] Upstash reserve failed", error);
+			void logger.warn("Upstash reserve failed", { error: String(error) });
 		}
 		return null;
 	}
@@ -194,7 +197,7 @@ export async function adjustDailyUsageInUpstash(
 		}
 	} catch (error) {
 		if (shouldLogUpstashUsageErrors()) {
-			console.warn("[Usage] Upstash adjust failed", error);
+			void logger.warn("Upstash adjust failed", { error: String(error) });
 		}
 	}
 }
