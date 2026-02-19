@@ -50,6 +50,7 @@ import type * as streamTools from "../streamTools.js";
 import type * as streamUtils from "../streamUtils.js";
 import type * as userApiKeys from "../userApiKeys.js";
 import type * as userAuth from "../userAuth.js";
+import type * as userDeletion from "../userDeletion.js";
 import type * as userProfile from "../userProfile.js";
 import type * as users from "../users.js";
 
@@ -102,6 +103,7 @@ declare const fullApi: ApiFromModules<{
   streamUtils: typeof streamUtils;
   userApiKeys: typeof userApiKeys;
   userAuth: typeof userAuth;
+  userDeletion: typeof userDeletion;
   userProfile: typeof userProfile;
   users: typeof users;
 }>;
