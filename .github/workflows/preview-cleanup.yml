@@ -18,13 +18,14 @@ jobs:
         env:
           CONVEX_TEAM_ACCESS_TOKEN: ${{ secrets.CONVEX_TEAM_ACCESS_TOKEN }}
         run: |
+          set -euo pipefail
           PR_NUM=${{ github.event.pull_request.number }}
           DEPLOYMENT_NAME="pr-${PR_NUM}"
           
           echo "🧹 Cleaning up Convex preview deployment: ${DEPLOYMENT_NAME}"
           
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            "https://api.convex.dev/v1/deployments/${DEPLOYMENT_NAME}/delete" \
+          RESPONSE=$(curl -sS -w "\n%{http_code}" -X DELETE \
+            "https://api.convex.dev/api/preview_deployments/${DEPLOYMENT_NAME}" \
             -H "Authorization: Bearer ${CONVEX_TEAM_ACCESS_TOKEN}" \
             -H "Content-Type: application/json")
           

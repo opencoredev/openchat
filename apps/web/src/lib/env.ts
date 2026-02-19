@@ -3,10 +3,15 @@
  * Access these via import.meta.env in client code
  */
 
+const convexUrl = import.meta.env.VITE_CONVEX_URL as string;
+const convexSiteUrl =
+  (import.meta.env.VITE_CONVEX_SITE_URL as string | undefined) ||
+  (convexUrl ? convexUrl.replace(/\.convex\.cloud$/, ".convex.site") : "");
+
 // Client-side env vars (must be prefixed with VITE_)
 export const env = {
-  CONVEX_URL: import.meta.env.VITE_CONVEX_URL as string,
-  CONVEX_SITE_URL: import.meta.env.VITE_CONVEX_SITE_URL as string,
+  CONVEX_URL: convexUrl,
+  CONVEX_SITE_URL: convexSiteUrl,
   POSTHOG_KEY: import.meta.env.VITE_POSTHOG_KEY,
   POSTHOG_HOST: import.meta.env.VITE_POSTHOG_HOST,
 } as const;
