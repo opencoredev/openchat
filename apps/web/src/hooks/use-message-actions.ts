@@ -2,104 +2,27 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 import type { Id } from "@server/convex/_generated/dataModel";
 import type { UIMessage } from "ai";
-import { getModelById, getModelCapabilities, useModelStore } from "@/stores/model";
-import { useProviderStore } from "@/stores/provider";
-import { useStreamStore } from "@/stores/stream";
 import { analytics } from "@/lib/analytics";
 import { triggerAutoTitle } from "./use-auto-title";
 import type {
 	StreamingState,
-	ReasoningPartWithState,
 	ConvexMessageRecord,
 	ChatStatus,
 } from "./use-streaming-state";
-import { normalizeMessageParts } from "./use-streaming-state";
+import {
+	getRuntimeModelConfig,
+	checkProviderLimit,
+	createInitialStreamParts,
+	createStreamMetadata,
+	getUserFriendlyError,
+} from "./message-action-utils";
+import { useRegenerateActions } from "./use-regenerate-actions";
 
 interface ChatFileAttachment {
 	type: "file";
 	mediaType: string;
 	filename?: string;
 	url: string;
-}
-
-function getUserFriendlyError(message: string): string {
-	const lowerMessage = message.toLowerCase();
-	
-	if (lowerMessage.includes("rate limit") || lowerMessage.includes("too many")) {
-		return "You're sending messages too quickly. Please wait a moment.";
-	}
-	if (lowerMessage.includes("unauthorized") || lowerMessage.includes("authentication")) {
-		return "Session expired. Please refresh the page.";
-	}
-	if (lowerMessage.includes("not found")) {
-		return "The requested resource could not be found.";
-	}
-	if (lowerMessage.includes("timeout") || lowerMessage.includes("timed out")) {
-		return "The request took too long. Please try again.";
-	}
-	if (lowerMessage.includes("network") || lowerMessage.includes("connection")) {
-		return "Network error. Please check your connection and try again.";
-	}
-	
-	return "An unexpected error occurred. Please try again.";
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getRuntimeModelConfig(models: any[], overrideModelId?: string) {
-	const modelState = useModelStore.getState();
-	const runtimeModelId = overrideModelId || modelState.selectedModelId;
-	const runtimeReasoningEnabled = modelState.reasoningEnabled;
-	const runtimeReasoningEffort = runtimeReasoningEnabled ? "medium" : "none";
-	const runtimeModel = getModelById(models, runtimeModelId);
-	const runtimeSupportsToolCalls = getModelCapabilities(
-		runtimeModelId,
-		runtimeModel,
-	).supportsTools;
-	return { runtimeModelId, runtimeReasoningEnabled, runtimeReasoningEffort, runtimeSupportsToolCalls };
-}
-
-function checkProviderLimit(): boolean {
-	const providerState = useProviderStore.getState();
-	if (providerState.activeProvider === "osschat" && providerState.isOverLimit()) {
-		toast.error("Daily limit reached", { description: "Add your OpenRouter API key to continue." });
-		return true;
-	}
-	return false;
-}
-
-function createInitialStreamParts(reasoningEffort: string): UIMessage["parts"] {
-	const parts: UIMessage["parts"] = [];
-	if (reasoningEffort !== "none") {
-		const reasoningPart: ReasoningPartWithState = { type: "reasoning", text: "", state: "streaming" };
-		parts.push(reasoningPart as UIMessage["parts"][number]);
-	}
-	parts.push({ type: "text", text: "", state: "streaming" });
-	return parts;
-}
-
-function messagesToTextHistory(msgs: Array<UIMessage>): Array<{ role: string; content: string }> {
-	return msgs
-		.filter((m) => m.role === "user" || m.role === "assistant")
-		.map((m) => {
-			const textPart = m.parts.find((p): p is { type: "text"; text: string } => p.type === "text");
-			return { role: m.role, content: textPart?.text || "" };
-		});
-}
-
-function createStreamMetadata(
-	runtimeReasoningEffort: string,
-	runtimeModelId: string,
-	activeProvider: string,
-	webSearchEnabled: boolean,
-) {
-	return {
-		reasoningRequested: runtimeReasoningEffort !== "none",
-		modelId: runtimeModelId,
-		provider: activeProvider,
-		reasoningEffort: runtimeReasoningEffort,
-		webSearchEnabled,
-		resumedFromActiveStream: false,
-	};
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -324,339 +247,24 @@ export function useMessageActions(deps: MessageActionsDeps): MessageActionsRetur
 		],
 	);
 
-	const editMessage = useCallback(
-		async (messageId: string, newContent: string) => {
-			if (!convexUserId || !chatIdRef.current) return;
-
-			const trimmedContent = newContent.trim();
-			if (!trimmedContent) return;
-
-			const { runtimeModelId, runtimeReasoningEnabled, runtimeReasoningEffort, runtimeSupportsToolCalls } =
-				getRuntimeModelConfig(models);
-			if (checkProviderLimit()) return;
-
-			const targetChatId = chatIdRef.current as Id<"chats">;
-			const editedMessageDoc = messagesResult?.find(
-				(msg) => msg._id === messageId || msg.clientMessageId === messageId,
-			);
-
-			if (!editedMessageDoc) {
-				toast.error("Could not edit message", {
-					description: "Message is not synced yet. Please try again in a second.",
-				});
-				return;
-			}
-
-			setError(undefined);
-			setStatus("submitted");
-
-			try {
-				await editAndRegenerate({
-					chatId: targetChatId,
-					userId: convexUserId,
-					messageId: editedMessageDoc._id,
-					newContent: trimmedContent,
-				});
-
-				streamingRef.current = null;
-				useStreamStore.getState().completeStream();
-
-				const editedIndex = messages.findIndex((m) => {
-					if (m.id === messageId) return true;
-					const metadata = m.metadata as { serverMessageId?: unknown; clientMessageId?: unknown } | undefined;
-					return (
-						metadata?.serverMessageId === editedMessageDoc._id ||
-						metadata?.clientMessageId === messageId
-					);
-				});
-
-				if (editedIndex < 0) {
-					throw new Error("Edited message not found in local state");
-				}
-
-				const keptMessages = messages
-					.slice(0, editedIndex + 1)
-					.map((m, index) => {
-						if (index !== editedIndex) return m;
-						const metadata = m.metadata as { reasoningRequested?: unknown } | undefined;
-						return {
-							...m,
-							parts: normalizeMessageParts({
-								content: trimmedContent,
-								reasoningRequested: metadata?.reasoningRequested === true,
-								isStreaming: false,
-							}),
-						};
-					});
-
-				setMessages(keptMessages);
-
-				await cleanupStaleJobs({ userId: convexUserId }).catch(() => {});
-
-				const assistantMsgId = crypto.randomUUID();
-				const allMsgs = messagesToTextHistory(keptMessages);
-
-				await startBackgroundStream({
-					chatId: targetChatId,
-					userId: convexUserId,
-					messageId: assistantMsgId,
-					model: runtimeModelId,
-					provider: activeProvider,
-					messages: allMsgs,
-					options: {
-						enableReasoning: runtimeReasoningEnabled,
-						reasoningEffort: runtimeReasoningEffort,
-						enableWebSearch: webSearchEnabled,
-						supportsToolCalls: runtimeSupportsToolCalls,
-					},
-				});
-
-				setMessages((prev) => [
-					...prev,
-					{
-						id: assistantMsgId,
-						role: "assistant",
-						parts: createInitialStreamParts(runtimeReasoningEffort),
-						metadata: createStreamMetadata(runtimeReasoningEffort, runtimeModelId, activeProvider, webSearchEnabled),
-					},
-				]);
-
-				setStatus("streaming");
-				streamingRef.current = { id: assistantMsgId, content: "", reasoning: "", chainHash: "[]" };
-			} catch (err) {
-				const parsedError = err instanceof Error ? err : new Error("Unknown error");
-				setError(parsedError);
-				setStatus("error");
-				toast.error("Failed to edit message", {
-					description: getUserFriendlyError(parsedError.message),
-				});
-			}
-		},
-		[
-			convexUserId,
-			messages,
-			messagesResult,
-			models,
-			activeProvider,
-			webSearchEnabled,
-			editAndRegenerate,
-			startBackgroundStream,
-			cleanupStaleJobs,
-			chatIdRef,
-			streamingRef,
-			setMessages,
-			setStatus,
-			setError,
-		],
-	);
-
-	const retryMessage = useCallback(
-		async (messageId: string, overrideModelId?: string) => {
-			if (!convexUserId || !chatIdRef.current) return;
-
-			const { runtimeModelId, runtimeReasoningEnabled, runtimeReasoningEffort, runtimeSupportsToolCalls } =
-				getRuntimeModelConfig(models, overrideModelId);
-			if (checkProviderLimit()) return;
-
-			const targetChatId = chatIdRef.current as Id<"chats">;
-			const retriedMessageDoc = messagesResult?.find(
-				(msg) => msg._id === messageId || msg.clientMessageId === messageId,
-			);
-
-			if (!retriedMessageDoc) {
-				toast.error("Could not retry message", {
-					description: "Message is not synced yet. Please try again in a second.",
-				});
-				return;
-			}
-
-			setError(undefined);
-			setStatus("submitted");
-
-			try {
-				const result = await retryMessageMut({
-					chatId: targetChatId,
-					userId: convexUserId,
-					messageId: retriedMessageDoc._id,
-				});
-
-				streamingRef.current = null;
-				useStreamStore.getState().completeStream();
-
-				const retriedIndex = messages.findIndex((m) => {
-					if (m.id === messageId) return true;
-					const metadata = m.metadata as { serverMessageId?: unknown; clientMessageId?: unknown } | undefined;
-					return (
-						metadata?.serverMessageId === retriedMessageDoc._id ||
-						metadata?.clientMessageId === messageId
-					);
-				});
-
-				if (retriedIndex < 0) {
-					throw new Error("Retried message not found in local state");
-				}
-
-				const keptMessages = messages.slice(0, retriedIndex + 1).map((m, index) => {
-					if (index !== retriedIndex) return m;
-					const metadata = m.metadata as { reasoningRequested?: unknown } | undefined;
-					return {
-						...m,
-						parts: normalizeMessageParts({
-							content: result.userContent,
-							reasoningRequested: metadata?.reasoningRequested === true,
-							isStreaming: false,
-						}),
-					};
-				});
-
-				setMessages(keptMessages);
-
-				await cleanupStaleJobs({ userId: convexUserId }).catch(() => {});
-
-				const assistantMsgId = crypto.randomUUID();
-				const allMsgs = messagesToTextHistory(keptMessages);
-
-				await startBackgroundStream({
-					chatId: targetChatId,
-					userId: convexUserId,
-					messageId: assistantMsgId,
-					model: runtimeModelId,
-					provider: activeProvider,
-					messages: allMsgs,
-					options: {
-						enableReasoning: runtimeReasoningEnabled,
-						reasoningEffort: runtimeReasoningEffort,
-						enableWebSearch: webSearchEnabled,
-						supportsToolCalls: runtimeSupportsToolCalls,
-					},
-				});
-
-				setMessages((prev) => [
-					...prev,
-					{
-						id: assistantMsgId,
-						role: "assistant",
-						parts: createInitialStreamParts(runtimeReasoningEffort),
-						metadata: createStreamMetadata(runtimeReasoningEffort, runtimeModelId, activeProvider, webSearchEnabled),
-					},
-				]);
-
-				setStatus("streaming");
-				streamingRef.current = { id: assistantMsgId, content: "", reasoning: "", chainHash: "[]" };
-			} catch (err) {
-				const parsedError = err instanceof Error ? err : new Error("Unknown error");
-				setError(parsedError);
-				setStatus("error");
-				toast.error("Failed to retry message", {
-					description: getUserFriendlyError(parsedError.message),
-				});
-			}
-		},
-		[
-			convexUserId,
-			messages,
-			messagesResult,
-			models,
-			activeProvider,
-			webSearchEnabled,
-			retryMessageMut,
-			startBackgroundStream,
-			cleanupStaleJobs,
-			chatIdRef,
-			streamingRef,
-			setMessages,
-			setStatus,
-			setError,
-		],
-	);
-
-	const forkMessage = useCallback(
-		async (messageId: string, overrideModelId?: string) => {
-			if (!convexUserId || !chatIdRef.current) return undefined;
-
-			const { runtimeModelId, runtimeReasoningEnabled, runtimeReasoningEffort, runtimeSupportsToolCalls } =
-				getRuntimeModelConfig(models, overrideModelId);
-			if (checkProviderLimit()) return undefined;
-
-			const forkIdx = messages.findIndex((message) => {
-				if (message.id === messageId) return true;
-				const metadata = message.metadata as
-					| { serverMessageId?: unknown; clientMessageId?: unknown }
-					| undefined;
-				return (
-					metadata?.serverMessageId === messageId ||
-					metadata?.clientMessageId === messageId
-				);
-			});
-
-			if (forkIdx < 0) {
-				toast.error("Could not branch off", {
-					description: "Message is not synced yet. Please try again in a second.",
-				});
-				return undefined;
-			}
-
-			const msgsUpToFork = messagesToTextHistory(messages.slice(0, forkIdx + 1));
-
-			try {
-				const forkMessageDoc = messagesResult?.find(
-					(msg) => msg._id === messageId || msg.clientMessageId === messageId,
-				);
-
-				if (!forkMessageDoc) {
-					toast.error("Could not branch off", {
-						description: "Message is not synced yet. Please try again in a second.",
-					});
-					return undefined;
-				}
-
-				const { newChatId } = await forkChatMut({
-					chatId: chatIdRef.current as Id<"chats">,
-					userId: convexUserId,
-					messageId: forkMessageDoc._id,
-				});
-
-				await cleanupStaleJobs({ userId: convexUserId }).catch(() => {});
-
-				const assistantMsgId = crypto.randomUUID();
-				await startBackgroundStream({
-					chatId: newChatId,
-					userId: convexUserId,
-					messageId: assistantMsgId,
-					model: runtimeModelId,
-					provider: activeProvider,
-					messages: msgsUpToFork,
-					options: {
-						enableReasoning: runtimeReasoningEnabled,
-						reasoningEffort: runtimeReasoningEffort,
-						enableWebSearch: webSearchEnabled,
-						supportsToolCalls: runtimeSupportsToolCalls,
-					},
-				});
-
-				return newChatId;
-			} catch (err) {
-				const parsedError = err instanceof Error ? err : new Error("Unknown error");
-				toast.error("Failed to branch off", {
-					description: parsedError.message,
-				});
-				return undefined;
-			}
-		},
-		[
-			convexUserId,
-			messages,
-			models,
-			activeProvider,
-			webSearchEnabled,
-			forkChatMut,
-			cleanupStaleJobs,
-			startBackgroundStream,
-			messagesResult,
-			chatIdRef,
-			streamingRef,
-		],
-	);
+	const { editMessage, retryMessage, forkMessage } = useRegenerateActions({
+		convexUserId,
+		messages,
+		messagesResult,
+		models,
+		activeProvider,
+		webSearchEnabled,
+		chatIdRef,
+		streamingRef,
+		setMessages,
+		setStatus,
+		setError,
+		editAndRegenerate,
+		retryMessageMut,
+		forkChatMut,
+		startBackgroundStream,
+		cleanupStaleJobs,
+	});
 
 	return { sendMessage, editMessage, retryMessage, forkMessage };
 }
