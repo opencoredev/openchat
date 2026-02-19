@@ -2,7 +2,6 @@ import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex, crossDomain } from "@convex-dev/better-auth/plugins";
 import { getAuthConfigProvider } from "@convex-dev/better-auth/auth-config";
 import { betterAuth } from "better-auth";
-import { oAuthProxy } from "better-auth/plugins";
 import { components } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
@@ -11,12 +10,6 @@ import { getAllowedOrigins } from "./lib/origins";
 import { createLogger } from "./lib/logger";
 
 const logger = createLogger("auth");
-
-/**
- * Production Convex site URL - used for OAuth callbacks.
- * All OAuth flows (including from preview environments) route through production.
- */
-const PRODUCTION_CONVEX_SITE_URL = process.env.PRODUCTION_CONVEX_SITE_URL;
 
 /**
  * Better Auth component client for Convex integration.
@@ -42,8 +35,8 @@ export const createAuth = (
 	}
 	const siteUrl = process.env.SITE_URL || "http://localhost:3000";
 
-	// Detect if this is a preview environment (explicit opt-in only)
-	// Dev cloud deployments with their own OAuth apps should NOT use oAuthProxy
+	// Detect if this is a preview environment (explicit opt-in only).
+	// Preview deployments intentionally support email/password only.
 	const isPreview = process.env.DEPLOYMENT_TYPE === "preview";
 
 	// Build authConfig at runtime when CONVEX_SITE_URL is available
@@ -51,7 +44,7 @@ export const createAuth = (
 		providers: [getAuthConfigProvider()],
 	};
 
-	// Build plugins array - add oAuthProxy for preview environments
+	// Build plugins required for Convex + cross-domain auth.
 	const plugins = [
 		// Required for Convex compatibility - pass authConfig for JWT configuration
 		convex({ authConfig }),
@@ -59,22 +52,7 @@ export const createAuth = (
 		crossDomain({ siteUrl }),
 	];
 
-	// Add oAuthProxy plugin for preview environments
-	// This routes OAuth callbacks through production and redirects back to preview
-	if (isPreview) {
-		if (!PRODUCTION_CONVEX_SITE_URL) {
-			throw new Error("PRODUCTION_CONVEX_SITE_URL environment variable is not set");
-		}
-		plugins.push(
-			oAuthProxy({
-				productionURL: PRODUCTION_CONVEX_SITE_URL,
-				currentURL: convexSiteUrl,
-			}) as unknown as typeof plugins[number]
-		);
-	}
-
 	const trustedOrigins = [
-		PRODUCTION_CONVEX_SITE_URL,
 		convexSiteUrl,
 		siteUrl,
 		...getAllowedOrigins(),
@@ -108,33 +86,35 @@ export const createAuth = (
 				void logger.info(`Verification email for user: ${url}`, { email: user.email });
 			},
 		},
-		socialProviders: {
-			// Only include GitHub OAuth if credentials are configured
-			// (avoids throwing during Convex module analysis when env vars aren't set yet)
-			...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
-				? {
-						github: {
-							clientId: process.env.GITHUB_CLIENT_ID,
-							clientSecret: process.env.GITHUB_CLIENT_SECRET,
-							// Use current environment's URL for OAuth callbacks
-							redirectURI: `${convexSiteUrl}/api/auth/callback/github`,
-						},
-					}
-				: {}),
-			// Only include Vercel OAuth if credentials are configured
-			...(process.env.VERCEL_CLIENT_ID && process.env.VERCEL_CLIENT_SECRET
-				? {
-						vercel: {
-							clientId: process.env.VERCEL_CLIENT_ID,
-							clientSecret: process.env.VERCEL_CLIENT_SECRET,
-							// Use current environment's URL for OAuth callbacks
-							redirectURI: `${convexSiteUrl}/api/auth/callback/vercel`,
-							// Request email and profile scopes
-							scope: ["openid", "email", "profile"],
-						},
-					}
-				: {}),
-		},
+		socialProviders: isPreview
+			? {}
+			: {
+					// Only include GitHub OAuth if credentials are configured
+					// (avoids throwing during Convex module analysis when env vars aren't set yet)
+					...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
+						? {
+								github: {
+									clientId: process.env.GITHUB_CLIENT_ID,
+									clientSecret: process.env.GITHUB_CLIENT_SECRET,
+									// Use current environment's URL for OAuth callbacks
+									redirectURI: `${convexSiteUrl}/api/auth/callback/github`,
+								},
+							}
+						: {}),
+					// Only include Vercel OAuth if credentials are configured
+					...(process.env.VERCEL_CLIENT_ID && process.env.VERCEL_CLIENT_SECRET
+						? {
+								vercel: {
+									clientId: process.env.VERCEL_CLIENT_ID,
+									clientSecret: process.env.VERCEL_CLIENT_SECRET,
+									// Use current environment's URL for OAuth callbacks
+									redirectURI: `${convexSiteUrl}/api/auth/callback/vercel`,
+									// Request email and profile scopes
+									scope: ["openid", "email", "profile"],
+								},
+							}
+						: {}),
+				},
 	// Trust explicitly configured origins (no wildcards for security)
 	trustedOrigins,
 		plugins,

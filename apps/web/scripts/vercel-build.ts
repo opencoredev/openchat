@@ -107,19 +107,5 @@ setConvexEnvIfPresent("SITE_URL", siteUrl, previewName, previewKey);
 setConvexEnvIfPresent("DEPLOYMENT_TYPE", "preview", previewName, previewKey);
 setConvexEnvIfPresent("PRODUCTION_CONVEX_SITE_URL", productionConvexSiteUrl, previewName, previewKey);
 setConvexEnvIfPresent("BETTER_AUTH_SECRET", process.env.BETTER_AUTH_SECRET, previewName, previewKey);
-setConvexEnvIfPresent(
-	"GITHUB_CLIENT_ID",
-	process.env.AUTH_GITHUB_CLIENT_ID ?? process.env.GITHUB_CLIENT_ID,
-	previewName,
-	previewKey
-);
-setConvexEnvIfPresent(
-	"GITHUB_CLIENT_SECRET",
-	process.env.AUTH_GITHUB_CLIENT_SECRET ?? process.env.GITHUB_CLIENT_SECRET,
-	previewName,
-	previewKey
-);
-setConvexEnvIfPresent("VERCEL_CLIENT_ID", process.env.VERCEL_CLIENT_ID, previewName, previewKey);
-setConvexEnvIfPresent("VERCEL_CLIENT_SECRET", process.env.VERCEL_CLIENT_SECRET, previewName, previewKey);
 
 log("Preview build completed.");
