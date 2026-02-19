@@ -22,10 +22,26 @@ function run(
 	});
 }
 
-// Production: just build (Convex production is deployed separately via CI)
+// Production: build with the production Convex URL.
+// VITE_CONVEX_URL should be set in the Vercel project's production env vars.
+// Fall back to the known production deployment URL if not explicitly set.
 if (process.env.VERCEL_ENV === "production") {
-	log("Production build detected; running bun run build.");
-	run("bun", ["run", "build"]);
+	const prodConvexUrl =
+		process.env.VITE_CONVEX_URL ?? "https://outgoing-setter-201.convex.cloud";
+	const prodConvexSiteUrl =
+		process.env.VITE_CONVEX_SITE_URL ??
+		prodConvexUrl.replace(/\.convex\.cloud$/, ".convex.site");
+
+	log("Production build detected.");
+	log(`  VITE_CONVEX_URL      = ${prodConvexUrl}`);
+	log(`  VITE_CONVEX_SITE_URL = ${prodConvexSiteUrl}`);
+
+	run("bun", ["run", "build"], {
+		env: {
+			VITE_CONVEX_URL: prodConvexUrl,
+			VITE_CONVEX_SITE_URL: prodConvexSiteUrl,
+		},
+	});
 	process.exit(0);
 }
 
