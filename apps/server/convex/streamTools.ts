@@ -1,9 +1,3 @@
-/**
- * Web search helper utilities and tool-call processing for streamExecution.ts.
- *
- * Extracted to keep streamExecution.ts under 500 lines.
- */
-
 import type { UsagePayload } from "./lib/billingUtils";
 import { normalizeUsagePayload } from "./lib/billingUtils";
 
