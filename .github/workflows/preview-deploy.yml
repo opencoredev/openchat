@@ -61,10 +61,14 @@ jobs:
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          BRANCH_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
           PR_NUM=${{ github.event.pull_request.number }}
           PREVIEW_NAME="pr-${PR_NUM}"
+          BRANCH_SLUG=$(printf "%s" "$BRANCH_REF" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/^-+//; s/-+$//; s/-+/-/g')
+          PREVIEW_SITE_URL="https://osschat-web-git-${BRANCH_SLUG}-${REPO_OWNER}.vercel.app"
 
           set_if_present() {
             local key="$1"
@@ -74,11 +78,13 @@ jobs:
             fi
           }
 
+          set_if_present "SITE_URL" "$PREVIEW_SITE_URL"
+          set_if_present "ALLOWED_ORIGINS" "$PREVIEW_SITE_URL"
           set_if_present "DEPLOYMENT_TYPE" "preview"
           set_if_present "BETTER_AUTH_SECRET" "$BETTER_AUTH_SECRET"
           set_if_present "PRODUCTION_CONVEX_SITE_URL" "https://outgoing-setter-201.convex.site"
 
-          echo "✅ Convex env vars set for ${PREVIEW_NAME}"
+          echo "✅ Convex env vars set for ${PREVIEW_NAME} (${PREVIEW_SITE_URL})"
 
       - name: Comment on PR
         uses: actions/github-script@v7
