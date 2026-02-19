@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
-import { PencilIcon, SparklesIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import type { MouseEvent } from "react";
 import type { Id } from "@server/convex/_generated/dataModel";
@@ -11,20 +10,16 @@ import { convexClient } from "@/lib/convex";
 import { useProviderStore } from "@/stores/provider";
 import { useChatTitleStore } from "@/stores/chat-title";
 import { useBulkSelectionStore } from "@/stores/bulk-selection";
-import { Button } from "../ui/button";
 import { SidebarContent, useSidebar } from "../ui/sidebar";
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { ChatGroup, ChatItemSkeleton } from "./chat-list-item";
 import type { ChatItem } from "./chat-list-item";
+import {
+	ChatContextMenu,
+	DeleteChatDialog,
+	BulkDeleteDialog,
+	BulkSelectionBar,
+} from "./chat-list-dialogs";
+import type { ContextMenuState } from "./chat-list-dialogs";
 
 const CHATS_CACHE_KEY = "openchat-chats-cache";
 const CONTEXT_MENU_PADDING = 12;
@@ -39,16 +34,10 @@ export function groupChatsByTime(chats: Array<ChatItem>, now: number) {
 
 	for (const chat of chats) {
 		const diffDays = Math.floor((now - chat.updatedAt) / oneDayMs);
-
-		if (diffDays === 0) {
-			today.push(chat);
-		} else if (diffDays < 7) {
-			last7Days.push(chat);
-		} else if (diffDays < 30) {
-			last30Days.push(chat);
-		} else {
-			older.push(chat);
-		}
+		if (diffDays === 0) today.push(chat);
+		else if (diffDays < 7) last7Days.push(chat);
+		else if (diffDays < 30) last30Days.push(chat);
+		else older.push(chat);
 	}
 
 	return { today, last7Days, last30Days, older };
@@ -63,11 +52,7 @@ export function ChatList() {
 	const confirmDelete = useChatTitleStore((s) => s.confirmDelete);
 	const generatingChatIds = useChatTitleStore((s) => s.generatingChatIds);
 	const setTitleGenerating = useChatTitleStore((s) => s.setGenerating);
-	const [contextMenu, setContextMenu] = useState<{
-		chatId: string;
-		x: number;
-		y: number;
-	} | null>(null);
+	const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 	const [deleteChatId, setDeleteChatId] = useState<string | null>(null);
 	const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
 	const [isBulkDeleting, setIsBulkDeleting] = useState(false);
@@ -130,9 +115,7 @@ export function ChatList() {
 	}, [chatsResult?.chats]);
 
 	const chats = chatsResult?.chats ?? cachedChatsRef.current ?? [];
-
 	const hasCachedChats = chats.length > 0;
-
 	const isLoadingChats = user?.id && !hasCachedChats
 		? convexUser === undefined || chatsResult === undefined
 		: false;
@@ -215,34 +198,21 @@ export function ChatList() {
 	};
 
 	const handleSubmitEdit = async () => {
-		if (!editingChatId || !convexClient || !convexUser?._id) {
-			handleCancelEdit();
-			return;
-		}
-
+		if (!editingChatId || !convexClient || !convexUser?._id) { handleCancelEdit(); return; }
 		const nextTitle = editValue.trim();
-		if (!nextTitle) {
-			handleCancelEdit();
-			return;
-		}
-		if (nextTitle === editOriginal.trim()) {
-			handleCancelEdit();
-			return;
-		}
-
+		if (!nextTitle) { handleCancelEdit(); return; }
+		if (nextTitle === editOriginal.trim()) { handleCancelEdit(); return; }
 		await convexClient.mutation(api.chats.setTitle, {
 			chatId: editingChatId as Id<"chats">,
 			userId: convexUser._id,
 			title: nextTitle,
 			updateUpdatedAt: false,
 		});
-
 		handleCancelEdit();
 	};
 
 	const handleRegenerateTitle = async (chatId: string) => {
 		if (!convexClient || !convexUser?._id) return;
-
 		setContextMenu(null);
 		setDeleteChatId(null);
 		setTitleGenerating(chatId, true, "manual");
@@ -251,12 +221,7 @@ export function ChatList() {
 				chatId: chatId as Id<"chats">,
 				userId: convexUser._id,
 			});
-
-			if (!seedText) {
-				toast.error("No message available to generate a name.");
-				return;
-			}
-
+			if (!seedText) { toast.error("No message available to generate a name."); return; }
 			const generatedTitle = await convexClient.action(api.chats.generateTitle, {
 				userId: convexUser._id,
 				seedText: seedText.trim().slice(0, 300),
@@ -265,9 +230,7 @@ export function ChatList() {
 			});
 			if (!generatedTitle) {
 				if (activeProvider === "openrouter") {
-					const hasOpenRouterKey = await convexClient.query(api.users.hasOpenRouterKey, {
-						userId: convexUser._id,
-					});
+					const hasOpenRouterKey = await convexClient.query(api.users.hasOpenRouterKey, { userId: convexUser._id });
 					if (!hasOpenRouterKey) {
 						toast.error("Connect your OpenRouter API key to generate titles with this provider.");
 						return;
@@ -276,7 +239,6 @@ export function ChatList() {
 				toast.error("Could not generate a chat title right now. Try again.");
 				return;
 			}
-
 			await convexClient.mutation(api.chats.setGeneratedTitle, {
 				chatId: chatId as Id<"chats">,
 				userId: convexUser._id,
@@ -299,19 +261,14 @@ export function ChatList() {
 	const handleDeleteChat = useCallback(
 		async (chatId: string) => {
 			if (!convexClient || !convexUser?._id) return;
-
 			setContextMenu(null);
 			setDeleteChatId(null);
-
 			try {
 				await convexClient.mutation(api.chats.remove, {
 					chatId: chatId as Id<"chats">,
 					userId: convexUser._id,
 				});
-
-				if (currentChatId === chatId) {
-					navigate({ to: "/" });
-				}
+				if (currentChatId === chatId) navigate({ to: "/" });
 			} catch (error) {
 				console.warn("[Chat] Failed to delete chat:", error);
 				toast.error("Failed to delete chat");
@@ -323,31 +280,18 @@ export function ChatList() {
 	const handleBulkDelete = useCallback(
 		async () => {
 			if (!convexClient || !convexUser?._id) return;
-
 			const chatIdsToDelete = getSelectedChatIds();
 			if (chatIdsToDelete.length === 0) return;
-
 			setIsBulkDeleting(true);
 			setShowBulkDeleteDialog(false);
-
 			try {
 				const result = await convexClient.mutation(api.chats.removeBulk, {
 					chatIds: chatIdsToDelete,
 					userId: convexUser._id,
 				});
-
-				if (result.deleted > 0) {
-					toast.success(`Deleted ${result.deleted} chat${result.deleted > 1 ? "s" : ""}`);
-				}
-
-				if (result.failed > 0) {
-					toast.error(`Failed to delete ${result.failed} chat${result.failed > 1 ? "s" : ""}`);
-				}
-
-				if (currentChatId && chatIdsToDelete.includes(currentChatId as Id<"chats">)) {
-					navigate({ to: "/" });
-				}
-
+				if (result.deleted > 0) toast.success(`Deleted ${result.deleted} chat${result.deleted > 1 ? "s" : ""}`);
+				if (result.failed > 0) toast.error(`Failed to delete ${result.failed} chat${result.failed > 1 ? "s" : ""}`);
+				if (currentChatId && chatIdsToDelete.includes(currentChatId as Id<"chats">)) navigate({ to: "/" });
 				deselectAll();
 			} catch (error) {
 				console.warn("[Chat] Failed to bulk delete chats:", error);
@@ -363,9 +307,7 @@ export function ChatList() {
 		[convexClient, convexUser?._id, currentChatId, navigate, getSelectedChatIds, deselectAll],
 	);
 
-	useEffect(() => {
-		contextMenuRef.current = contextMenu;
-	}, [contextMenu]);
+	useEffect(() => { contextMenuRef.current = contextMenu; }, [contextMenu]);
 
 	useEffect(() => {
 		if (typeof window === "undefined") return;
@@ -375,7 +317,6 @@ export function ChatList() {
 		const maxY = Math.max(CONTEXT_MENU_PADDING, window.innerHeight - rect.height - CONTEXT_MENU_PADDING);
 		const nextX = Math.min(Math.max(contextMenu.x, CONTEXT_MENU_PADDING), maxX);
 		const nextY = Math.min(Math.max(contextMenu.y, CONTEXT_MENU_PADDING), maxY);
-
 		if (nextX !== contextMenu.x || nextY !== contextMenu.y) {
 			setContextMenu((prev) => (prev ? { ...prev, x: nextX, y: nextY } : prev));
 		}
@@ -383,9 +324,7 @@ export function ChatList() {
 
 	useEffect(() => {
 		isMountedRef.current = true;
-		return () => {
-			isMountedRef.current = false;
-		};
+		return () => { isMountedRef.current = false; };
 	}, []);
 
 	useEffect(() => {
@@ -401,15 +340,11 @@ export function ChatList() {
 				setContextMenu(null);
 				setDeleteChatId(null);
 			}
-			if (event.key === "Escape" && selectedChatIds.size > 0) {
-				deselectAll();
-			}
+			if (event.key === "Escape" && selectedChatIds.size > 0) deselectAll();
 		};
-
 		window.addEventListener("click", handleDismiss);
 		window.addEventListener("contextmenu", handleDismiss);
 		window.addEventListener("keydown", handleKey);
-
 		return () => {
 			window.removeEventListener("click", handleDismiss);
 			window.removeEventListener("contextmenu", handleDismiss);
@@ -435,7 +370,6 @@ export function ChatList() {
 
 	return (
 		<>
-			{/* Chat History - scrollable area that takes remaining space */}
 			<SidebarContent className="scrollbar-none min-h-0 flex-1 overflow-y-auto">
 				{isLoadingChats ? (
 					<div className="px-3 py-2 space-y-1">
@@ -458,139 +392,38 @@ export function ChatList() {
 				)}
 			</SidebarContent>
 
-			{selectedChatIds.size > 0 && (
-				<div className="shrink-0 border-t border-sidebar-border/50 px-3 py-2 flex items-center justify-between gap-2">
-					<span className="text-sm text-sidebar-foreground/70">{selectedChatIds.size} selected</span>
-					<div className="flex items-center gap-1">
-						<Button onClick={deselectAll} variant="ghost" size="sm" className="h-7 px-2 text-xs">Cancel</Button>
-						<Button
-							onClick={() => {
-								if (confirmDelete) {
-									setShowBulkDeleteDialog(true);
-								} else {
-									void handleBulkDelete();
-								}
-							}}
-							variant="destructive"
-							size="sm"
-							className="h-7 px-2 text-xs gap-1"
-							disabled={isBulkDeleting}
-						>
-							<Trash2Icon className="size-3" />
-							Delete
-						</Button>
-					</div>
-				</div>
-			)}
+			<BulkSelectionBar
+				selectedCount={selectedChatIds.size}
+				isBulkDeleting={isBulkDeleting}
+				confirmDelete={confirmDelete}
+				onDeselectAll={deselectAll}
+				onDelete={() => void handleBulkDelete()}
+				onShowBulkDeleteDialog={() => setShowBulkDeleteDialog(true)}
+			/>
 
-			{contextMenu && (
-				<div
-					ref={contextMenuElementRef}
-					className="fixed z-50 min-w-[190px] rounded-lg border border-sidebar-border/60 bg-sidebar/95 p-1 shadow-lg backdrop-blur"
-					style={{ left: contextMenu.x, top: contextMenu.y }}
-					onClick={(event) => event.stopPropagation()}
-				>
-					<button
-						type="button"
-						className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-						onClick={() => handleRegenerateTitle(contextMenu.chatId)}
-					>
-						<SparklesIcon className="size-4" />
-						Regenerate name
-					</button>
-					<button
-						type="button"
-						className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-						onClick={handleRenameFromMenu}
-					>
-						<PencilIcon className="size-4" />
-						Rename
-					</button>
-					<button
-						type="button"
-						className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive/90 hover:bg-destructive/10 hover:text-destructive"
-						onClick={() => {
-							setContextMenu(null);
-							if (confirmDelete) {
-								setDeleteChatId(contextMenu.chatId);
-							} else {
-								void handleDeleteChat(contextMenu.chatId);
-							}
-						}}
-					>
-						<Trash2Icon className="size-4" />
-						Delete chat
-					</button>
-				</div>
-			)}
+			<ChatContextMenu
+				contextMenu={contextMenu}
+				contextMenuElementRef={contextMenuElementRef}
+				onRegenerateTitle={handleRegenerateTitle}
+				onRename={handleRenameFromMenu}
+				onDelete={(chatId) => void handleDeleteChat(chatId)}
+				confirmDelete={confirmDelete}
+				onSetDeleteId={setDeleteChatId}
+			/>
 
-			<AlertDialog
-				open={!!deleteChatId}
-				onOpenChange={(isDialogOpen) => {
-					if (!isDialogOpen) setDeleteChatId(null);
-				}}
-			>
-				<AlertDialogContent
-					size="sm"
-					onKeyDown={(event) => {
-						if (event.key === "Enter" && deleteChatId) {
-							event.preventDefault();
-							handleDeleteChat(deleteChatId);
-						}
-					}}
-				>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Delete chat</AlertDialogTitle>
-						<AlertDialogDescription>
-							Are you sure you want to delete &ldquo;{deleteChat?.title ?? "this chat"}&rdquo;?
-							This action cannot be undone.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction
-							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-							onClick={() => deleteChatId && handleDeleteChat(deleteChatId)}
-						>
-							Confirm
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
+			<DeleteChatDialog
+				deleteChatId={deleteChatId}
+				deleteChatTitle={deleteChat?.title}
+				onOpenChange={(open) => { if (!open) setDeleteChatId(null); }}
+				onConfirm={(chatId) => void handleDeleteChat(chatId)}
+			/>
 
-			<AlertDialog
+			<BulkDeleteDialog
 				open={showBulkDeleteDialog}
-				onOpenChange={(isDialogOpen) => {
-					if (!isDialogOpen) setShowBulkDeleteDialog(false);
-				}}
-			>
-				<AlertDialogContent
-					size="sm"
-					onKeyDown={(event) => {
-						if (event.key === "Enter" && selectedChatIds.size > 0) {
-							event.preventDefault();
-							void handleBulkDelete();
-						}
-					}}
-				>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Delete {selectedChatIds.size} chat{selectedChatIds.size !== 1 ? "s" : ""}?</AlertDialogTitle>
-						<AlertDialogDescription>
-							Are you sure you want to delete {selectedChatIds.size} chat{selectedChatIds.size !== 1 ? "s" : ""}?
-							This action cannot be undone.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction
-							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-							onClick={() => void handleBulkDelete()}
-						>
-							Delete {selectedChatIds.size} chat{selectedChatIds.size !== 1 ? "s" : ""}
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
+				selectedCount={selectedChatIds.size}
+				onOpenChange={(open) => { if (!open) setShowBulkDeleteDialog(false); }}
+				onConfirm={() => void handleBulkDelete()}
+			/>
 		</>
 	);
 }
