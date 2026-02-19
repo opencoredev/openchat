@@ -20,22 +20,44 @@ jobs:
         run: |
           set -euo pipefail
           PR_NUM=${{ github.event.pull_request.number }}
-          DEPLOYMENT_NAME="pr-${PR_NUM}"
-          
-          echo "🧹 Cleaning up Convex preview deployment: ${DEPLOYMENT_NAME}"
-          
-          RESPONSE=$(curl -sS -w "\n%{http_code}" -X DELETE \
-            "https://api.convex.dev/api/preview_deployments/${DEPLOYMENT_NAME}" \
+          PREVIEW_IDENTIFIER="pr-${PR_NUM}"
+          CONVEX_PROJECT_ID="1236982"
+
+          echo "🧹 Looking up Convex preview deployment: ${PREVIEW_IDENTIFIER}"
+
+          # List all deployments for the project and find the one matching our PR
+          DEPLOYMENT_NAME=$(curl -s \
+            "https://api.convex.dev/v1/projects/${CONVEX_PROJECT_ID}/list_deployments" \
+            -H "Authorization: Bearer ${CONVEX_TEAM_ACCESS_TOKEN}" | \
+            python3 -c "
+          import sys, json
+          deployments = json.load(sys.stdin)
+          for d in deployments:
+              if d.get('previewIdentifier') == '$PREVIEW_IDENTIFIER':
+                  print(d['name'])
+                  break
+          " 2>/dev/null || true)
+
+          if [ -z "$DEPLOYMENT_NAME" ]; then
+            echo "⚠️ No Convex deployment found for ${PREVIEW_IDENTIFIER} (may have already been cleaned up)"
+            exit 0
+          fi
+
+          echo "   Found deployment: ${DEPLOYMENT_NAME}"
+
+          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST \
+            "https://api.convex.dev/v1/deployments/${DEPLOYMENT_NAME}/delete" \
             -H "Authorization: Bearer ${CONVEX_TEAM_ACCESS_TOKEN}" \
-            -H "Content-Type: application/json")
-          
+            -H "Content-Type: application/json" \
+            -d '{}')
+
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | head -n-1)
-          
+
           if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "204" ]; then
-            echo "✅ Convex preview deployment deleted successfully"
+            echo "✅ Convex preview deployment '${DEPLOYMENT_NAME}' deleted successfully"
           elif [ "$HTTP_CODE" = "404" ]; then
-            echo "⚠️ Convex preview deployment not found (may have already been cleaned up)"
+            echo "⚠️ Convex deployment not found (may have already been cleaned up)"
           else
             echo "❌ Failed to delete Convex preview deployment"
             echo "   HTTP Code: $HTTP_CODE"
