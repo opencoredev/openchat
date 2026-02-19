@@ -1,3 +1,4 @@
 {
-	"buildCommand": "bun run build:vercel"
+	"buildCommand": "bun run build:vercel",
+	"ignoreCommand": "if [ \"$VERCEL_ENV\" = \"production\" ] || [ -n \"$VITE_CONVEX_URL\" ]; then exit 1; else exit 0; fi"
 }
