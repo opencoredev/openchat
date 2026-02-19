@@ -89,19 +89,14 @@ export const createAuth = (
 			enabled: true,
 			minPasswordLength: 8,
 			maxPasswordLength: 128,
-			// SECURITY: Require verified email to prevent account takeover via
-			// unverified email registration exploiting email-based migration linking (OSS-37)
-			requireEmailVerification: true,
+			requireEmailVerification: !isPreview,
 			sendResetPassword: async ({ user, url }: { user: { email: string }; url: string }) => {
-				// TODO: integrate with email provider (e.g., Resend, SendGrid)
 				console.log(`[Auth] Password reset requested for ${user.email}: ${url}`);
 			},
 		},
 		emailVerification: {
-			sendOnSignUp: true,
+			sendOnSignUp: !isPreview,
 			sendVerificationEmail: async ({ user, url }: { user: { email: string }; url: string }) => {
-				// TODO: integrate with email provider (e.g., Resend, SendGrid)
-				// For now, log the verification URL for development/debugging
 				console.log(`[Auth] Verification email for ${user.email}: ${url}`);
 			},
 		},
