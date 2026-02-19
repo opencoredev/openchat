@@ -161,7 +161,7 @@ jobs:
             "https://api.vercel.com/v13/deployments?teamId=${TEAM_ID}&forceNew=1" \
             -H "Authorization: Bearer ${VERCEL_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "{\"name\":\"osschat-web\",\"deploymentId\":\"${DEP_ID}\",\"target\":\"preview\"}")
+            -d "{\"name\":\"osschat-web\",\"deploymentId\":\"${DEP_ID}\"}")
 
           NEW_URL=$(echo "$REDEPLOY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('url',''))" 2>/dev/null || true)
           if [ -n "$NEW_URL" ]; then
