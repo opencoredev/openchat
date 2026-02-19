@@ -43,6 +43,40 @@ jobs:
             exit 1
           fi
 
+      - name: Delete Vercel Branch Env Vars
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          BRANCH_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          PROJECT_ID="prj_PydnhiRsYKJ4ASMIhsYZSJY5rqhT"
+          TEAM_ID="team_HuxyDiDenUAZ2TsD2llXhJZq"
+          ENCODED_BRANCH=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$BRANCH_REF")
+
+          ENV_IDS=$(curl -s \
+            "https://api.vercel.com/v9/projects/${PROJECT_ID}/env?teamId=${TEAM_ID}&gitBranch=${ENCODED_BRANCH}" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" | \
+            python3 -c "
+          import sys,json
+          data = json.load(sys.stdin)
+          keys = {'VITE_CONVEX_URL', 'VITE_CONVEX_SITE_URL'}
+          for e in data.get('envs', []):
+              if e.get('key') in keys and e.get('gitBranch') == '$BRANCH_REF':
+                  print(e['id'])
+          " 2>/dev/null || true)
+
+          if [ -z "$ENV_IDS" ]; then
+            echo "No branch-scoped Vercel env vars found for ${BRANCH_REF}"
+          else
+            for ENV_ID in $ENV_IDS; do
+              curl -s -X DELETE \
+                "https://api.vercel.com/v9/projects/${PROJECT_ID}/env/${ENV_ID}?teamId=${TEAM_ID}" \
+                -H "Authorization: Bearer ${VERCEL_TOKEN}" > /dev/null
+              echo "  Deleted env var id=${ENV_ID}"
+            done
+            echo "✅ Vercel branch env vars deleted"
+          fi
+
       - name: Summary
         if: always()
         run: |
@@ -52,6 +86,7 @@ jobs:
           echo "| Resource | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Convex Preview (pr-${PR_NUM}) | 🧹 Cleaned up |" >> $GITHUB_STEP_SUMMARY
+          echo "| Vercel Branch Env Vars | 🧹 Deleted |" >> $GITHUB_STEP_SUMMARY
           echo "| Frontend (Vercel) | 🧹 Auto-cleaned by Vercel |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "_Vercel preview deployments are automatically deleted when the PR is closed._" >> $GITHUB_STEP_SUMMARY

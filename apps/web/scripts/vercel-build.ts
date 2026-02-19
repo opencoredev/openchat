@@ -22,113 +22,50 @@ function run(
 	});
 }
 
-function setConvexEnvIfPresent(key: string, value: string | undefined, previewName: string, deployKey: string) {
-	if (!value) return;
-	run(
-		"bunx",
-		["convex", "env", "set", key, value, "--preview-name", previewName],
-		{
-			cwd: "../server",
-			env: {
-				CONVEX_DEPLOY_KEY: deployKey,
-				CONVEX_DEPLOYMENT: undefined,
-			},
-		}
-	);
-}
-
-function toHttpsUrl(hostOrUrl: string | undefined): string | undefined {
-	if (!hostOrUrl) return undefined;
-	if (hostOrUrl.startsWith("http://") || hostOrUrl.startsWith("https://")) return hostOrUrl;
-	return `https://${hostOrUrl}`;
-}
-
+// Production: just build (Convex production is deployed separately via CI)
 if (process.env.VERCEL_ENV === "production") {
 	log("Production build detected; running bun run build.");
 	run("bun", ["run", "build"]);
 	process.exit(0);
 }
 
-const previewKey = process.env.CONVEX_PREVIEW_DEPLOY_KEY ?? process.env.CONVEX_DEPLOY_KEY;
+// Preview: VITE_CONVEX_URL must be pre-set by GitHub Actions (preview-deploy.yml).
+//
+// We must NOT call `convex deploy --preview-create` here because:
+// - GH Actions also calls it for the same PR
+// - Both runs create *different* Convex deployments (new random name each time)
+// - Each then tries to fetch config from the *other's* URL → 404 race condition
+//
+// The correct flow:
+//   1. GH Actions deploys Convex → gets URL
+//   2. GH Actions sets VITE_CONVEX_URL as branch-scoped Vercel env var
+//   3. GH Actions triggers Vercel redeploy
+//   4. This script reads VITE_CONVEX_URL and just runs `bun run build`
 
-if (!previewKey) {
-	if (process.env.VITE_CONVEX_URL) {
-		log("No Convex deploy key found; using existing VITE_CONVEX_URL and running bun run build.");
-		run("bun", ["run", "build"]);
-		process.exit(0);
-	}
+const convexUrl = process.env.VITE_CONVEX_URL;
 
-	log("Missing Convex deploy key for preview build.");
-	log("Set CONVEX_DEPLOY_KEY (or CONVEX_PREVIEW_DEPLOY_KEY) in Vercel Preview env.");
+if (!convexUrl) {
+	log("❌ VITE_CONVEX_URL is not set.");
+	log("   GitHub Actions (preview-deploy.yml) must deploy Convex preview first,");
+	log("   set VITE_CONVEX_URL as a branch-scoped Vercel env var, then trigger");
+	log("   a Vercel redeploy. That redeploy will succeed with the URL pre-set.");
 	process.exit(1);
 }
 
-let previewName = "preview";
-if (process.env.VERCEL_GIT_PULL_REQUEST_ID) {
-	previewName = `pr-${process.env.VERCEL_GIT_PULL_REQUEST_ID}`;
-} else if (process.env.VERCEL_GIT_COMMIT_REF) {
-	previewName = process.env.VERCEL_GIT_COMMIT_REF
-		.toLowerCase()
-		.replace(/[^a-z0-9-]+/g, "-")
-		.replace(/^-+/, "")
-		.replace(/-+$/, "")
-		.replace(/-+/g, "-") || "preview";
-}
+// Derive VITE_CONVEX_SITE_URL from VITE_CONVEX_URL if not explicitly set
+const convexSiteUrl =
+	process.env.VITE_CONVEX_SITE_URL ??
+	convexUrl.replace(/\.convex\.cloud$/, ".convex.site");
 
-const branchAliasUrl = toHttpsUrl(process.env.VERCEL_BRANCH_URL);
-const deploymentUrl = toHttpsUrl(process.env.VERCEL_URL);
-const siteUrl = branchAliasUrl ?? deploymentUrl;
+log(`Preview build using:`);
+log(`  VITE_CONVEX_URL      = ${convexUrl}`);
+log(`  VITE_CONVEX_SITE_URL = ${convexSiteUrl}`);
 
-const allowedOrigins = Array.from(
-	new Set(
-		[branchAliasUrl, deploymentUrl].filter((o): o is string => Boolean(o))
-	)
-).join(",");
-
-const productionConvexSiteUrl =
-	process.env.PRODUCTION_CONVEX_SITE_URL ?? "https://outgoing-setter-201.convex.site";
-
-if (process.env.CONVEX_DRY_RUN === "1") {
-	log("Dry run enabled.");
-	log(`Would deploy Convex preview named: ${previewName}`);
-	log(`Would set SITE_URL=${siteUrl ?? "<empty>"}`);
-	log(`Would set ALLOWED_ORIGINS=${allowedOrigins || "<empty>"}`);
-	log("Would set DEPLOYMENT_TYPE=preview");
-	log(`Would set PRODUCTION_CONVEX_SITE_URL=${productionConvexSiteUrl}`);
-	log("Would run web build with VITE_CONVEX_URL + VITE_CONVEX_SITE_URL.");
-	process.exit(0);
-}
-
-log(`Deploying Convex preview: ${previewName}`);
-run(
-	"bunx",
-	[
-		"convex",
-		"deploy",
-		"--yes",
-		"--preview-create",
-		previewName,
-		"--preview-run",
-		"previewSeed",
-		"--cmd-url-env-var-name",
-		"VITE_CONVEX_URL",
-		"--cmd",
-		'export VITE_CONVEX_SITE_URL="$(printf "%s" "$VITE_CONVEX_URL" | sed \'s/\\.convex\\.cloud$/.convex.site/\')" && cd ../web && bun run build',
-	],
-	{
-		cwd: "../server",
-		env: {
-			CONVEX_DEPLOY_KEY: previewKey,
-			CONVEX_DEPLOYMENT: undefined,
-		},
-	}
-);
-
-log(`Syncing Convex preview env vars for ${previewName}`);
-setConvexEnvIfPresent("SITE_URL", siteUrl, previewName, previewKey);
-setConvexEnvIfPresent("ALLOWED_ORIGINS", allowedOrigins || undefined, previewName, previewKey);
-setConvexEnvIfPresent("DEPLOYMENT_TYPE", "preview", previewName, previewKey);
-setConvexEnvIfPresent("PRODUCTION_CONVEX_SITE_URL", productionConvexSiteUrl, previewName, previewKey);
-setConvexEnvIfPresent("BETTER_AUTH_SECRET", process.env.BETTER_AUTH_SECRET, previewName, previewKey);
+run("bun", ["run", "build"], {
+	env: {
+		VITE_CONVEX_URL: convexUrl,
+		VITE_CONVEX_SITE_URL: convexSiteUrl,
+	},
+});
 
 log("Preview build completed.");
