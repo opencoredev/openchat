@@ -61,25 +61,115 @@ jobs:
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
-          GITHUB_CLIENT_ID: ${{ secrets.AUTH_GITHUB_CLIENT_ID }}
-          GITHUB_CLIENT_SECRET: ${{ secrets.AUTH_GITHUB_CLIENT_SECRET }}
-          VERCEL_CLIENT_ID: ${{ secrets.VERCEL_CLIENT_ID }}
-          VERCEL_CLIENT_SECRET: ${{ secrets.VERCEL_CLIENT_SECRET }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          BRANCH_REF: ${{ github.event.pull_request.head.ref }}
         run: |
+          set -euo pipefail
           PR_NUM=${{ github.event.pull_request.number }}
-          # Vercel preview URLs are not predictable at this point;
-          # auth won't work in previews (GitHub OAuth only allows osschat.dev)
-          PREVIEW_SITE_URL="https://pr-${PR_NUM}.osschat.dev"
+          PREVIEW_NAME="pr-${PR_NUM}"
+          BRANCH_SLUG=$(printf "%s" "$BRANCH_REF" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/^-+//; s/-+$//; s/-+/-/g')
+          PREVIEW_SITE_URL="https://osschat-web-git-${BRANCH_SLUG}-${REPO_OWNER}.vercel.app"
 
-          bunx convex env set SITE_URL "$PREVIEW_SITE_URL" --preview-name "pr-${PR_NUM}"
-          bunx convex env set BETTER_AUTH_SECRET "$BETTER_AUTH_SECRET" --preview-name "pr-${PR_NUM}"
-          bunx convex env set GITHUB_CLIENT_ID "$GITHUB_CLIENT_ID" --preview-name "pr-${PR_NUM}"
-          bunx convex env set GITHUB_CLIENT_SECRET "$GITHUB_CLIENT_SECRET" --preview-name "pr-${PR_NUM}"
-          bunx convex env set VERCEL_CLIENT_ID "$VERCEL_CLIENT_ID" --preview-name "pr-${PR_NUM}"
-          bunx convex env set VERCEL_CLIENT_SECRET "$VERCEL_CLIENT_SECRET" --preview-name "pr-${PR_NUM}"
-          bunx convex env set PRODUCTION_CONVEX_SITE_URL "https://outgoing-setter-201.convex.site" --preview-name "pr-${PR_NUM}"
+          set_if_present() {
+            local key="$1"
+            local value="$2"
+            if [ -n "$value" ]; then
+              bunx convex env set "$key" "$value" --preview-name "$PREVIEW_NAME"
+            fi
+          }
 
-          echo "✅ Convex env vars set for pr-${PR_NUM}"
+          set_if_present "SITE_URL" "$PREVIEW_SITE_URL"
+          set_if_present "ALLOWED_ORIGINS" "$PREVIEW_SITE_URL"
+          set_if_present "DEPLOYMENT_TYPE" "preview"
+          set_if_present "BETTER_AUTH_SECRET" "$BETTER_AUTH_SECRET"
+          set_if_present "PRODUCTION_CONVEX_SITE_URL" "https://outgoing-setter-201.convex.site"
+
+          echo "✅ Convex env vars set for ${PREVIEW_NAME} (${PREVIEW_SITE_URL})"
+
+      - name: Set Vercel Branch Env Vars
+        id: vercel-env
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CONVEX_URL: ${{ steps.convex-deploy.outputs.convex_url }}
+          CONVEX_SITE_URL: ${{ steps.convex-deploy.outputs.convex_site_url }}
+          BRANCH_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          PROJECT_ID="prj_PydnhiRsYKJ4ASMIhsYZSJY5rqhT"
+          TEAM_ID="team_HuxyDiDenUAZ2TsD2llXhJZq"
+          API="https://api.vercel.com/v9/projects/${PROJECT_ID}/env?teamId=${TEAM_ID}"
+
+          upsert_env() {
+            local key="$1"
+            local value="$2"
+            local existing_id
+            existing_id=$(curl -s "https://api.vercel.com/v9/projects/${PROJECT_ID}/env?teamId=${TEAM_ID}&gitBranch=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$BRANCH_REF")" \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}" | \
+              python3 -c "import sys,json; envs=json.load(sys.stdin).get('envs',[]); matches=[e['id'] for e in envs if e.get('key')=='$key' and e.get('gitBranch')=='$BRANCH_REF']; print(matches[0] if matches else '')" 2>/dev/null || true)
+
+            if [ -n "$existing_id" ]; then
+              curl -s -X PATCH "https://api.vercel.com/v9/projects/${PROJECT_ID}/env/${existing_id}?teamId=${TEAM_ID}" \
+                -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "{\"value\":\"${value}\"}" > /dev/null
+              echo "  Updated ${key} (id=${existing_id})"
+            else
+              curl -s -X POST "$API" \
+                -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "{\"key\":\"${key}\",\"value\":\"${value}\",\"type\":\"plain\",\"target\":[\"preview\"],\"gitBranch\":\"${BRANCH_REF}\"}" > /dev/null
+              echo "  Created ${key}"
+            fi
+          }
+
+          echo "Setting branch-scoped Vercel env vars for ${BRANCH_REF}..."
+          upsert_env "VITE_CONVEX_URL" "${CONVEX_URL}"
+          upsert_env "VITE_CONVEX_SITE_URL" "${CONVEX_SITE_URL}"
+          echo "✅ Vercel env vars set"
+
+      - name: Trigger Vercel Redeploy
+        id: vercel-redeploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          PROJECT_ID="prj_PydnhiRsYKJ4ASMIhsYZSJY5rqhT"
+          TEAM_ID="team_HuxyDiDenUAZ2TsD2llXhJZq"
+          COMMIT_SHA="${{ github.event.pull_request.head.sha }}"
+          BRANCH_REF="${{ github.event.pull_request.head.ref }}"
+
+          LATEST_DEP=$(curl -s \
+            "https://api.vercel.com/v6/deployments?teamId=${TEAM_ID}&projectId=${PROJECT_ID}&limit=10" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}")
+
+          DEP_ID=$(echo "$LATEST_DEP" | python3 -c "
+          import sys,json
+          data = json.load(sys.stdin)
+          for d in data.get('deployments', []):
+              if d.get('meta',{}).get('githubCommitRef') == '$BRANCH_REF':
+                  print(d['uid'])
+                  break
+          " 2>/dev/null || true)
+
+          if [ -z "$DEP_ID" ]; then
+            echo "⚠️ No existing Vercel deployment found for branch ${BRANCH_REF}; Vercel will deploy automatically."
+            exit 0
+          fi
+
+          echo "Redeploying Vercel deployment ${DEP_ID}..."
+          REDEPLOY=$(curl -s -X POST \
+            "https://api.vercel.com/v13/deployments?teamId=${TEAM_ID}&forceNew=1" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"osschat-web\",\"deploymentId\":\"${DEP_ID}\"}")
+
+          NEW_URL=$(echo "$REDEPLOY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('url',''))" 2>/dev/null || true)
+          if [ -n "$NEW_URL" ]; then
+            echo "✅ Vercel redeploy triggered: https://${NEW_URL}"
+            echo "vercel_url=https://${NEW_URL}" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Redeploy response: $(echo "$REDEPLOY" | head -c 500)"
+          fi
 
       - name: Comment on PR
         uses: actions/github-script@v7
@@ -88,21 +178,22 @@ jobs:
             const prNumber = context.payload.pull_request.number;
             const convexUrl = '${{ steps.convex-deploy.outputs.convex_url }}';
             const convexSiteUrl = '${{ steps.convex-deploy.outputs.convex_site_url }}';
+            const vercelUrl = '${{ steps.vercel-redeploy.outputs.vercel_url }}';
 
             const body = `## 🚀 Preview Deployment Ready
 
-            Vercel will post the frontend preview URL automatically.
+            Vercel is rebuilding the frontend with the new Convex backend URL.
+            ${vercelUrl ? `\n**Latest preview:** ${vercelUrl}` : '\nVercel will post the preview URL automatically.'}
 
             ### Convex Preview Backend
             - Cloud URL: \`${convexUrl}\`
             - Site URL: \`${convexSiteUrl}\`
 
-            > ⚠️ Auth (GitHub OAuth) only works on \`osschat.dev\` — login will not work in previews.
+            > ℹ️ Preview deployments support email/password auth only (GitHub/Vercel OAuth disabled).
 
             ---
-            <sub>🤖 Convex preview deployed automatically by GitHub Actions</sub>`;
+            <sub>🤖 Deployed automatically by GitHub Actions</sub>`;
 
-            // Find existing comment
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -139,7 +230,8 @@ jobs:
           echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Convex Preview | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
-          echo "| Frontend (Vercel) | ✅ Auto-deployed by Vercel |" >> $GITHUB_STEP_SUMMARY
+          echo "| Vercel Env Vars | ✅ Set (branch-scoped) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend (Vercel) | ✅ Redeploy triggered |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Convex URLs" >> $GITHUB_STEP_SUMMARY
           echo "- Cloud: ${{ steps.convex-deploy.outputs.convex_url }}" >> $GITHUB_STEP_SUMMARY

@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "BROWSERSLIST_IGNORE_OLD_DATA=true BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true portless openchat vite dev",
     "build": "vite build",
+    "build:vercel": "bun ./scripts/vercel-build.ts",
     "start": "node .output/server/index.mjs",
     "preview": "vite preview",
     "test": "vitest run",

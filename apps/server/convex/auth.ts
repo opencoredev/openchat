@@ -39,8 +39,8 @@ export const createAuth = (
 	}
 	const siteUrl = process.env.SITE_URL || "http://localhost:3000";
 
-	// Detect if this is a preview environment (explicit opt-in only)
-	// Dev cloud deployments with their own OAuth apps should NOT use oAuthProxy
+	// Detect if this is a preview environment (explicit opt-in only).
+	// Preview deployments intentionally support email/password auth only.
 	const isPreview = process.env.DEPLOYMENT_TYPE === "preview";
 
 	// Build authConfig at runtime when CONVEX_SITE_URL is available
@@ -89,49 +89,46 @@ export const createAuth = (
 			enabled: true,
 			minPasswordLength: 8,
 			maxPasswordLength: 128,
-			// SECURITY: Require verified email to prevent account takeover via
-			// unverified email registration exploiting email-based migration linking (OSS-37)
-			requireEmailVerification: true,
+			requireEmailVerification: !isPreview,
 			sendResetPassword: async ({ user, url }: { user: { email: string }; url: string }) => {
-				// TODO: integrate with email provider (e.g., Resend, SendGrid)
 				console.log(`[Auth] Password reset requested for ${user.email}: ${url}`);
 			},
 		},
 		emailVerification: {
-			sendOnSignUp: true,
+			sendOnSignUp: !isPreview,
 			sendVerificationEmail: async ({ user, url }: { user: { email: string }; url: string }) => {
-				// TODO: integrate with email provider (e.g., Resend, SendGrid)
-				// For now, log the verification URL for development/debugging
 				console.log(`[Auth] Verification email for ${user.email}: ${url}`);
 			},
 		},
-		socialProviders: {
-			// Only include GitHub OAuth if credentials are configured
-			// (avoids throwing during Convex module analysis when env vars aren't set yet)
-			...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
-				? {
-						github: {
-							clientId: process.env.GITHUB_CLIENT_ID,
-							clientSecret: process.env.GITHUB_CLIENT_SECRET,
-							// Use current environment's URL for OAuth callbacks
-							redirectURI: `${convexSiteUrl}/api/auth/callback/github`,
-						},
-					}
-				: {}),
-			// Only include Vercel OAuth if credentials are configured
-			...(process.env.VERCEL_CLIENT_ID && process.env.VERCEL_CLIENT_SECRET
-				? {
-						vercel: {
-							clientId: process.env.VERCEL_CLIENT_ID,
-							clientSecret: process.env.VERCEL_CLIENT_SECRET,
-							// Use current environment's URL for OAuth callbacks
-							redirectURI: `${convexSiteUrl}/api/auth/callback/vercel`,
-							// Request email and profile scopes
-							scope: ["openid", "email", "profile"],
-						},
-					}
-				: {}),
-		},
+		socialProviders: isPreview
+			? {}
+			: {
+					// Only include GitHub OAuth if credentials are configured
+					// (avoids throwing during Convex module analysis when env vars aren't set yet)
+					...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
+						? {
+								github: {
+									clientId: process.env.GITHUB_CLIENT_ID,
+									clientSecret: process.env.GITHUB_CLIENT_SECRET,
+									// Use current environment's URL for OAuth callbacks
+									redirectURI: `${convexSiteUrl}/api/auth/callback/github`,
+								},
+							}
+						: {}),
+					// Only include Vercel OAuth if credentials are configured
+					...(process.env.VERCEL_CLIENT_ID && process.env.VERCEL_CLIENT_SECRET
+						? {
+								vercel: {
+									clientId: process.env.VERCEL_CLIENT_ID,
+									clientSecret: process.env.VERCEL_CLIENT_SECRET,
+									// Use current environment's URL for OAuth callbacks
+									redirectURI: `${convexSiteUrl}/api/auth/callback/vercel`,
+									// Request email and profile scopes
+									scope: ["openid", "email", "profile"],
+								},
+							}
+						: {}),
+				},
 	// Trust explicitly configured origins (no wildcards for security)
 	trustedOrigins,
 		plugins,
