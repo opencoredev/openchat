@@ -66,7 +66,9 @@ if (process.env.VERCEL_GIT_PULL_REQUEST_ID) {
 		.replace(/-+/g, "-") || "preview";
 }
 
-const siteUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
+const deploymentSiteUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
+const branchSiteUrl = process.env.VERCEL_BRANCH_URL ? `https://${process.env.VERCEL_BRANCH_URL}` : undefined;
+const siteUrl = branchSiteUrl ?? deploymentSiteUrl;
 const productionConvexSiteUrl =
 	process.env.PRODUCTION_CONVEX_SITE_URL ?? "https://outgoing-setter-201.convex.site";
 
@@ -74,6 +76,7 @@ if (process.env.CONVEX_DRY_RUN === "1") {
 	log("Dry run enabled.");
 	log(`Would deploy Convex preview named: ${previewName}`);
 	log(`Would set SITE_URL=${siteUrl ?? "<empty>"}`);
+	log(`Would set ALLOWED_ORIGINS=${[branchSiteUrl, deploymentSiteUrl].filter(Boolean).join(",") || "<empty>"}`);
 	log("Would set DEPLOYMENT_TYPE=preview");
 	log(`Would set PRODUCTION_CONVEX_SITE_URL=${productionConvexSiteUrl}`);
 	log("Would run web build with VITE_CONVEX_URL.");
@@ -104,6 +107,12 @@ run(
 
 log(`Syncing Convex preview env vars for ${previewName}`);
 setConvexEnvIfPresent("SITE_URL", siteUrl, previewName, previewKey);
+setConvexEnvIfPresent(
+	"ALLOWED_ORIGINS",
+	[branchSiteUrl, deploymentSiteUrl].filter(Boolean).join(","),
+	previewName,
+	previewKey
+);
 setConvexEnvIfPresent("DEPLOYMENT_TYPE", "preview", previewName, previewKey);
 setConvexEnvIfPresent("PRODUCTION_CONVEX_SITE_URL", productionConvexSiteUrl, previewName, previewKey);
 setConvexEnvIfPresent("BETTER_AUTH_SECRET", process.env.BETTER_AUTH_SECRET, previewName, previewKey);
