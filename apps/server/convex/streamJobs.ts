@@ -233,8 +233,6 @@ export const getStreamJob = query({
 	},
 });
 
-export { getActiveStreamJob } from "./streamQueries";
-
 // ---------------------------------------------------------------------------
 // completeStream
 // ---------------------------------------------------------------------------

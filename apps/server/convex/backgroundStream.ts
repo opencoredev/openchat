@@ -10,13 +10,14 @@
 export {
 	startStream,
 	getStreamJob,
-	getActiveStreamJob,
 	completeStream,
 	failStream,
 	getJobInternal,
 	getPersistedDailyUsageForDateInternal,
 	cleanupStaleJobs,
 } from "./streamJobs";
+
+export { getActiveStreamJob } from "./streamQueries";
 
 export { executeStream } from "./streamExecution";
 
