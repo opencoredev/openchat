@@ -3,6 +3,12 @@ name: Preview Cleanup
 on:
   pull_request:
     types: [closed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to clean up (e.g. 576)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -11,7 +17,7 @@ jobs:
   cleanup-convex-preview:
     name: Cleanup Convex Preview
     runs-on: ubuntu-latest
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     
     steps:
       - name: Delete Convex Preview Deployment
@@ -19,7 +25,7 @@ jobs:
           CONVEX_TEAM_ACCESS_TOKEN: ${{ secrets.CONVEX_TEAM_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          PR_NUM=${{ github.event.pull_request.number }}
+          PR_NUM=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number || github.event.pull_request.number }}
           PREVIEW_IDENTIFIER="pr-${PR_NUM}"
           CONVEX_PROJECT_ID="1236982"
 
@@ -66,6 +72,7 @@ jobs:
           fi
 
       - name: Delete Vercel Branch Env Vars
+        if: github.event_name == 'pull_request'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           BRANCH_REF: ${{ github.event.pull_request.head.ref }}
@@ -102,13 +109,13 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          PR_NUM=${{ github.event.pull_request.number }}
+          PR_NUM=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number || github.event.pull_request.number }}
           echo "## Preview Cleanup Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Resource | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Convex Preview (pr-${PR_NUM}) | 🧹 Cleaned up |" >> $GITHUB_STEP_SUMMARY
-          echo "| Vercel Branch Env Vars | 🧹 Deleted |" >> $GITHUB_STEP_SUMMARY
+          echo "| Vercel Branch Env Vars | 🧹 Deleted (PR events only) |" >> $GITHUB_STEP_SUMMARY
           echo "| Frontend (Vercel) | 🧹 Auto-cleaned by Vercel |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "_Vercel preview deployments are automatically deleted when the PR is closed._" >> $GITHUB_STEP_SUMMARY
