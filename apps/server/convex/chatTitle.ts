@@ -8,8 +8,10 @@ import { throwRateLimitError } from "./lib/rateLimitUtils";
 import { sanitizeTitle } from "./lib/sanitize";
 import { requireAuthUserId, requireAuthUserIdFromAction } from "./lib/auth";
 import { decryptSecret } from "./lib/crypto";
+import { createLogger } from "./lib/logger";
+import { OSSCHAT_IO_URL, TITLE_GENERATION_MODEL_ID } from "./lib/constants";
 
-const TITLE_MODEL_ID = "google/gemini-2.5-flash-lite";
+const logger = createLogger("chatTitle");
 const TITLE_MAX_LENGTH = 200;
 
 const TITLE_STYLE_PROMPTS: Record<"short" | "standard" | "long", string> = {
@@ -57,11 +59,11 @@ async function generateTitleFromSeed(
 			headers: {
 				"Content-Type": "application/json",
 				Authorization: `Bearer ${openRouterKey}`,
-				"HTTP-Referer": process.env.CONVEX_SITE_URL || "https://osschat.io",
-				"X-Title": "OSSChat",
-			},
+			"HTTP-Referer": process.env.CONVEX_SITE_URL || OSSCHAT_IO_URL,
+			"X-Title": "OSSChat",
+		},
 		body: JSON.stringify({
-			model: TITLE_MODEL_ID,
+			model: TITLE_GENERATION_MODEL_ID,
 			messages: [
 				{ role: "system", content: systemPrompt },
 				{ role: "user", content: normalizedSeed },
@@ -73,7 +75,7 @@ async function generateTitleFromSeed(
 
 		if (!response.ok) {
 			const errorBody = await response.text();
-			console.warn("[Chat Title] OpenRouter error:", response.status, errorBody);
+			void logger.warn("OpenRouter error", { status: response.status, errorBody });
 			return null;
 		}
 
@@ -94,7 +96,7 @@ async function generateTitleFromSeed(
 		const sanitizedTitle = sanitizeTitle(title, TITLE_MAX_LENGTH);
 		return sanitizedTitle || null;
 	} catch (error) {
-		console.warn("[Chat Title] Failed to generate title:", error);
+		void logger.error("Failed to generate title", error);
 		return null;
 	}
 }

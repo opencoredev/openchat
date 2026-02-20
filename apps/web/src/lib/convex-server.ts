@@ -13,7 +13,6 @@ function createServerClient() {
 		console.warn("[Convex Server] No CONVEX_URL configured");
 		return null;
 	}
-	console.log("[Convex Server] Initializing client with:", CONVEX_URL);
 	return new ConvexHttpClient(CONVEX_URL);
 }
 

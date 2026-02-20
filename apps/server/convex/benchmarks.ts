@@ -2,6 +2,9 @@ import { v } from "convex/values";
 import { internalAction, internalMutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { buildMatchingMap, type AAModel } from "./lib/model_matching";
+import { createLogger } from "./lib/logger";
+
+const logger = createLogger("benchmarks");
 
 type AAModelsResponse = {
 	data?: AAModel[];
@@ -35,7 +38,7 @@ export const fetchAndStoreBenchmarks = internalAction({
 	handler: async (ctx) => {
 		const apiKey = process.env.ARTIFICIAL_ANALYSIS_API_KEY;
 		if (!apiKey) {
-			console.warn("ARTIFICIAL_ANALYSIS_API_KEY is not set; skipping benchmark refresh");
+			void logger.warn("ARTIFICIAL_ANALYSIS_API_KEY is not set; skipping benchmark refresh");
 			return;
 		}
 
@@ -84,7 +87,7 @@ export const fetchAndStoreBenchmarks = internalAction({
 				}];
 			});
 
-			await ctx.runMutation((internal as any).benchmarks.storeBenchmarks, { benchmarks });
+			await ctx.runMutation(internal.benchmarks.storeBenchmarks, { benchmarks });
 		} catch (error) {
 			console.error("Failed to refresh Artificial Analysis benchmarks", error);
 		}
@@ -132,10 +135,52 @@ export const getBenchmarkByOpenRouterId = query({
 	},
 });
 
+const benchmarkDocValidator = v.object({
+	_id: v.id("benchmarks"),
+	_creationTime: v.number(),
+	openRouterModelId: v.string(),
+	aaSlug: v.string(),
+	aaCreatorName: v.string(),
+	intelligenceIndex: v.optional(v.float64()),
+	codingIndex: v.optional(v.float64()),
+	mathIndex: v.optional(v.float64()),
+	mmluPro: v.optional(v.float64()),
+	gpqa: v.optional(v.float64()),
+	scicode: v.optional(v.float64()),
+	livecodebench: v.optional(v.float64()),
+	math500: v.optional(v.float64()),
+	aime: v.optional(v.float64()),
+	lastUpdated: v.float64(),
+});
+
+const MAX_BENCHMARKS_LIMIT = 500;
+const DEFAULT_BENCHMARKS_LIMIT = 200;
+
 export const getAllBenchmarks = query({
-	args: {},
-	handler: async (ctx) => {
-		return await ctx.db.query("benchmarks").collect();
+	args: {
+		cursor: v.optional(v.string()),
+		limit: v.optional(v.number()),
+	},
+	returns: v.object({
+		benchmarks: v.array(benchmarkDocValidator),
+		nextCursor: v.union(v.string(), v.null()),
+	}),
+	handler: async (ctx, args) => {
+		let limit = args.limit ?? DEFAULT_BENCHMARKS_LIMIT;
+		if (!Number.isFinite(limit) || limit <= 0) {
+			limit = DEFAULT_BENCHMARKS_LIMIT;
+		} else if (limit > MAX_BENCHMARKS_LIMIT) {
+			limit = MAX_BENCHMARKS_LIMIT;
+		}
+
+		const results = await ctx.db
+			.query("benchmarks")
+			.paginate({ cursor: args.cursor ?? null, numItems: limit });
+
+		return {
+			benchmarks: results.page,
+			nextCursor: results.continueCursor ?? null,
+		};
 	},
 });
 

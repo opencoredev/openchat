@@ -23,7 +23,7 @@ const logger = createLogger("Cron");
 
 const crons = cronJobs();
 
-crons.interval("refresh benchmarks", { hours: 8 }, (internal as any).benchmarks.fetchAndStoreBenchmarks);
+crons.interval("refresh benchmarks", { hours: 8 }, internal.benchmarks.fetchAndStoreBenchmarks);
 
 /**
  * Cleanup soft-deleted records
