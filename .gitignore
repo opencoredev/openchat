@@ -20,6 +20,7 @@ apps/server/node_modules.bak/
 .railway/
 ISSUES_COMPREHENSIVE.txt
 .env.vercel.*
+.env.preview.check
 /.playwright-mcp/
 *.bak
 preflight.yml
