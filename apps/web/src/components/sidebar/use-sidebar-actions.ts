@@ -138,7 +138,7 @@ export function useSidebarActions({
 			return;
 		}
 
-		await convexClient.mutation(api.chats.setTitle, {
+		await convexClient.mutation(api.chatTitle.setTitle, {
 			chatId: editingChatId as Id<"chats">,
 			userId: convexUser._id,
 			title: nextTitle,
@@ -165,7 +165,7 @@ export function useSidebarActions({
 				return;
 			}
 
-			const generatedTitle = await convexClient.action(api.chats.generateTitle, {
+			const generatedTitle = await convexClient.action(api.chatTitle.generateTitle, {
 				userId: convexUser._id,
 				seedText: seedText.trim().slice(0, 300),
 				length: chatTitleLength as "short" | "standard" | "long",
@@ -185,11 +185,11 @@ export function useSidebarActions({
 				return;
 			}
 
-			await convexClient.mutation(api.chats.setGeneratedTitle, {
-				chatId: chatId as Id<"chats">,
-				userId: convexUser._id,
-				title: generatedTitle,
-				force: true,
+		await convexClient.mutation(api.chatTitle.setGeneratedTitle, {
+			chatId: chatId as Id<"chats">,
+			userId: convexUser._id,
+			title: generatedTitle,
+			force: true,
 			});
 		} catch (error) {
 			console.warn("[Chat] Title regeneration failed:", error);

@@ -120,7 +120,7 @@ export const startStream = mutation({
 			(chat.messageCount ?? 0) <= 1;
 		const seedText = shouldGenerateAutoTitle ? getLatestUserSeedText(args.messages) : null;
 		if (seedText) {
-			await ctx.scheduler.runAfter(0, internal.chats.generateAndSetTitleInternal, {
+			await ctx.scheduler.runAfter(0, internal.chatTitle.generateAndSetTitleInternal, {
 				chatId: args.chatId,
 				userId,
 				seedText,

@@ -60,7 +60,7 @@ export function useChatActions({
 	const sendMessages = useMutation(api.messages.send);
 	const editAndRegenerate = useMutation(api.messages.editAndRegenerate);
 	const retryMessageMut = useMutation(api.messages.retryMessage);
-	const forkChatMut = useMutation(api.chats.fork);
+	const forkChatMut = useMutation(api.chatFork.fork);
 	const startBackgroundStream = useMutation(api.backgroundStream.startStream);
 	const cleanupStaleJobs = useMutation(api.backgroundStream.cleanupStaleJobs);
 

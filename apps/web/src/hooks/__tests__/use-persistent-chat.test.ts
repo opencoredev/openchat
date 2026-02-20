@@ -20,7 +20,8 @@ vi.mock("@server/convex/_generated/api", () => ({
 			editAndRegenerate: "messages.editAndRegenerate",
 			retryMessage: "messages.retryMessage",
 		},
-		chats: { create: "chats.create", fork: "chats.fork" },
+		chats: { create: "chats.create" },
+		chatFork: { fork: "chatFork.fork" },
 		backgroundStream: {
 			getActiveStreamJob: "backgroundStream.getActiveStreamJob",
 			startStream: "backgroundStream.startStream",
@@ -45,7 +46,7 @@ const mutationMap: Record<string, ReturnType<typeof vi.fn>> = {
 	"messages.send": mockSendMessages,
 	"messages.editAndRegenerate": mockEditAndRegenerate,
 	"messages.retryMessage": mockRetryMessage,
-	"chats.fork": mockForkChat,
+	"chatFork.fork": mockForkChat,
 	"backgroundStream.startStream": mockStartBackgroundStream,
 	"backgroundStream.cleanupStaleJobs": mockCleanupStaleJobs,
 };

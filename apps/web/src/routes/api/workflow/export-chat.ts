@@ -119,7 +119,7 @@ async function runExportChatInline(
 ): Promise<{ downloadUrl: string; byteLength: number; fileName: string }> {
 	const { chatId, userId, format = "markdown" } = payload;
 	const convexClient = createConvexServerClient(authToken);
-	const chatExportData = await convexClient.query(api.chats.getChatExportData, {
+	const chatExportData = await convexClient.query(api.chatExport.getChatExportData, {
 		chatId: chatId as Id<"chats">,
 		userId: userId as Id<"users">,
 	});

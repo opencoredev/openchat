@@ -1140,7 +1140,7 @@ describe('chats.setGeneratedTitle', () => {
       });
     });
 
-    await asExternalId(t, 'test-user').mutation(api.chats.setGeneratedTitle, {
+    await asExternalId(t, 'test-user').mutation(api.chatTitle.setGeneratedTitle, {
       chatId,
       userId,
       title: 'Generated Title',
@@ -1161,7 +1161,7 @@ describe('chats.setGeneratedTitle', () => {
       });
     });
 
-    await asExternalId(t, 'test-user').mutation(api.chats.setGeneratedTitle, {
+    await asExternalId(t, 'test-user').mutation(api.chatTitle.setGeneratedTitle, {
       chatId,
       userId,
       title: 'Fresh Title',
@@ -1182,7 +1182,7 @@ describe('chats.setGeneratedTitle', () => {
       });
     });
 
-    await asExternalId(t, 'test-user').mutation(api.chats.setGeneratedTitle, {
+    await asExternalId(t, 'test-user').mutation(api.chatTitle.setGeneratedTitle, {
       chatId,
       userId,
       title: 'Should Not Apply',
@@ -1203,7 +1203,7 @@ describe('chats.setGeneratedTitle', () => {
       });
     });
 
-    await asExternalId(t, 'test-user').mutation(api.chats.setGeneratedTitle, {
+    await asExternalId(t, 'test-user').mutation(api.chatTitle.setGeneratedTitle, {
       chatId,
       userId,
       title: 'Forced Replace',
@@ -1268,7 +1268,7 @@ describe('chats.generateAndSetTitleInternal', () => {
 			),
 		);
 
-		const result = await t.action(internal.chats.generateAndSetTitleInternal, {
+		const result = await t.action(internal.chatTitle.generateAndSetTitleInternal, {
 			chatId,
 			userId,
 			seedText: 'this is the first user message',
@@ -1289,7 +1289,7 @@ describe('chats.generateAndSetTitleInternal', () => {
 			await ctx.db.patch(chatId, { title: 'Custom Existing Title' });
 		});
 
-		const result = await t.action(internal.chats.generateAndSetTitleInternal, {
+		const result = await t.action(internal.chatTitle.generateAndSetTitleInternal, {
 			chatId,
 			userId,
 			seedText: 'first message',

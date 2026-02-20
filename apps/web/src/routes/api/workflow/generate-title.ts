@@ -145,7 +145,7 @@ async function runGenerateTitleInline(
 		return { saved: false, reason: "empty_seed" };
 	}
 
-	const generatedTitle = await convexClient.action(api.chats.generateTitle, {
+	const generatedTitle = await convexClient.action(api.chatTitle.generateTitle, {
 		userId: convexUserId,
 		seedText: normalizedSeed,
 		length,
@@ -168,7 +168,7 @@ async function runGenerateTitleInline(
 		return { saved: false, reason: "empty_title" };
 	}
 
-	await convexClient.mutation(api.chats.setGeneratedTitle, {
+	await convexClient.mutation(api.chatTitle.setGeneratedTitle, {
 		chatId: convexChatId,
 		userId: convexUserId,
 		title: sanitizedTitle,
@@ -292,7 +292,7 @@ const workflow = serve<GenerateTitlePayload>(async (context) => {
 	}
 
 	await context.run("save-title", async () => {
-		await convexClient.mutation(api.chats.setGeneratedTitle, {
+		await convexClient.mutation(api.chatTitle.setGeneratedTitle, {
 			chatId: convexChatId,
 			userId: convexUserId,
 			title: sanitizedTitle,

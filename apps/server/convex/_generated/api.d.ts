@@ -11,6 +11,9 @@
 import type * as auth from "../auth.js";
 import type * as backgroundStream from "../backgroundStream.js";
 import type * as benchmarks from "../benchmarks.js";
+import type * as chatExport from "../chatExport.js";
+import type * as chatFork from "../chatFork.js";
+import type * as chatTitle from "../chatTitle.js";
 import type * as chats from "../chats.js";
 import type * as cleanupAction from "../cleanupAction.js";
 import type * as config_constants from "../config/constants.js";
@@ -49,6 +52,9 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   backgroundStream: typeof backgroundStream;
   benchmarks: typeof benchmarks;
+  chatExport: typeof chatExport;
+  chatFork: typeof chatFork;
+  chatTitle: typeof chatTitle;
   chats: typeof chats;
   cleanupAction: typeof cleanupAction;
   "config/constants": typeof config_constants;
