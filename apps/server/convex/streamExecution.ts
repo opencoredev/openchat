@@ -3,6 +3,9 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { createLogger } from "./lib/logger";
+
+const logger = createLogger("streamExecution");
 import {
 	DAILY_AI_LIMIT_CENTS,
 	getCurrentDateKey,
@@ -459,15 +462,12 @@ export const executeStream = internalAction({
 					: undefined,
 			});
 		} catch (error) {
-			console.error("[BackgroundStream] executeStream failed", {
-				jobId: args.jobId,
-				error,
-			});
+			void logger.error("executeStream failed", error, { jobId: args.jobId });
 			if (reservedDateKey && reservedUsageCents > 0) {
 				try {
 					await adjustDailyUsageInUpstash(job.userId, reservedDateKey, -reservedUsageCents);
 				} catch (adjustError) {
-					console.warn("[Usage] Upstash refund adjustment failed", adjustError);
+					void logger.error("Upstash refund adjustment failed", adjustError);
 				}
 			}
 			await ctx.runMutation(internal.backgroundStream.failStream, {

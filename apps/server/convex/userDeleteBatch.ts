@@ -1,5 +1,8 @@
 import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import { createLogger } from "./lib/logger";
+
+const logger = createLogger("userDeleteBatch");
 
 const DELETE_BATCH_SIZE_DEFAULT = 100;
 const DELETE_BATCH_SIZE_MAX = 500;
@@ -107,7 +110,7 @@ export const deleteUserFiles = internalMutation({
 			} catch (e) {
 				const message = e instanceof Error ? e.message : String(e);
 				if (!message.toLowerCase().includes("not found")) {
-					console.error("Unexpected error deleting storage file:", file.storageId, message);
+					void logger.error("Unexpected error deleting storage file", e, { storageId: file.storageId, message });
 				}
 			}
 			await ctx.db.delete(file._id);

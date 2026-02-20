@@ -4,6 +4,9 @@ import { httpAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { authComponent, createAuth } from "./auth";
 import { getAllowedOrigins, getCorsOrigin } from "./lib/origins";
+import { createLogger } from "./lib/logger";
+
+const logger = createLogger("http");
 
 const http = httpRouter();
 
@@ -135,7 +138,7 @@ http.route({
             ? 400
             : 500;
       if (status === 500) {
-        console.error("[cleanup-batch] Internal error", error);
+        void logger.error("cleanup-batch internal error", error);
       }
       const safeMessage = status === 500 ? "Cleanup batch failed" : message;
       return new Response(JSON.stringify({ error: safeMessage }), {

@@ -5,6 +5,9 @@ import { rateLimiter } from "./lib/rateLimiter";
 import { throwRateLimitError } from "./lib/rateLimitUtils";
 import { getProfileByUserId } from "./lib/profiles";
 import { requireAuthUserId } from "./lib/auth";
+import { createLogger } from "./lib/logger";
+
+const logger = createLogger("userAuth");
 
 const EMAIL_LINK_MIGRATION_DEADLINE_MS = Date.parse("2026-06-01T00:00:00.000Z");
 
@@ -107,11 +110,11 @@ export const ensure = mutation({
 					updatedAt: Date.now(),
 				});
 				existing = existingByEmail;
-				console.log(`[Auth Migration] Linked user ${args.email} from WorkOS to Better Auth (email verified)`);
+				void logger.info("Linked user from WorkOS to Better Auth (email verified)", { email: args.email });
 			}
 		} else if (!existing && args.email && !isEmailVerified && Date.now() < EMAIL_LINK_MIGRATION_DEADLINE_MS) {
 			// Log attempts to link with unverified email for security monitoring
-			console.warn(`[Auth Migration] Blocked linking for unverified email ${args.email} (potential account takeover attempt)`);
+			void logger.warn("Blocked linking for unverified email (potential account takeover attempt)", { email: args.email });
 		}
 
 		const now = Date.now();

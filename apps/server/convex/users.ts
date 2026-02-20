@@ -1,6 +1,9 @@
 import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { DAILY_AI_LIMIT_CENTS, getCurrentDateKey } from "./lib/billingUtils";
+import { createLogger } from "./lib/logger";
+
+const logger = createLogger("users");
 
 // Re-export auth functions (ensure, getCurrentAuthUser, getByExternalId, getByExternalIdInternal, getById)
 export {
@@ -69,9 +72,7 @@ export const incrementAiUsage = internalMutation({
 
 		// Sanity cap: reject suspiciously high usage values
 		if (args.usageCents > MAX_SINGLE_REQUEST_CENTS) {
-			console.error(
-				`[Usage] Rejected suspiciously high usage: ${args.usageCents}¢ for user ${args.userId}`,
-			);
+			void logger.error("Rejected suspiciously high usage", null, { usageCents: args.usageCents, userId: args.userId });
 			return {
 				usedCents: 0,
 				remainingCents: DAILY_AI_LIMIT_CENTS,
@@ -81,9 +82,7 @@ export const incrementAiUsage = internalMutation({
 
 		const user = await ctx.db.get(args.userId);
 		if (!user) {
-			console.warn(
-				`[Usage] User not found for usage recording: ${args.userId}, usage: ${args.usageCents}¢`,
-			);
+			void logger.warn("User not found for usage recording", { userId: args.userId, usageCents: args.usageCents });
 			return {
 				usedCents: 0,
 				remainingCents: DAILY_AI_LIMIT_CENTS,
