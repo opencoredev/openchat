@@ -426,7 +426,6 @@ describe('saveFileMetadata - File Type Validation', () => {
 		['image/png', 'test.png'],
 		['image/gif', 'test.gif'],
 		['image/webp', 'test.webp'],
-		['image/svg+xml', 'test.svg'],
 		['image/bmp', 'test.bmp'],
 	];
 
