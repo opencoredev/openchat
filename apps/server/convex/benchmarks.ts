@@ -49,7 +49,7 @@ export const fetchAndStoreBenchmarks = internalAction({
 			}
 			const openRouterPayload = (await openRouterResponse.json()) as OpenRouterModelsResponse;
 			const openRouterIds = (openRouterPayload.data ?? []).map((m) => m.id);
-			console.log(`Fetched ${openRouterIds.length} OpenRouter model IDs`);
+			void logger.info("Fetched OpenRouter model IDs", { count: openRouterIds.length });
 
 			const response = await fetch("https://artificialanalysis.ai/api/v2/data/llms/models", {
 				headers: {
@@ -89,7 +89,7 @@ export const fetchAndStoreBenchmarks = internalAction({
 
 			await ctx.runMutation(internal.benchmarks.storeBenchmarks, { benchmarks });
 		} catch (error) {
-			console.error("Failed to refresh Artificial Analysis benchmarks", error);
+			void logger.error("Failed to refresh Artificial Analysis benchmarks", error);
 		}
 	},
 });

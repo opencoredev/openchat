@@ -1302,3 +1302,169 @@ describe('chats.generateAndSetTitleInternal', () => {
 		expect(result.reason).toBe('title_already_set');
 	});
 });
+
+describe('chats.getChatReadStatuses', () => {
+	let t: ReturnType<typeof convexTest>;
+	let userId: Id<'users'>;
+	let otherUserId: Id<'users'>;
+
+	beforeEach(async () => {
+		t = createConvexTest();
+
+		userId = await t.run(async (ctx) => {
+			return await ctx.db.insert('users', {
+				externalId: 'test-user',
+				email: 'test@example.com',
+				name: 'Test User',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			});
+		});
+
+		otherUserId = await t.run(async (ctx) => {
+			return await ctx.db.insert('users', {
+				externalId: 'other-user',
+				email: 'other@example.com',
+				name: 'Other User',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			});
+		});
+	});
+
+	it('should return empty statuses when no read records exist', async () => {
+		const result = await asExternalId(t, 'test-user').query(api.chats.getChatReadStatuses, { userId });
+
+		expect(result.statuses).toEqual([]);
+		expect([null, '_end_cursor']).toContain(result.nextCursor);
+	});
+
+	it('should return statuses for user chats', async () => {
+		const chatId = await t.run(async (ctx) => {
+			return await ctx.db.insert('chats', {
+				userId,
+				title: 'Test Chat',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			});
+		});
+
+		await asExternalId(t, 'test-user').mutation(api.chats.markChatAsRead, { userId, chatId });
+
+		const result = await asExternalId(t, 'test-user').query(api.chats.getChatReadStatuses, { userId });
+
+		expect(result.statuses.length).toBe(1);
+		expect(result.statuses[0].chatId).toBe(chatId);
+		expect(result.statuses[0].lastReadAt).toBeGreaterThan(0);
+	});
+
+	it('should only return statuses for requesting user', async () => {
+		const userChatId = await t.run(async (ctx) => {
+			return await ctx.db.insert('chats', {
+				userId,
+				title: 'User Chat',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			});
+		});
+
+		const otherChatId = await t.run(async (ctx) => {
+			return await ctx.db.insert('chats', {
+				userId: otherUserId,
+				title: 'Other Chat',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			});
+		});
+
+		await asExternalId(t, 'test-user').mutation(api.chats.markChatAsRead, { userId, chatId: userChatId });
+		await asExternalId(t, 'other-user').mutation(api.chats.markChatAsRead, { userId: otherUserId, chatId: otherChatId });
+
+		const result = await asExternalId(t, 'test-user').query(api.chats.getChatReadStatuses, { userId });
+
+		expect(result.statuses.length).toBe(1);
+		expect(result.statuses[0].chatId).toBe(userChatId);
+	});
+
+	it('should respect custom limit', async () => {
+		await t.run(async (ctx) => {
+			const now = Date.now();
+			for (let i = 0; i < 5; i++) {
+				const chatId = await ctx.db.insert('chats', {
+					userId,
+					title: `Chat ${i}`,
+					createdAt: now + i,
+					updatedAt: now + i,
+				});
+				await ctx.db.insert('chatReadStatus', {
+					userId,
+					chatId,
+					lastReadAt: now + i,
+				});
+			}
+		});
+
+		const result = await asExternalId(t, 'test-user').query(api.chats.getChatReadStatuses, { userId, limit: 3 });
+
+		expect(result.statuses.length).toBe(3);
+		expect(result.nextCursor).toBeTruthy();
+	});
+
+	it('should support pagination with cursor', async () => {
+		await t.run(async (ctx) => {
+			const now = Date.now();
+			for (let i = 0; i < 6; i++) {
+				const chatId = await ctx.db.insert('chats', {
+					userId,
+					title: `Chat ${i}`,
+					createdAt: now + i,
+					updatedAt: now + i,
+				});
+				await ctx.db.insert('chatReadStatus', {
+					userId,
+					chatId,
+					lastReadAt: now + i,
+				});
+			}
+		});
+
+		const firstPage = await asExternalId(t, 'test-user').query(api.chats.getChatReadStatuses, { userId, limit: 4 });
+		expect(firstPage.statuses.length).toBe(4);
+		expect(firstPage.nextCursor).toBeTruthy();
+
+		const secondPage = await asExternalId(t, 'test-user').query(api.chats.getChatReadStatuses, {
+			userId,
+			limit: 4,
+			cursor: firstPage.nextCursor ?? undefined,
+		});
+		expect(secondPage.statuses.length).toBe(2);
+	});
+
+	it('should enforce maximum limit of 1000', async () => {
+		const result = await asExternalId(t, 'test-user').query(api.chats.getChatReadStatuses, { userId, limit: 9999 });
+		expect(result).toBeDefined();
+		expect(result.statuses).toEqual([]);
+	});
+
+	it('should handle invalid limit (negative)', async () => {
+		const result = await asExternalId(t, 'test-user').query(api.chats.getChatReadStatuses, { userId, limit: -1 });
+		expect(result).toBeDefined();
+	});
+
+	it('should return null/end nextCursor when all results fetched', async () => {
+		await t.run(async (ctx) => {
+			const chatId = await ctx.db.insert('chats', {
+				userId,
+				title: 'Only Chat',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			});
+			await ctx.db.insert('chatReadStatus', { userId, chatId, lastReadAt: Date.now() });
+		});
+
+		const result = await asExternalId(t, 'test-user').query(api.chats.getChatReadStatuses, { userId, limit: 10 });
+
+		expect(result.statuses.length).toBe(1);
+		expect([null, '_end_cursor']).toContain(result.nextCursor);
+	});
+});

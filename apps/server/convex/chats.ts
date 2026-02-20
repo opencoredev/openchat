@@ -333,6 +333,10 @@ export const checkExportRateLimit = mutation({
 // Chat Read Status Functions
 // ============================================================================
 
+// Security configuration: enforce maximum read status list limit
+const MAX_READ_STATUS_LIMIT = 1000;
+const DEFAULT_READ_STATUS_LIMIT = 500;
+
 /**
  * Mark a chat as read by updating the lastReadAt timestamp.
  * Creates a new record if one doesn't exist, otherwise updates the existing one.
@@ -377,31 +381,42 @@ export const markChatAsRead = mutation({
 	},
 });
 
-/**
- * Get all chat read statuses for a user.
- * Returns a map of chatId -> lastReadAt timestamp.
- */
 export const getChatReadStatuses = query({
 	args: {
 		userId: v.id("users"),
+		cursor: v.optional(v.string()),
+		limit: v.optional(v.number()),
 	},
-	returns: v.array(
-		v.object({
-			chatId: v.id("chats"),
-			lastReadAt: v.number(),
-		})
-	),
+	returns: v.object({
+		statuses: v.array(
+			v.object({
+				chatId: v.id("chats"),
+				lastReadAt: v.number(),
+			})
+		),
+		nextCursor: v.union(v.string(), v.null()),
+	}),
 	handler: async (ctx, args) => {
 		const userId = await requireAuthUserId(ctx, args.userId);
-		const statuses = await ctx.db
+		let limit = args.limit ?? DEFAULT_READ_STATUS_LIMIT;
+		if (!Number.isFinite(limit) || limit <= 0) {
+			limit = DEFAULT_READ_STATUS_LIMIT;
+		} else if (limit > MAX_READ_STATUS_LIMIT) {
+			limit = MAX_READ_STATUS_LIMIT;
+		}
+
+		const results = await ctx.db
 			.query("chatReadStatus")
 			.withIndex("by_user", (q) => q.eq("userId", userId))
-			.collect();
+			.paginate({ cursor: args.cursor ?? null, numItems: limit });
 
-		return statuses.map((s) => ({
-			chatId: s.chatId,
-			lastReadAt: s.lastReadAt,
-		}));
+		return {
+			statuses: results.page.map((s) => ({
+				chatId: s.chatId,
+				lastReadAt: s.lastReadAt,
+			})),
+			nextCursor: results.continueCursor ?? null,
+		};
 	},
 });
 
