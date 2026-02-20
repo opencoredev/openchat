@@ -21,13 +21,16 @@ export default defineConfig({
 			"apps/**/*.test.{ts,tsx}",
 			"apps/**/*.component.test.{ts,tsx}",
 		],
-		exclude: ["apps/**/tests/**"],
+		exclude: [
+			"apps/**/tests/**",
+			"**/node_modules/**",
+			"apps/server/convex/testSetup.test.ts",
+		],
 		coverage: {
 			provider: "v8",
 			reportsDirectory: "./coverage",
 		},
 		pool: "threads",
-		poolOptions: { threads: { singleThread: true } },
 		setupFiles: ["apps/web/src/test/setup.ts"],
 	},
 });
