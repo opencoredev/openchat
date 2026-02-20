@@ -166,9 +166,9 @@ describe("users.ensure", () => {
 		});
 
 		const stat = await t.run(async (ctx) => {
-			return await ctx.db
+			return await (ctx.db as any)
 				.query("dbStats")
-				.withIndex("by_key", (q) => q.eq("key", "users_total"))
+				.withIndex("by_key", (q: any) => q.eq("key", "users_total"))
 				.unique();
 		});
 
@@ -187,9 +187,9 @@ describe("users.ensure", () => {
 		});
 
 		const stat = await t.run(async (ctx) => {
-			return await ctx.db
+			return await (ctx.db as any)
 				.query("dbStats")
-				.withIndex("by_key", (q) => q.eq("key", "users_total"))
+				.withIndex("by_key", (q: any) => q.eq("key", "users_total"))
 				.unique();
 		});
 
@@ -718,9 +718,9 @@ describe("users concurrent operations", () => {
 
 		// Should only have one user in the database
 		const users = await t.run(async (ctx) => {
-			return await ctx.db
+			return await (ctx.db as any)
 				.query("users")
-				.withIndex("by_external_id", (q) =>
+				.withIndex("by_external_id", (q: any) =>
 					q.eq("externalId", "user_concurrent")
 				)
 				.collect();

@@ -46,7 +46,7 @@ describe.skip("rateLimiter - user operations", () => {
 
 		// Try to exceed the rate limit (100/min with 20 burst)
 		// Create many requests simultaneously
-		const promises = [];
+		const promises: Promise<any>[] = [];
 		for (let i = 0; i < 150; i++) {
 			promises.push(
 				t.mutation(api.users.ensure, {
@@ -65,7 +65,7 @@ describe.skip("rateLimiter - user operations", () => {
 		const t = createConvexTest();
 
 		// Exhaust the rate limit
-		const promises = [];
+		const promises: Promise<any>[] = [];
 		for (let i = 0; i < 150; i++) {
 			promises.push(
 				t.mutation(api.users.ensure, {
@@ -78,9 +78,9 @@ describe.skip("rateLimiter - user operations", () => {
 			await Promise.all(promises);
 			// If no error, test fails
 			expect(true).toBe(false);
-		} catch (error) {
+		} catch (error: unknown) {
 			// Check that error message includes retry information
-			expect(error.message).toMatch(/try again/i);
+			expect((error as Error).message).toMatch(/try again/i);
 		}
 	});
 
@@ -92,7 +92,7 @@ describe.skip("rateLimiter - user operations", () => {
 		});
 
 		// Try to save many keys (limit: 5/min with 2 burst)
-		const promises = [];
+		const promises: Promise<any>[] = [];
 		for (let i = 0; i < 10; i++) {
 			promises.push(
 				t.mutation(api.users.saveOpenRouterKey, {
@@ -115,7 +115,7 @@ describe.skip("rateLimiter - user operations", () => {
 		});
 
 		// Try to remove many times (limit: 5/min with 2 burst)
-		const promises = [];
+		const promises: Promise<any>[] = [];
 		for (let i = 0; i < 10; i++) {
 			promises.push(
 				t.mutation(api.users.removeOpenRouterKey, { userId })
@@ -156,7 +156,7 @@ describe.skip("rateLimiter - template operations", () => {
 		});
 
 		// Try to exceed limit (20/min with 5 burst)
-		const promises = [];
+		const promises: Promise<any>[] = [];
 		for (let i = 0; i < 30; i++) {
 			promises.push(
 				t.mutation(api.promptTemplates.create, {
@@ -188,7 +188,7 @@ describe.skip("rateLimiter - template operations", () => {
 		});
 
 		// Try to update many times (limit: 30/min with 10 burst)
-		const promises = [];
+		const promises: Promise<any>[] = [];
 		for (let i = 0; i < 50; i++) {
 			promises.push(
 				t.mutation(api.promptTemplates.update, {
@@ -328,7 +328,7 @@ describe.skip("rateLimiter - token bucket behavior", () => {
 		});
 
 		// Exceed burst capacity
-		const promises = [];
+		const promises: Promise<any>[] = [];
 		for (let i = 0; i < 10; i++) {
 			promises.push(
 				t.mutation(api.promptTemplates.create, {
@@ -567,10 +567,10 @@ describe.skip("rateLimiter - error messages", () => {
 				);
 			}
 			await Promise.all(promises);
-		} catch (error) {
+		} catch (error: unknown) {
 			// Error should mention what was rate limited
-			expect(error.message).toMatch(/too many/i);
-			expect(error.message).toMatch(/template/i);
+			expect((error as Error).message).toMatch(/too many/i);
+			expect((error as Error).message).toMatch(/template/i);
 		}
 	});
 
@@ -592,9 +592,9 @@ describe.skip("rateLimiter - error messages", () => {
 				);
 			}
 			await Promise.all(promises);
-		} catch (error) {
+		} catch (error: unknown) {
 			// Should mention when to retry
-			expect(error.message.toLowerCase()).toMatch(/try again/);
+			expect((error as Error).message.toLowerCase()).toMatch(/try again/);
 		}
 	});
 });
