@@ -1,1 +1,11 @@
-// barrel exports added as components are moved here
+export { ChatMessageList } from "./chat-message-list";
+export type { ChatMessageListProps } from "./chat-message-list";
+export { ChainOfThought, buildChainOfThoughtSteps } from "./chat-chain-of-thought";
+export type { ChainOfThoughtStep, ChainOfThoughtProps } from "./chat-chain-of-thought";
+export { InlineErrorMessage } from "./inline-error-message";
+export type { InlineErrorMessageProps } from "./inline-error-message";
+export { PillButton, ReasoningToggleButton, WebSearchToggleButton, SendButton } from "./prompt-toolbar";
+export type { PillButtonProps, SendButtonProps, ToolbarToggleProps } from "./prompt-toolbar";
+export { PremiumPromptInputInner } from "./premium-prompt-input";
+export type { PremiumPromptInputProps } from "./premium-prompt-input";
+export { getSafeUrl, replaceUtmSource, ALLOWED_URL_SCHEMES } from "./url-utils";
