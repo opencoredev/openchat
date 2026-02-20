@@ -695,27 +695,37 @@ describe("promptTemplates.autoSave", () => {
 		expect(template?.template).toBe("Auto Content");
 	});
 
-	test("should not enforce rate limiting on auto-save", async () => {
+	test("should enforce rate limit on auto-save", async () => {
 
-		const externalId = "user_autosave_2";
+		const externalId = `user_autosave_rate_${Math.random().toString(36)}`;
 		const { authed, userId } = await createUser(t, externalId);
 
 		const { templateId } = await authed.mutation(api.promptTemplates.create, {
 			userId,
 			name: "Template",
-			command: "/autorate",
+			command: `/autorate_${Math.random().toString(36).substring(7)}`,
 			template: "Content",
 		});
 
-		// Should not hit rate limit even with many rapid saves
+		const promises = [];
 		for (let i = 0; i < 50; i++) {
-			const result = await authed.mutation(api.promptTemplates.autoSave, {
-				templateId,
-				userId,
-				name: `Auto ${i}`,
-			});
-			expect(result.ok).toBe(true);
+			promises.push(
+				authed.mutation(api.promptTemplates.autoSave, {
+					templateId,
+					userId,
+					name: `Auto ${i}`,
+				})
+			);
 		}
+
+		const results = await Promise.allSettled(promises);
+		const rejected = results.filter(
+			(r): r is PromiseRejectedResult => r.status === "rejected"
+		);
+		expect(rejected.length).toBeGreaterThan(0);
+		expect(
+			rejected.some((r) => /Too many auto-saves/.test(String(r.reason)))
+		).toBe(true);
 	});
 });
 

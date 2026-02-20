@@ -305,7 +305,7 @@ export const update = mutation({
 	},
 });
 
-// Auto-save mutation for real-time editing (less strict validation, no rate limiting)
+// Auto-save mutation for real-time editing
 export const autoSave = mutation({
 	args: {
 		templateId: v.id("promptTemplates"),
@@ -316,6 +316,15 @@ export const autoSave = mutation({
 	returns: v.object({ ok: v.boolean() }),
 	handler: async (ctx, args) => {
 		const userId = await requireAuthUserId(ctx, args.userId);
+		// Rate limiting
+		const { ok: rateLimitOk, retryAfter } = await rateLimiter.limit(ctx, "templateAutoSave", {
+			key: userId,
+		});
+
+		if (!rateLimitOk) {
+			throwRateLimitError("auto-saves", retryAfter);
+		}
+
 		const existing = await ctx.db.get(args.templateId);
 		if (!existing || existing.userId !== userId || existing.deletedAt) {
 			return { ok: false };
