@@ -105,6 +105,7 @@ export const fork = mutation({
 		);
 
 		await incrementStat(ctx, STAT_KEYS.CHATS_TOTAL, 1);
+		await incrementStat(ctx, STAT_KEYS.MESSAGES_TOTAL, messagesToCopy.length);
 
 		return {
 			newChatId,

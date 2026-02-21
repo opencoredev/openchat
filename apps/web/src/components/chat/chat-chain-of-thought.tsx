@@ -68,7 +68,7 @@ export function buildChainOfThoughtSteps(
 			part.type !== "tool-result"
 		) {
 			const toolName = part.type.replace("tool-", "");
-			const isStreaming = part.state === "input-streaming";
+			const isStreaming = part.state === "input-streaming" || part.state === "input-available";
 			const isComplete = part.state === "output-available";
 			const isError = part.state === "output-error";
 

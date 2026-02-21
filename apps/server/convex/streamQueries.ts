@@ -49,12 +49,23 @@ function pickJobFields(job: {
 	error?: string;
 	messageId: string;
 }) {
+	const rawOptions = job.options as Record<string, unknown> | undefined;
+	const sanitizedOptions = rawOptions
+		? {
+				enableReasoning: rawOptions["enableReasoning"] as boolean | undefined,
+				reasoningEffort: rawOptions["reasoningEffort"] as string | undefined,
+				enableWebSearch: rawOptions["enableWebSearch"] as boolean | undefined,
+				supportsToolCalls: rawOptions["supportsToolCalls"] as boolean | undefined,
+				maxSteps: rawOptions["maxSteps"] as number | undefined,
+			}
+		: undefined;
+
 	return {
 		_id: job._id,
 		status: job.status,
 		model: job.model,
 		provider: job.provider,
-		options: job.options,
+		options: sanitizedOptions,
 		content: job.content,
 		reasoning: job.reasoning,
 		chainOfThoughtParts: job.chainOfThoughtParts,

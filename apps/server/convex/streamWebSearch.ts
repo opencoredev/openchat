@@ -68,7 +68,7 @@ export async function executePrefetchedSearches(
 				if (remainingContextChars > 0) {
 					const trimmedChunk =
 						chunk.length > remainingContextChars
-							? `${chunk.slice(0, Math.max(0, remainingContextChars - 1))}...`
+							? `${chunk.slice(0, Math.max(0, remainingContextChars - 3))}...`
 							: chunk;
 					contextChunks.push(trimmedChunk);
 					remainingContextChars -= trimmedChunk.length;

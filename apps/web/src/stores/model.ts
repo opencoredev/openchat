@@ -129,9 +129,6 @@ export const useModelStore = create<ModelState>()(
 );
 
 export function useModels() {
-	const [models, setModels] = useState<Array<Model>>(() => cache.models || getFallbackModels());
-	const [isLoading, setIsLoading] = useState(() => cache.loading || !cache.models);
-	const [error, setError] = useState<Error | null>(() => cache.error);
 	const [, forceUpdate] = useState(0);
 
 	useEffect(() => {
@@ -143,27 +140,12 @@ export function useModels() {
 
 		async function load() {
 			if (cache.models && Date.now() - cache.timestamp < CACHE_TTL) {
-				setModels(cache.models);
-				setIsLoading(false);
-				setError(null);
 				return;
 			}
-
-			setIsLoading(true);
-
 			try {
-				const fetched = await fetchAllModels();
-				if (!cancelled) {
-					setModels(fetched);
-					setError(null);
-				}
-			} catch (e) {
-				if (!cancelled) {
-					setError(e instanceof Error ? e : new Error("Failed"));
-					setModels(getFallbackModels());
-				}
-			} finally {
-				if (!cancelled) setIsLoading(false);
+				await fetchAllModels();
+			} catch {
+				if (cancelled) return;
 			}
 		}
 
@@ -174,17 +156,15 @@ export function useModels() {
 	}, []);
 
 	const reload = useCallback(async () => {
-		setIsLoading(true);
-		setError(null);
 		try {
-			const fetched = await reloadModels();
-			setModels(fetched);
-		} catch (e) {
-			setError(e instanceof Error ? e : new Error("Failed"));
-		} finally {
-			setIsLoading(false);
+			await reloadModels();
+		} catch {
 		}
 	}, []);
+
+	const models = cache.models || getFallbackModels();
+	const isLoading = cache.loading || !cache.models;
+	const error = cache.error;
 
 	const modelsByProvider = useMemo(() => {
 		const groups: Record<string, Array<Model>> = {};

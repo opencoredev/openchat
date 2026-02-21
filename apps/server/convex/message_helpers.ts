@@ -130,7 +130,10 @@ export async function insertOrUpdateMessage(
 		);
 	}
 
-	if (args.attachments && args.attachments.length > 0 && args.userId) {
+	if (args.attachments && args.attachments.length > 0) {
+		if (!args.userId) {
+			throw new Error("userId is required to validate attachment ownership.");
+		}
 		await validateAttachmentOwnership(ctx, args.attachments, args.userId);
 	}
 
@@ -149,7 +152,10 @@ export async function insertOrUpdateMessage(
 
 	if (!targetId) {
 		const chat = await ctx.db.get(args.chatId);
-		const messageCount = chat?.messageCount ?? 0;
+		if (!chat) {
+			throw new Error(`Chat not found: ${args.chatId}`);
+		}
+		const messageCount = chat.messageCount ?? 0;
 
 		if (messageCount >= MAX_MESSAGES_PER_CHAT) {
 			throw new Error(
@@ -187,11 +193,9 @@ export async function insertOrUpdateMessage(
 			messageType: args.messageType ?? undefined,
 		});
 
-		if (chat) {
-			await ctx.db.patch(args.chatId, {
-				messageCount: messageCount + 1,
-			});
-		}
+		await ctx.db.patch(args.chatId, {
+			messageCount: messageCount + 1,
+		});
 
 		await incrementStat(ctx, STAT_KEYS.MESSAGES_TOTAL);
 	} else {

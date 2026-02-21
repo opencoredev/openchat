@@ -120,7 +120,7 @@ export const ensure = mutation({
 		const now = Date.now();
 		if (existing) {
 			// Update user email (auth data stays in users table)
-			const needsEmailUpdate = existing.email !== args.email;
+			const needsEmailUpdate = args.email !== undefined && existing.email !== args.email;
 			if (needsEmailUpdate) {
 				await ctx.db.patch(existing._id, {
 					email: args.email ?? undefined,
@@ -133,7 +133,8 @@ export const ensure = mutation({
 			if (profile) {
 				// Update existing profile if name/avatar changed
 				const needsProfileUpdate =
-					profile.name !== args.name || profile.avatarUrl !== args.avatarUrl;
+					(args.name !== undefined && profile.name !== args.name) ||
+					(args.avatarUrl !== undefined && profile.avatarUrl !== args.avatarUrl);
 				if (needsProfileUpdate) {
 					await ctx.db.patch(profile._id, {
 						name: args.name ?? undefined,
@@ -156,7 +157,8 @@ export const ensure = mutation({
 
 			// Also update user table for backwards compatibility during migration
 			const needsUserProfileUpdate =
-				existing.name !== args.name || existing.avatarUrl !== args.avatarUrl;
+				(args.name !== undefined && existing.name !== args.name) ||
+				(args.avatarUrl !== undefined && existing.avatarUrl !== args.avatarUrl);
 			if (needsUserProfileUpdate) {
 				await ctx.db.patch(existing._id, {
 					name: args.name ?? undefined,

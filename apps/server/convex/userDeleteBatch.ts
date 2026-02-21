@@ -104,17 +104,23 @@ export const deleteUserFiles = internalMutation({
 			.withIndex("by_user", (q) => q.eq("userId", args.userId))
 			.take(batchSize);
 
-		for (const file of files) {
-			try {
-				await ctx.storage.delete(file.storageId);
-			} catch (e) {
-				const message = e instanceof Error ? e.message : String(e);
-				if (!message.toLowerCase().includes("not found")) {
-					void logger.error("Unexpected error deleting storage file", e, { storageId: file.storageId, message });
+		await Promise.all(
+			files.map(async (file) => {
+				try {
+					await ctx.storage.delete(file.storageId);
+				} catch (e) {
+					const message = e instanceof Error ? e.message : String(e);
+					if (!message.toLowerCase().includes("not found")) {
+						await logger.error("Unexpected error deleting storage file", e, {
+							storageId: file.storageId,
+							message,
+						});
+						throw e;
+					}
 				}
-			}
-			await ctx.db.delete(file._id);
-		}
+				await ctx.db.delete(file._id);
+			})
+		);
 
 		return {
 			deleted: files.length,

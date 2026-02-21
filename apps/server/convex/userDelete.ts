@@ -112,10 +112,12 @@ export const deleteAccountWorkflowStep = action({
 			case "delete-chat-read-statuses":
 				return await ctx.runMutation(internal.users.deleteUserChatReadStatuses, {
 					userId,
+					batchSize: args.batchSize,
 				});
 			case "delete-prompt-templates":
 				return await ctx.runMutation(internal.users.deleteUserPromptTemplates, {
 					userId,
+					batchSize: args.batchSize,
 				});
 			case "delete-user": {
 				const result: { success: boolean } = await ctx.runMutation(

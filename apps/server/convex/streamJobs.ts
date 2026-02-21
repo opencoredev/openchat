@@ -295,10 +295,16 @@ export const cleanupStaleJobs = mutation({
 
 		for (const job of staleJobs) {
 			if (job.createdAt < fiveMinutesAgo) {
+				const now = Date.now();
 				await ctx.db.patch(job._id, {
 					status: "error",
 					error: "Cleaned up stale job",
-					completedAt: Date.now(),
+					completedAt: now,
+				});
+				await ctx.db.patch(job.chatId, {
+					activeStreamId: undefined,
+					status: "idle",
+					updatedAt: now,
 				});
 				cleaned++;
 			}

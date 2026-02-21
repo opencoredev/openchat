@@ -9,7 +9,7 @@ import type { UIDataTypes, UIMessagePart, UITools } from "ai";
 import { buildChainOfThoughtSteps, ChainOfThought } from "./chat-chain-of-thought";
 import { InlineErrorMessage } from "./inline-error-message";
 
-function AutoScroll({ messageCount }: { messageCount: number }) {
+function AutoScroll({ messageCount, isStreaming }: { messageCount: number; isStreaming: boolean }) {
 	const { scrollToBottom, isAtBottom } = useConversationScroll();
 	const prevCountRef = useRef(messageCount);
 	const initialScrollDone = useRef(false);
@@ -30,6 +30,14 @@ function AutoScroll({ messageCount }: { messageCount: number }) {
 		}
 		prevCountRef.current = messageCount;
 	}, [messageCount, scrollToBottom, isAtBottom]);
+
+	useEffect(() => {
+		if (isStreaming && isAtBottom) {
+			requestAnimationFrame(() => {
+				scrollToBottom();
+			});
+		}
+	}, [isStreaming, isAtBottom, scrollToBottom]);
 
 	return null;
 }
@@ -239,7 +247,7 @@ export const ChatMessageList = memo(function ChatMessageList({
 
 	return (
 		<Conversation className="flex-1 px-2 md:px-4" showScrollButton>
-			<AutoScroll messageCount={messages.length} />
+			<AutoScroll messageCount={messages.length} isStreaming={isLoading} />
 			<ConversationContent className="mx-auto max-w-3xl pt-16 md:pt-6 pb-16 px-2 md:px-4">
 				{messages.length === 0 && isNewChat ? (
 					<StartScreen onPromptSelect={onPromptSelect} />
@@ -417,9 +425,14 @@ export const ChatMessageList = memo(function ChatMessageList({
 								</div>
 							);
 						})}
-						{isLoading && messages[messages.length - 1]?.role === "user" && (
-							<LoadingIndicator />
-						)}
+						{isLoading && (() => {
+							const lastMsg = messages[messages.length - 1];
+							const lastIsUser = lastMsg?.role === "user";
+							const lastIsEmptyAssistant =
+								lastMsg?.role === "assistant" &&
+								(!lastMsg.parts || lastMsg.parts.length === 0);
+							return (lastIsUser || lastIsEmptyAssistant) && <LoadingIndicator />;
+						})()}
 					</>
 				)}
 			</ConversationContent>

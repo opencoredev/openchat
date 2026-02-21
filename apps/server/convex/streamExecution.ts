@@ -91,6 +91,9 @@ export const executeStream = internalAction({
 		}
 
 		if (!apiKey) {
+			if (job.provider === "osschat" && reservedUsageCents > 0 && reservedDateKey) {
+				await adjustDailyUsageInUpstash(job.userId, reservedDateKey, -reservedUsageCents);
+			}
 			await ctx.runMutation(internal.backgroundStream.failStream, {
 				jobId: args.jobId,
 				error: "No API key available",

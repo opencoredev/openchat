@@ -1,5 +1,6 @@
 import {
 	Children,
+	forwardRef,
 	useState,
 } from "react";
 import type {
@@ -138,21 +139,19 @@ export const PromptInputTools = ({ className, ...props }: PromptInputToolsProps)
 
 export type PromptInputButtonProps = ComponentProps<typeof InputGroupButton>;
 
-export const PromptInputButton = ({
-	variant = "ghost",
-	className,
-	size,
-	...props
-}: PromptInputButtonProps) => {
-	const newSize = size ?? (Children.count(props.children) > 1 ? "sm" : "icon-sm");
+export const PromptInputButton = forwardRef<HTMLButtonElement, PromptInputButtonProps>(
+	({ variant = "ghost", className, size, ...props }, ref) => {
+		const newSize = size ?? (Children.count(props.children) > 1 ? "sm" : "icon-sm");
 
-	return (
-		<InputGroupButton
-			className={cn(className)}
-			size={newSize}
-			type="button"
-			variant={variant}
-			{...props}
-		/>
-	);
-};
+		return (
+			<InputGroupButton
+				ref={ref}
+				className={cn(className)}
+				size={newSize}
+				type="button"
+				variant={variant}
+				{...props}
+			/>
+		);
+	},
+);
