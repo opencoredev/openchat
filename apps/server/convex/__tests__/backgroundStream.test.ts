@@ -1,14 +1,25 @@
 import { convexTest } from "convex-test";
-import { expect, test, describe } from "vitest";
+import { expect, test, describe, afterEach } from "vitest";
 import { api, internal } from "../_generated/api";
 import schema from "../schema";
 import { modules, rateLimiter } from "../testSetup.test";
 
+let lastT: ReturnType<typeof convexTest> | null = null;
+
 function createConvexTest() {
 	const t = convexTest(schema, modules);
 	rateLimiter.register(t);
+	lastT = t;
 	return t;
 }
+
+afterEach(async () => {
+	if (lastT) {
+		await new Promise<void>(resolve => setTimeout(resolve, 0));
+		await lastT.finishInProgressScheduledFunctions();
+		lastT = null;
+	}
+});
 
 async function seedUserAndChat(t: ReturnType<typeof convexTest>, externalId: string) {
 	const userId = await t.run(async (ctx) => {
