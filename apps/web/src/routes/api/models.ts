@@ -154,21 +154,25 @@ export const Route = createFileRoute("/api/models")({
 							{ status: 400 },
 						);
 					}
-					const rl = await modelsIpRatelimit.limit(ip);
-					if (!rl.success) {
-						const retryAfterSeconds = Math.max(
-							1,
-							Math.ceil((rl.reset - Date.now()) / 1000),
-						);
-						return json(
-							{ error: "Rate limit exceeded" },
-							{
-								status: 429,
-								headers: {
-									"Retry-After": String(retryAfterSeconds),
+					try {
+						const rl = await modelsIpRatelimit.limit(ip);
+						if (!rl.success) {
+							const retryAfterSeconds = Math.max(
+								1,
+								Math.ceil((rl.reset - Date.now()) / 1000),
+							);
+							return json(
+								{ error: "Rate limit exceeded" },
+								{
+									status: 429,
+									headers: {
+										"Retry-After": String(retryAfterSeconds),
+									},
 								},
-							},
-						);
+							);
+						}
+					} catch (error) {
+						console.warn("[Models API] Rate limiter unavailable, proceeding without rate limiting:", error);
 					}
 				}
 
