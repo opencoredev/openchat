@@ -26,3 +26,4 @@ ISSUES_COMPREHENSIVE.txt
 preflight.yml
 !.github/workflows/preflight.yml
 .sisyphus/
+session-ses_*.md
