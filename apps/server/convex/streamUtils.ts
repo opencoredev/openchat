@@ -1,5 +1,6 @@
 import { normalizeUsagePayload } from "./lib/billingUtils";
 import type { UsagePayload } from "./lib/billingUtils";
+import type { JSONValue } from "ai";
 
 export const UPDATE_INTERVAL = 5;
 export const MAX_SEARCH_RESULTS_FOR_MODEL = 5;
@@ -361,10 +362,10 @@ export function buildOpenRouterOptions(
 	model: string,
 	reasoningEffort?: string,
 ): {
-	openRouterOptions: Record<string, unknown>;
+	openRouterOptions: Record<string, JSONValue>;
 	maxOutputTokens?: number;
 } {
-	const baseOptions: Record<string, unknown> = {
+	const baseOptions: Record<string, JSONValue> = {
 		provider: { require_parameters: true },
 		usage: { include: true },
 	};
@@ -387,7 +388,7 @@ export function buildOpenRouterOptions(
 		medium: 10000,
 		high: 20000,
 	};
-	const reasoningConfig: Record<string, unknown> = { exclude: false };
+	const reasoningConfig: Record<string, JSONValue> = { exclude: false };
 	let maxOutputTokens: number | undefined;
 
 	// OpenRouter supports effort="none|low|medium|high". When reasoning is requested,

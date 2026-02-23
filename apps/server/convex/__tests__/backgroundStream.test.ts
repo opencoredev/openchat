@@ -397,6 +397,77 @@ describe("backgroundStream", () => {
 		expect(chat?.activeStreamId).toBeUndefined();
 	});
 
+	test("startStream does not schedule auto-title when all messages are assistant (seed is null)", async () => {
+		const { userId, chatId } = await seedUserAndChat("bs_user_12");
+
+		const jobId = await withIdentity("bs_user_12").mutation(
+			api.backgroundStream.startStream,
+			{
+				chatId,
+				userId,
+				messageId: "msg-012",
+				model: "openai/gpt-4o",
+				provider: "openrouter",
+				messages: [{ role: "assistant", content: "Hello!" }],
+			},
+		);
+
+		expect(jobId).toBeDefined();
+		// If no error thrown, the null-seed path ran without issues
+		const job = await t.run(async (ctx) => ctx.db.get(jobId));
+		expect(job?.status).toBe("pending");
+	});
+
+	test("startStream seed text is null when user message has whitespace-only content", async () => {
+		const { userId, chatId } = await seedUserAndChat("bs_user_13");
+
+		const jobId = await withIdentity("bs_user_13").mutation(
+			api.backgroundStream.startStream,
+			{
+				chatId,
+				userId,
+				messageId: "msg-013",
+				model: "openai/gpt-4o",
+				provider: "openrouter",
+				messages: [{ role: "user", content: "   " }],
+			},
+		);
+
+		expect(jobId).toBeDefined();
+		const job = await t.run(async (ctx) => ctx.db.get(jobId));
+		expect(job?.status).toBe("pending");
+	});
+
+	test("startStream throws rate limit error after messageSend capacity is exhausted", async () => {
+		const { userId, chatId } = await seedUserAndChat("bs_rl_user");
+
+		const sends = [];
+		for (let i = 0; i < 10; i++) {
+			sends.push(
+				withIdentity("bs_rl_user").mutation(api.backgroundStream.startStream, {
+					chatId,
+					userId,
+					messageId: `msg-rl-${i}`,
+					model: "openai/gpt-4o",
+					provider: "openrouter",
+					messages: testMessages,
+				}).catch(() => {}),
+			);
+		}
+		await Promise.all(sends);
+
+		await expect(
+			withIdentity("bs_rl_user").mutation(api.backgroundStream.startStream, {
+				chatId,
+				userId,
+				messageId: "msg-rl-overflow",
+				model: "openai/gpt-4o",
+				provider: "openrouter",
+				messages: testMessages,
+			}),
+		).rejects.toThrow(/Too many streams started/);
+	});
+
 	test("failStream preserves partialContent when provided", async () => {
 		const { userId, chatId } = await seedUserAndChat("bs_user_11");
 

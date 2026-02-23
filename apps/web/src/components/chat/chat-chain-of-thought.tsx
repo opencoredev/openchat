@@ -27,8 +27,101 @@ export interface ChainOfThoughtStep {
 	status: "complete" | "active" | "pending" | "error";
 }
 
+type ChainPart = {
+	type: string;
+	state?: string;
+	text?: string;
+	toolCallId?: string;
+	input?: unknown;
+	output?: unknown;
+	errorText?: string;
+};
+
+type SearchResult = {
+	url?: string;
+	link?: string;
+	title?: string;
+	name?: string;
+	description?: string;
+	snippet?: string;
+	content?: string;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+	return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
+}
+
+function asSearchResult(value: unknown): SearchResult | null {
+	const rec = asRecord(value);
+	if (!rec) return null;
+	return {
+		url: typeof rec.url === "string" ? rec.url : undefined,
+		link: typeof rec.link === "string" ? rec.link : undefined,
+		title: typeof rec.title === "string" ? rec.title : undefined,
+		name: typeof rec.name === "string" ? rec.name : undefined,
+		description: typeof rec.description === "string" ? rec.description : undefined,
+		snippet: typeof rec.snippet === "string" ? rec.snippet : undefined,
+		content: typeof rec.content === "string" ? rec.content : undefined,
+	};
+}
+
+function asChainPart(value: unknown): ChainPart | null {
+	const rec = asRecord(value);
+	if (!rec || typeof rec.type !== "string") return null;
+	return {
+		type: rec.type,
+		state: typeof rec.state === "string" ? rec.state : undefined,
+		text: typeof rec.text === "string" ? rec.text : undefined,
+		toolCallId: typeof rec.toolCallId === "string" ? rec.toolCallId : undefined,
+		input: rec.input,
+		output: rec.output,
+		errorText: typeof rec.errorText === "string" ? rec.errorText : undefined,
+	};
+}
+
+function asToolState(
+	state: string | undefined,
+): "input-streaming" | "input-available" | "output-available" | "output-error" | undefined {
+	if (
+		state === "input-streaming" ||
+		state === "input-available" ||
+		state === "output-available" ||
+		state === "output-error"
+	) {
+		return state;
+	}
+	return undefined;
+}
+
+function normalizeSearchResults(results: unknown): SearchResult[] {
+	const topLevel = Array.isArray(results) ? results : null;
+	if (topLevel) {
+		return topLevel
+			.map(asSearchResult)
+			.filter((result): result is SearchResult => result !== null);
+	}
+
+	const obj = asRecord(results);
+	if (!obj) return [];
+
+	const candidates = [obj.results, obj.data, obj.items, obj.hits, obj.organic];
+	for (const candidate of candidates) {
+		if (!Array.isArray(candidate)) continue;
+		return candidate
+			.map(asSearchResult)
+			.filter((result): result is SearchResult => result !== null);
+	}
+
+	return [];
+}
+
+function getToolQuery(input: unknown): string | undefined {
+	const rec = asRecord(input);
+	return rec && typeof rec.query === "string" ? rec.query : undefined;
+}
+
 export function buildChainOfThoughtSteps(
-	parts: Array<any>,
+	parts: Array<unknown>,
 	reasoningRequested = false,
 ): {
 	steps: Array<ChainOfThoughtStep>;
@@ -40,7 +133,8 @@ export function buildChainOfThoughtSteps(
 	let hasTextContent = false;
 
 	for (let i = 0; i < parts.length; i++) {
-		const part = parts[i];
+		const part = asChainPart(parts[i]);
+		if (!part) continue;
 
 		if (part.type === "text") {
 			hasTextContent = true;
@@ -81,7 +175,7 @@ export function buildChainOfThoughtSteps(
 				toolName: toolName,
 				toolInput: part.input,
 				toolOutput: part.output,
-				toolState: part.state,
+				toolState: asToolState(part.state),
 				errorText: part.errorText,
 				status: isError ? "error" : isComplete ? "complete" : "active",
 			});
@@ -102,24 +196,7 @@ export function buildChainOfThoughtSteps(
 }
 
 function SearchResultsDisplay({ results, isExpanded }: { results: unknown; isExpanded: boolean }) {
-	let searchResults: Array<any> = [];
-
-	if (Array.isArray(results)) {
-		searchResults = results;
-	} else if (results && typeof results === "object") {
-		const obj = results as Record<string, unknown>;
-		if (Array.isArray(obj.results)) {
-			searchResults = obj.results;
-		} else if (Array.isArray(obj.data)) {
-			searchResults = obj.data;
-		} else if (Array.isArray(obj.items)) {
-			searchResults = obj.items;
-		} else if (Array.isArray(obj.hits)) {
-			searchResults = obj.hits;
-		} else if (Array.isArray(obj.organic)) {
-			searchResults = obj.organic;
-		}
-	}
+	const searchResults = normalizeSearchResults(results);
 
 	if (searchResults.length === 0) {
 		return <p className="text-xs text-muted-foreground">No results found</p>;
@@ -135,7 +212,7 @@ function SearchResultsDisplay({ results, isExpanded }: { results: unknown; isExp
 
 	return (
 		<div className="space-y-2">
-			{searchResults.slice(0, 5).map((result: any, i: number) => {
+			{searchResults.slice(0, 5).map((result, i: number) => {
 				const rawUrl = result.url || result.link;
 				const safeUrl = rawUrl ? replaceUtmSource(rawUrl) : null;
 				const displayTitle = result.title || result.name || (safeUrl ? rawUrl : null) || "Result";
@@ -277,8 +354,7 @@ export function ChainOfThought({
 	}
 
 	const getToolLabel = (step: ChainOfThoughtStep) => {
-		const input = step.toolInput as Record<string, unknown> | undefined;
-		const query = input?.query as string | undefined;
+		const query = getToolQuery(step.toolInput);
 		if (step.toolState === "output-available") {
 			return `Search: ${query || step.toolName || "tool"}`;
 		}

@@ -10,6 +10,9 @@
 
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+// betterAuth component schema – static import so register() stays synchronous
+// eslint-disable-next-line import/no-extraneous-dependencies
+import betterAuthSchemaDefault from '../../../node_modules/@convex-dev/better-auth/dist/component/schema.js';
 
 // Create modules object that convex-test expects (lazy-loaded functions)
 export const modules = {
@@ -32,6 +35,13 @@ export const modules = {
   './promptTemplates.ts': () => import('./promptTemplates'),
   './schema.ts': () => import('./schema'),
   './users.ts': () => import('./users'),
+  './userProfile.ts': () => import('./userProfile'),
+  './userApiKeys.ts': () => import('./userApiKeys'),
+  './userAuth.ts': () => import('./userAuth'),
+  './userDelete.ts': () => import('./userDelete'),
+  './userDeleteBatch.ts': () => import('./userDeleteBatch'),
+  './message_queries.ts': () => import('./message_queries'),
+  './message_helpers.ts': () => import('./message_helpers'),
   './lib/batchFileUrls.ts': () => import('./lib/batchFileUrls'),
   './lib/billingUtils.ts': () => import('./lib/billingUtils'),
   './lib/dbStats.ts': () => import('./lib/dbStats'),
@@ -83,3 +93,31 @@ export const rateLimiter = {
 
 // Also export these for backwards compatibility
 export { rateLimiterComponentSchema, rateLimiterComponentModules };
+
+// ---------------------------------------------------------------------------
+// betterAuth component setup for tests that call deleteUserRecord / deleteAccount
+// ---------------------------------------------------------------------------
+
+// betterAuth component modules (lazy-loaded to avoid import side effects)
+const betterAuthComponentModules = {
+	'./adapter.ts': () => import('../../../node_modules/@convex-dev/better-auth/dist/component/adapter.js'),
+	'./schema.ts': () => import('../../../node_modules/@convex-dev/better-auth/dist/component/schema.js'),
+	'./_generated/api.ts': () => import('../../../node_modules/@convex-dev/better-auth/dist/component/_generated/api.js'),
+	'./_generated/server.ts': () => import('../../../node_modules/@convex-dev/better-auth/dist/component/_generated/server.js'),
+};
+
+// betterAuth schema imported at top of file (stays synchronous).
+
+/**
+ * betterAuth test helper for tests that exercise deleteUserRecord / deleteAccount.
+ * Registers the betterAuth component so ctx.runMutation(components.betterAuth.adapter.deleteMany, ...)
+ * resolves against the in-memory test database.
+ */
+export const betterAuth = {
+	modules: betterAuthComponentModules,
+	register: (t: any, name: string = "betterAuth") => {
+		t.registerComponent(name, betterAuthSchemaDefault, betterAuthComponentModules);
+	},
+};
+
+export { betterAuthComponentModules };

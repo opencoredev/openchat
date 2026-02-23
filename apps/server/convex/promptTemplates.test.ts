@@ -116,6 +116,22 @@ describe("promptTemplates.create", () => {
 		expect(template?.command).toBe("/test-command");
 	});
 
+	test("should truncate command exceeding max length", async () => {
+		const externalId = "user_template_cmd_trunc";
+		const { authed, userId } = await createUser(t, externalId);
+
+		const longCommand = "/" + "a".repeat(60);
+		const result = await authed.mutation(api.promptTemplates.create, {
+			userId,
+			name: "Long Command",
+			command: longCommand,
+			template: "Content",
+		});
+
+		const template = await t.run(async (ctx) => ctx.db.get(result.templateId));
+		expect(template?.command.length).toBeLessThanOrEqual(51);
+	});
+
 	test("should sanitize command to lowercase and alphanumeric", async () => {
 		const externalId = "user_template_4";
 		const { authed, userId } = await createUser(t, externalId);
@@ -379,7 +395,43 @@ describe("promptTemplates.list", () => {
 		expect(result.nextCursor).toBeDefined(); // Should have more results
 	});
 
-		test("should not return templates from other users", async () => {
+		test("should use default limit when limit is 0 (invalid)", async () => {
+		const externalId = "user_list_limit_0";
+		const { authed, userId } = await createUser(t, externalId);
+
+		const result = await authed.query(api.promptTemplates.list, {
+			userId,
+			limit: 0,
+		});
+
+		expect(result.templates).toBeDefined();
+	});
+
+	test("should use default limit when limit is negative (invalid)", async () => {
+		const externalId = "user_list_limit_neg";
+		const { authed, userId } = await createUser(t, externalId);
+
+		const result = await authed.query(api.promptTemplates.list, {
+			userId,
+			limit: -5,
+		});
+
+		expect(result.templates).toBeDefined();
+	});
+
+	test("should cap limit to max when limit exceeds maximum", async () => {
+		const externalId = "user_list_limit_max";
+		const { authed, userId } = await createUser(t, externalId);
+
+		const result = await authed.query(api.promptTemplates.list, {
+			userId,
+			limit: 999,
+		});
+
+		expect(result.templates).toBeDefined();
+	});
+
+	test("should not return templates from other users", async () => {
 			const externalId1 = "user_list_5a";
 			const externalId2 = "user_list_5b";
 			const user1 = await createUser(t, externalId1);
@@ -605,7 +657,75 @@ describe("promptTemplates.update", () => {
 		expect(result.ok).toBe(true);
 	});
 
-		test("should enforce rate limit on updates", async () => {
+		test("should update description field", async () => {
+		const externalId = "user_update_desc_1";
+		const { authed, userId } = await createUser(t, externalId);
+
+		const { templateId } = await authed.mutation(api.promptTemplates.create, {
+			userId,
+			name: "Template",
+			command: "/desctest",
+			template: "Content",
+		});
+
+		const result = await authed.mutation(api.promptTemplates.update, {
+			templateId,
+			userId,
+			description: "Updated description",
+		});
+
+		expect(result.ok).toBe(true);
+		const template = await t.run(async (ctx) => ctx.db.get(templateId));
+		expect(template?.description).toBe("Updated description");
+	});
+
+	test("should update category field", async () => {
+		const externalId = "user_update_cat_1";
+		const { authed, userId } = await createUser(t, externalId);
+
+		const { templateId } = await authed.mutation(api.promptTemplates.create, {
+			userId,
+			name: "Template",
+			command: "/cattest",
+			template: "Content",
+			category: "general",
+		});
+
+		const result = await authed.mutation(api.promptTemplates.update, {
+			templateId,
+			userId,
+			category: "coding",
+		});
+
+		expect(result.ok).toBe(true);
+		const template = await t.run(async (ctx) => ctx.db.get(templateId));
+		expect(template?.category).toBe("coding");
+	});
+
+	test("should update isDraft field", async () => {
+		const externalId = "user_update_draft_1";
+		const { authed, userId } = await createUser(t, externalId);
+
+		const { templateId } = await authed.mutation(api.promptTemplates.create, {
+			userId,
+			name: "Draft Template",
+			command: "/drafttest",
+			template: "Content",
+			isDraft: false,
+		});
+
+		const result = await authed.mutation(api.promptTemplates.update, {
+			templateId,
+			userId,
+			isDraft: true,
+		});
+
+		expect(result.ok).toBe(true);
+		const template = await t.run(async (ctx) => ctx.db.get(templateId));
+		expect(template?.isDraft).toBe(true);
+	});
+
+	test("should enforce rate limit on updates", async () => {
 
 		const externalId = `user_update_rate_${Math.random().toString(36)}`;
 		const { authed, userId } = await createUser(t, externalId);
@@ -693,6 +813,74 @@ describe("promptTemplates.autoSave", () => {
 		const template = await t.run(async (ctx) => ctx.db.get(templateId));
 		expect(template?.name).toBe("Auto Updated");
 		expect(template?.template).toBe("Auto Content");
+	});
+
+	test("should auto-save template-only update without name (line 337 false branch)", async () => {
+		const externalId = "user_autosave_noname_1";
+		const { authed, userId } = await createUser(t, externalId);
+
+		const { templateId } = await authed.mutation(api.promptTemplates.create, {
+			userId,
+			name: "Original Name",
+			command: "/autononame",
+			template: "Original Content",
+		});
+
+		const result = await authed.mutation(api.promptTemplates.autoSave, {
+			templateId,
+			userId,
+			template: "Updated Content Only",
+		});
+
+		expect(result.ok).toBe(true);
+		const template = await t.run(async (ctx) => ctx.db.get(templateId));
+		expect(template?.name).toBe("Original Name");
+		expect(template?.template).toBe("Updated Content Only");
+	});
+
+	test("should auto-save name-only update without template (line 340 false branch)", async () => {
+		const externalId = "user_autosave_notemplate_1";
+		const { authed, userId } = await createUser(t, externalId);
+
+		const { templateId } = await authed.mutation(api.promptTemplates.create, {
+			userId,
+			name: "Original Name",
+			command: "/autonotemplate",
+			template: "Original Content",
+		});
+
+		const result = await authed.mutation(api.promptTemplates.autoSave, {
+			templateId,
+			userId,
+			name: "Updated Name Only",
+		});
+
+		expect(result.ok).toBe(true);
+		const template = await t.run(async (ctx) => ctx.db.get(templateId));
+		expect(template?.name).toBe("Updated Name Only");
+		expect(template?.template).toBe("Original Content");
+	});
+
+	test("should return ok false when template is deleted (line 330)", async () => {
+		const externalId = "user_autosave_del_1";
+		const { authed, userId } = await createUser(t, externalId);
+
+		const { templateId } = await authed.mutation(api.promptTemplates.create, {
+			userId,
+			name: "To Delete",
+			command: "/autodel",
+			template: "Content",
+		});
+
+		await authed.mutation(api.promptTemplates.remove, { templateId, userId });
+
+		const result = await authed.mutation(api.promptTemplates.autoSave, {
+			templateId,
+			userId,
+			name: "Should Not Update",
+		});
+
+		expect(result.ok).toBe(false);
 	});
 
 	test("should enforce rate limit on auto-save", async () => {
@@ -880,6 +1068,28 @@ describe("promptTemplates.incrementUsage", () => {
 		});
 
 		expect(result.ok).toBe(false);
+	});
+
+	test("increments from undefined usageCount via direct insert (line 394 ?? branch)", async () => {
+		const externalId = "user_usage_nullcount_1";
+		const { authed, userId } = await createUser(t, externalId);
+
+		const templateId = await t.run(async (ctx) =>
+			ctx.db.insert("promptTemplates", {
+				userId,
+				name: "No Count Template",
+				command: "/nocount",
+				template: "Content",
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			}),
+		);
+
+		const result = await authed.mutation(api.promptTemplates.incrementUsage, { templateId, userId });
+		expect(result.ok).toBe(true);
+
+		const template = await t.run(async (ctx) => ctx.db.get(templateId));
+		expect(template?.usageCount).toBe(1);
 	});
 });
 

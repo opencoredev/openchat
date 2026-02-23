@@ -7,8 +7,9 @@ import { createConvexServerClient } from "@/lib/convex-server";
 import { getAuthUser, getConvexAuthToken, isSameOrigin } from "@/lib/server-auth";
 import {
 	authRatelimit,
+	isRedisConfigured,
+	redisStore,
 	shouldFailClosedForMissingUpstash,
-	upstashRedis,
 	workflowClient,
 } from "@/lib/upstash";
 import { getWorkflowAuthToken, storeWorkflowAuthToken } from "@/lib/workflow-auth-token";
@@ -69,7 +70,7 @@ function parseDeletePayload(raw: unknown): DeleteAccountPayload | null {
 }
 
 async function clearRedisUserKeys(userId: string): Promise<number> {
-	if (!upstashRedis) return 0;
+	if (!isRedisConfigured()) return 0;
 
 	const directKeys = [
 		`user:${userId}:unread`,
@@ -83,19 +84,19 @@ async function clearRedisUserKeys(userId: string): Promise<number> {
 
 	let deleted = 0;
 	if (directKeys.length > 0) {
-		deleted += await upstashRedis.del(...directKeys);
+		deleted += await redisStore.del(...directKeys);
 	}
 
 	for (const pattern of patternKeys) {
 		let cursor: string | number = "0";
 		do {
-			const [nextCursor, keys]: [string, Array<string>] = await upstashRedis.scan(cursor, {
+			const [nextCursor, keys]: [string, Array<string>] = await redisStore.scan(cursor, {
 				match: pattern,
 				count: 100,
 			});
 			cursor = nextCursor;
 			if (keys.length > 0) {
-				deleted += await upstashRedis.del(...keys);
+				deleted += await redisStore.del(...keys);
 			}
 		} while (String(cursor) !== "0");
 	}

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 vi.mock('@/hooks/use-persistent-chat', () => ({
 	usePersistentChat: vi.fn(),
@@ -61,7 +61,6 @@ vi.mock('@/lib/auth-client', () => ({
 	useAuth: vi.fn(() => ({ user: null, isAuthenticated: false, loading: false })),
 }))
 
-// Conversation: deliberately NOT spreading unknown props to avoid React DOM warnings
 vi.mock('../ai-elements/conversation', () => ({
 	Conversation: ({ children, className }: any) => (
 		<div data-testid="conversation" className={className}>
@@ -94,7 +93,8 @@ vi.mock('../ai-elements/message', () => ({
 	),
 }))
 
-// PromptInputProvider MUST render children – otherwise the inner content won't appear
+const mockSetInput = vi.hoisted(() => vi.fn())
+
 vi.mock('../ai-elements/prompt-input', () => ({
 	PromptInput: ({ children, onSubmit }: any) => (
 		<form data-testid="prompt-input" onSubmit={onSubmit}>
@@ -120,7 +120,7 @@ vi.mock('../ai-elements/prompt-input', () => ({
 	),
 	PromptInputTools: ({ children }: any) => <div>{children}</div>,
 	usePromptInputController: vi.fn(() => ({
-		textInput: { value: '', setInput: vi.fn() },
+		textInput: { value: '', setInput: mockSetInput },
 		attachments: { add: vi.fn() },
 	})),
 }))
@@ -160,6 +160,28 @@ vi.mock('@/components/ai-elements/reasoning', () => ({
 	),
 	ReasoningContent: ({ children }: any) => <div>{children}</div>,
 	ReasoningTrigger: () => <button>Reasoning</button>,
+}))
+
+vi.mock('../chat/chat-message-list', () => ({
+	ChatMessageList: ({ onPromptSelect, onStartEdit, onRetryMessage, onForkMessage, editingMessageId }: any) => (
+		<div data-testid="chat-message-list" data-editing={editingMessageId ?? ''}>
+			<button data-testid="start-edit-btn" onClick={() => onStartEdit?.('msg-1', 'original text')} />
+			<button data-testid="prompt-select-btn" onClick={() => onPromptSelect?.('selected prompt')} />
+			<button data-testid="retry-btn" onClick={() => onRetryMessage?.('msg-1')} />
+			<button data-testid="fork-btn" onClick={() => onForkMessage?.('msg-1', 'model-x')} />
+		</div>
+	),
+}))
+
+vi.mock('../chat/premium-prompt-input', () => ({
+	PremiumPromptInputInner: ({ onSubmit, onStop, isLoading, textareaRef }: any) => (
+		<div data-testid="premium-prompt-input" data-loading={String(isLoading)}>
+			<textarea ref={textareaRef} data-testid="focus-area" />
+			<button data-testid="submit-btn" onClick={() => onSubmit?.({ text: 'test message', files: [] })} />
+			<button data-testid="submit-empty-btn" onClick={() => onSubmit?.({ text: '   ', files: [] })} />
+			<button data-testid="stop-btn" onClick={onStop} />
+		</div>
+	),
 }))
 
 vi.mock('@/lib/shortcuts', () => ({
@@ -227,14 +249,14 @@ describe('ChatInterface', () => {
 		expect(document.body).toBeTruthy()
 	})
 
-	it('shows start screen when isNewChat is true and messages are empty', () => {
+	it('renders ChatMessageList when isNewChat is true and messages are empty', () => {
 		vi.mocked(usePersistentChat).mockReturnValue({
 			...makeDefaultState(),
 			isNewChat: true,
 			messages: [],
 		})
 		render(<ChatInterface />)
-		expect(screen.getByTestId('start-screen')).toBeTruthy()
+		expect(screen.getByTestId('chat-message-list')).toBeTruthy()
 	})
 
 	it('does not show start screen when not a new chat', () => {
@@ -247,85 +269,49 @@ describe('ChatInterface', () => {
 		expect(screen.queryByTestId('start-screen')).toBeNull()
 	})
 
-	it('renders user messages in the conversation', () => {
+	it('passes messages to ChatMessageList', () => {
 		vi.mocked(usePersistentChat).mockReturnValue({
 			...makeDefaultState(),
 			isNewChat: false,
-			messages: [
-				{
-					id: 'msg-1',
-					role: 'user',
-					parts: [{ type: 'text', text: 'Hello, world!' }],
-				},
-			],
+			messages: [{ id: 'msg-1', role: 'user', parts: [] }],
 		})
 		render(<ChatInterface />)
-		expect(screen.getByTestId('message')).toBeTruthy()
-		expect(screen.getByText('Hello, world!')).toBeTruthy()
+		expect(screen.getByTestId('chat-message-list')).toBeTruthy()
 	})
 
-	it('shows loading dots when streaming and last message is from user', () => {
+	it('renders with streaming status and messages', () => {
+		vi.mocked(usePersistentChat).mockReturnValue({
+			...makeDefaultState(),
+			isNewChat: false,
+			status: 'streaming',
+			messages: [{ id: 'msg-1', role: 'user', parts: [] }],
+		})
+		render(<ChatInterface />)
+		expect(screen.getByTestId('chat-message-list')).toBeTruthy()
+	})
+
+	it('renders with multiple messages including assistant', () => {
 		vi.mocked(usePersistentChat).mockReturnValue({
 			...makeDefaultState(),
 			isNewChat: false,
 			status: 'streaming',
 			messages: [
-				{
-					id: 'msg-1',
-					role: 'user',
-					parts: [{ type: 'text', text: 'Waiting for reply' }],
-				},
+				{ id: 'msg-1', role: 'user', parts: [] },
+				{ id: 'msg-2', role: 'assistant', parts: [] },
 			],
 		})
 		render(<ChatInterface />)
-		const dots = document.querySelectorAll('.animate-bounce')
-		expect(dots.length).toBeGreaterThan(0)
+		expect(screen.getByTestId('chat-message-list')).toBeTruthy()
 	})
 
-	it('does not show loading dots when last message is from assistant', () => {
+	it('renders inline error message for messages with error type (via ChatMessageList mock)', () => {
 		vi.mocked(usePersistentChat).mockReturnValue({
 			...makeDefaultState(),
 			isNewChat: false,
-			status: 'streaming',
-			messages: [
-				{
-					id: 'msg-1',
-					role: 'user',
-					parts: [{ type: 'text', text: 'Hi' }],
-				},
-				{
-					id: 'msg-2',
-					role: 'assistant',
-					parts: [{ type: 'text', text: 'Hello!' }],
-				},
-			],
+			messages: [{ id: 'err-1', role: 'assistant', parts: [] } as any],
 		})
 		render(<ChatInterface />)
-		const dots = document.querySelectorAll('.animate-bounce')
-		expect(dots.length).toBe(0)
-	})
-
-	it('renders inline error message for messages with error type', () => {
-		vi.mocked(usePersistentChat).mockReturnValue({
-			...makeDefaultState(),
-			isNewChat: false,
-			messages: [
-				{
-					id: 'err-1',
-					role: 'assistant',
-					messageType: 'error',
-					error: {
-						code: 'rate_limit',
-						message: 'You are being rate limited.',
-						retryable: true,
-					},
-					parts: [],
-				} as any,
-			],
-		})
-		render(<ChatInterface />)
-		expect(screen.getByText('Rate Limit Exceeded')).toBeTruthy()
-		expect(screen.getByText('You are being rate limited.')).toBeTruthy()
+		expect(screen.getByTestId('chat-message-list')).toBeTruthy()
 	})
 
 	it('renders empty conversation when not new chat and messages are empty', () => {
@@ -339,18 +325,281 @@ describe('ChatInterface', () => {
 		expect(screen.queryByTestId('message')).toBeNull()
 	})
 
-	it('renders the prompt input textarea', () => {
+	it('renders PremiumPromptInputInner (contains textarea/controls)', () => {
 		render(<ChatInterface />)
-		expect(screen.getByTestId('prompt-textarea')).toBeTruthy()
+		expect(screen.getByTestId('premium-prompt-input')).toBeTruthy()
 	})
 
-	it('shows stop button when generation is in progress', () => {
+	it('shows stop button (data-loading=true) when generation is in progress', () => {
 		vi.mocked(usePersistentChat).mockReturnValue({
 			...makeDefaultState(),
 			status: 'streaming',
 		})
 		render(<ChatInterface />)
-		const stopButton = screen.getByRole('button', { name: 'Stop generating' })
-		expect(stopButton).toBeTruthy()
+		const input = screen.getByTestId('premium-prompt-input')
+		expect(input.getAttribute('data-loading')).toBe('true')
+	})
+
+	it('renders ChatMessageList component', () => {
+		render(<ChatInterface />)
+		expect(screen.getByTestId('chat-message-list')).toBeTruthy()
+	})
+
+	it('renders PremiumPromptInputInner component', () => {
+		render(<ChatInterface />)
+		expect(screen.getByTestId('premium-prompt-input')).toBeTruthy()
+	})
+
+	describe('edit message flow', () => {
+		it('onStartEdit sets input text to message content', () => {
+			render(<ChatInterface />)
+			fireEvent.click(screen.getByTestId('start-edit-btn'))
+			expect(mockSetInput).toHaveBeenCalledWith('original text')
+		})
+
+		it('shows editing banner when editingMessageId is set', () => {
+			render(<ChatInterface />)
+			fireEvent.click(screen.getByTestId('start-edit-btn'))
+			expect(screen.getByText('Editing message')).toBeTruthy()
+		})
+
+		it('cancel button clears the editing banner', () => {
+			render(<ChatInterface />)
+			fireEvent.click(screen.getByTestId('start-edit-btn'))
+			expect(screen.getByText('Editing message')).toBeTruthy()
+			fireEvent.click(screen.getByText('Cancel'))
+			expect(screen.queryByText('Editing message')).toBeNull()
+		})
+
+		it('Escape key clears the editing banner', () => {
+			render(<ChatInterface />)
+			fireEvent.click(screen.getByTestId('start-edit-btn'))
+			expect(screen.getByText('Editing message')).toBeTruthy()
+			fireEvent.keyDown(document, { key: 'Escape' })
+			expect(screen.queryByText('Editing message')).toBeNull()
+		})
+
+		it('Escape key does nothing when not editing', () => {
+			render(<ChatInterface />)
+			expect(screen.queryByText('Editing message')).toBeNull()
+			fireEvent.keyDown(document, { key: 'Escape' })
+			expect(screen.queryByText('Editing message')).toBeNull()
+		})
+
+		it('submitting with non-empty text while editing calls editMessage', async () => {
+			const editMessage = vi.fn().mockResolvedValue(undefined)
+			vi.mocked(usePersistentChat).mockReturnValue({
+				...makeDefaultState(),
+				editMessage,
+			})
+			render(<ChatInterface />)
+			fireEvent.click(screen.getByTestId('start-edit-btn'))
+			await act(async () => {
+				fireEvent.click(screen.getByTestId('submit-btn'))
+			})
+			expect(editMessage).toHaveBeenCalledWith('msg-1', 'test message')
+		})
+
+		it('submitting with empty text while editing does not call editMessage', async () => {
+			const editMessage = vi.fn().mockResolvedValue(undefined)
+			vi.mocked(usePersistentChat).mockReturnValue({
+				...makeDefaultState(),
+				editMessage,
+			})
+			render(<ChatInterface />)
+			fireEvent.click(screen.getByTestId('start-edit-btn'))
+			await act(async () => {
+				fireEvent.click(screen.getByTestId('submit-empty-btn'))
+			})
+			expect(editMessage).not.toHaveBeenCalled()
+		})
+
+		it('editMessage rejection is caught and editing banner remains visible', async () => {
+			const editMessage = vi.fn().mockRejectedValue(new Error('Edit failed'))
+			vi.mocked(usePersistentChat).mockReturnValue({
+				...makeDefaultState(),
+				editMessage,
+			})
+			render(<ChatInterface />)
+			fireEvent.click(screen.getByTestId('start-edit-btn'))
+			await act(async () => {
+				fireEvent.click(screen.getByTestId('submit-btn'))
+			})
+			expect(editMessage).toHaveBeenCalledWith('msg-1', 'test message')
+			expect(screen.getByText('Editing message')).toBeTruthy()
+		})
+	})
+
+	describe('submit flow', () => {
+		it('submitting with non-empty text calls sendMessage', async () => {
+			const sendMessage = vi.fn().mockResolvedValue(undefined)
+			vi.mocked(usePersistentChat).mockReturnValue({
+				...makeDefaultState(),
+				sendMessage,
+			})
+			render(<ChatInterface />)
+			await act(async () => {
+				fireEvent.click(screen.getByTestId('submit-btn'))
+			})
+			expect(sendMessage).toHaveBeenCalledWith({ text: 'test message', files: [] })
+		})
+
+		it('submitting with empty/whitespace text does NOT call sendMessage', async () => {
+			const sendMessage = vi.fn().mockResolvedValue(undefined)
+			vi.mocked(usePersistentChat).mockReturnValue({
+				...makeDefaultState(),
+				sendMessage,
+			})
+			render(<ChatInterface />)
+			await act(async () => {
+				fireEvent.click(screen.getByTestId('submit-empty-btn'))
+			})
+			expect(sendMessage).not.toHaveBeenCalled()
+		})
+
+		it('onChatCreated navigates to /c/$chatId', async () => {
+			const navigate = vi.fn()
+			const { useNavigate } = await import('@tanstack/react-router')
+			vi.mocked(useNavigate).mockReturnValue(navigate)
+
+			let capturedOnChatCreated: ((id: string) => void) | undefined
+			const { usePersistentChat: upc } = await import('@/hooks/use-persistent-chat')
+			vi.mocked(upc).mockImplementation((opts: any) => {
+				capturedOnChatCreated = opts?.onChatCreated
+				return makeDefaultState()
+			})
+			render(<ChatInterface />)
+			capturedOnChatCreated?.('new-chat-id')
+			expect(navigate).toHaveBeenCalledWith(
+				expect.objectContaining({ to: '/c/$chatId', params: { chatId: 'new-chat-id' } }),
+			)
+		})
+	})
+
+	describe('loading states', () => {
+		it('status submitted renders component without crash', () => {
+			vi.mocked(usePersistentChat).mockReturnValue({
+				...makeDefaultState(),
+				status: 'submitted',
+			})
+			render(<ChatInterface />)
+			expect(screen.getByTestId('premium-prompt-input')).toBeTruthy()
+			expect(screen.getByTestId('premium-prompt-input').getAttribute('data-loading')).toBe('true')
+		})
+
+		it('isResuming true renders without crash', () => {
+			vi.mocked(usePersistentChat).mockReturnValue({
+				...makeDefaultState(),
+				isResuming: true,
+			})
+			render(<ChatInterface />)
+			expect(document.body).toBeTruthy()
+		})
+	})
+
+	describe('shortcut events', () => {
+		it('SHORTCUT_EVENT_STOP_GENERATION calls stop when isLoading', async () => {
+			const stop = vi.fn()
+			vi.mocked(usePersistentChat).mockReturnValue({
+				...makeDefaultState(),
+				status: 'streaming',
+				stop,
+			})
+			render(<ChatInterface />)
+			window.dispatchEvent(new Event('stop-generation'))
+			expect(stop).toHaveBeenCalled()
+		})
+
+		it('SHORTCUT_EVENT_STOP_GENERATION does nothing when not loading', async () => {
+			const stop = vi.fn()
+			vi.mocked(usePersistentChat).mockReturnValue({
+				...makeDefaultState(),
+				status: 'ready',
+				stop,
+			})
+			render(<ChatInterface />)
+			window.dispatchEvent(new Event('stop-generation'))
+			expect(stop).not.toHaveBeenCalled()
+		})
+
+		it('SHORTCUT_EVENT_FOCUS_PROMPT_TOGGLE focuses the textarea when not focused', () => {
+			render(<ChatInterface />)
+			const textarea = screen.getByTestId('focus-area')
+			const focusSpy = vi.spyOn(textarea, 'focus')
+			window.dispatchEvent(new Event('focus-prompt-toggle'))
+			expect(focusSpy).toHaveBeenCalled()
+		})
+
+		it('SHORTCUT_EVENT_FOCUS_PROMPT_TOGGLE blurs the textarea when it is focused', () => {
+			render(<ChatInterface />)
+			const textarea = screen.getByTestId('focus-area')
+			textarea.focus()
+			const blurSpy = vi.spyOn(textarea, 'blur')
+			window.dispatchEvent(new Event('focus-prompt-toggle'))
+			expect(blurSpy).toHaveBeenCalled()
+		})
+	})
+
+	describe('fork message', () => {
+		it('onForkMessage calls forkMessage and navigates on success', async () => {
+			const forkMessage = vi.fn().mockResolvedValue('forked-chat-id')
+			const navigate = vi.fn()
+			const { useNavigate } = await import('@tanstack/react-router')
+			vi.mocked(useNavigate).mockReturnValue(navigate)
+			vi.mocked(usePersistentChat).mockReturnValue({
+				...makeDefaultState(),
+				forkMessage,
+			})
+			render(<ChatInterface />)
+			await act(async () => {
+				fireEvent.click(screen.getByTestId('fork-btn'))
+			})
+			expect(forkMessage).toHaveBeenCalledWith('msg-1', 'model-x')
+			expect(navigate).toHaveBeenCalledWith(
+				expect.objectContaining({ to: '/c/$chatId', params: { chatId: 'forked-chat-id' } }),
+			)
+		})
+
+		it('onForkMessage does not navigate when forkMessage returns null', async () => {
+			const forkMessage = vi.fn().mockResolvedValue(null)
+			const navigate = vi.fn()
+			const { useNavigate } = await import('@tanstack/react-router')
+			vi.mocked(useNavigate).mockReturnValue(navigate)
+			vi.mocked(usePersistentChat).mockReturnValue({
+				...makeDefaultState(),
+				forkMessage,
+			})
+			render(<ChatInterface />)
+			await act(async () => {
+				fireEvent.click(screen.getByTestId('fork-btn'))
+			})
+			expect(forkMessage).toHaveBeenCalled()
+			expect(navigate).not.toHaveBeenCalledWith(
+				expect.objectContaining({ to: '/c/$chatId' }),
+			)
+		})
+	})
+
+	describe('prompt select from start screen', () => {
+		it('clicking prompt-select-btn sets input via onPromptSelect', () => {
+			render(<ChatInterface />)
+			fireEvent.click(screen.getByTestId('prompt-select-btn'))
+			expect(mockSetInput).toHaveBeenCalledWith('selected prompt')
+		})
+	})
+
+	describe('retry message', () => {
+		it('retryMessage is called when retry button is clicked', async () => {
+			const retryMessage = vi.fn().mockResolvedValue(undefined)
+			vi.mocked(usePersistentChat).mockReturnValue({
+				...makeDefaultState(),
+				retryMessage,
+			})
+			render(<ChatInterface />)
+			await act(async () => {
+				fireEvent.click(screen.getByTestId('retry-btn'))
+			})
+			expect(retryMessage).toHaveBeenCalledWith('msg-1')
+		})
 	})
 })

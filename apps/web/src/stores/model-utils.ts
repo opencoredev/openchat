@@ -274,7 +274,9 @@ export function getModelById(modelList: Array<Model>, id: string): Model | undef
 }
 
 export function prefetchModels() {
-	fetchAllModels().catch(() => {});
+	fetchAllModels().catch((error) => {
+		console.warn("[ModelCache] Prefetch failed", error);
+	});
 }
 
 export function getCacheStatus() {

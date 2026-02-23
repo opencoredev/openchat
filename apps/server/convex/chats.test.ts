@@ -1468,3 +1468,377 @@ describe('chats.getChatReadStatuses', () => {
 		expect([null, '_end_cursor']).toContain(result.nextCursor);
 	});
 });
+
+describe('chats.remove rate limit (line 165)', () => {
+	let t: ReturnType<typeof createConvexTest>;
+	let userId: Id<'users'>;
+
+	beforeEach(async () => {
+		vi.useFakeTimers();
+		t = createConvexTest();
+		userId = await t.run(async (ctx) =>
+			ctx.db.insert('users', {
+				externalId: 'rl-remove-user',
+				email: 'rl-remove@example.com',
+				name: 'RL Remove User',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('throws rate limit error after chatDelete capacity exhausted (capacity 3)', async () => {
+		const chatIds: Id<'chats'>[] = [];
+		for (let i = 0; i < 4; i++) {
+			const c = await asExternalId(t, 'rl-remove-user').mutation(api.chats.create, { userId, title: `Chat ${i}` });
+			chatIds.push(c.chatId);
+		}
+
+		for (let i = 0; i < 3; i++) {
+			await asExternalId(t, 'rl-remove-user').mutation(api.chats.remove, { userId, chatId: chatIds[i]! });
+		}
+
+		await expect(
+			asExternalId(t, 'rl-remove-user').mutation(api.chats.remove, { userId, chatId: chatIds[3]! })
+		).rejects.toThrow();
+	});
+});
+
+describe('chats.removeBulk rate limit (line 232)', () => {
+	let t: ReturnType<typeof createConvexTest>;
+	let userId: Id<'users'>;
+
+	beforeEach(async () => {
+		vi.useFakeTimers();
+		t = createConvexTest();
+		userId = await t.run(async (ctx) =>
+			ctx.db.insert('users', {
+				externalId: 'rl-bulk-user',
+				email: 'rl-bulk@example.com',
+				name: 'RL Bulk User',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('throws rate limit error when bulk delete exceeds capacity (capacity 50)', async () => {
+		const chatIds: Id<'chats'>[] = [];
+		for (let i = 0; i < 51; i++) {
+			const c = await t.run(async (ctx) =>
+				ctx.db.insert('chats', {
+					userId,
+					title: `Chat ${i}`,
+					createdAt: Date.now(),
+					updatedAt: Date.now(),
+				})
+			);
+			chatIds.push(c);
+		}
+
+		await asExternalId(t, 'rl-bulk-user').mutation(api.chats.removeBulk, {
+			userId,
+			chatIds: chatIds.slice(0, 50),
+		});
+
+		await expect(
+			asExternalId(t, 'rl-bulk-user').mutation(api.chats.removeBulk, {
+				userId,
+				chatIds: chatIds.slice(50),
+			})
+		).rejects.toThrow();
+	});
+});
+
+describe('chats.create rate limit (line 132)', () => {
+	let t: ReturnType<typeof createConvexTest>;
+	let userId: Id<'users'>;
+
+	beforeEach(async () => {
+		vi.useFakeTimers();
+		t = createConvexTest();
+		userId = await t.run(async (ctx) =>
+			ctx.db.insert('users', {
+				externalId: 'rl-create-user',
+				email: 'rl-create@example.com',
+				name: 'RL Create User',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('throws rate limit error after chatCreate capacity exhausted', async () => {
+		for (let i = 0; i < 5; i++) {
+			await asExternalId(t, 'rl-create-user').mutation(api.chats.create, { userId, title: `Chat ${i}` });
+		}
+		await expect(
+			asExternalId(t, 'rl-create-user').mutation(api.chats.create, { userId, title: 'Over limit' })
+		).rejects.toThrow();
+	});
+});
+
+describe('chats.checkExportRateLimit rate limit (line 325)', () => {
+	let t: ReturnType<typeof createConvexTest>;
+	let userId: Id<'users'>;
+
+	beforeEach(async () => {
+		vi.useFakeTimers();
+		t = createConvexTest();
+		userId = await t.run(async (ctx) =>
+			ctx.db.insert('users', {
+				externalId: 'rl-export-user',
+				email: 'rl-export@example.com',
+				name: 'RL Export User',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('throws after export capacity exhausted (capacity 2)', async () => {
+		for (let i = 0; i < 2; i++) {
+			await asExternalId(t, 'rl-export-user').mutation(api.chats.checkExportRateLimit, { userId });
+		}
+		await expect(
+			asExternalId(t, 'rl-export-user').mutation(api.chats.checkExportRateLimit, { userId })
+		).rejects.toThrow();
+	});
+});
+
+describe('chats.markChatAsRead additional paths', () => {
+	let t: ReturnType<typeof createConvexTest>;
+	let userId: Id<'users'>;
+
+	beforeEach(async () => {
+		vi.useFakeTimers();
+		t = createConvexTest();
+		userId = await t.run(async (ctx) =>
+			ctx.db.insert('users', {
+				externalId: 'mark-read-user',
+				email: 'mark-read@example.com',
+				name: 'Mark Read User',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('returns ok: false when chat belongs to another user (line 355)', async () => {
+		const otherId = await t.run(async (ctx) =>
+			ctx.db.insert('users', {
+				externalId: 'other-mark',
+				email: 'other-mark@example.com',
+				name: 'Other Mark',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+		const chatId = await t.run(async (ctx) =>
+			ctx.db.insert('chats', {
+				userId: otherId,
+				title: 'Other Chat',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+
+		const result = await asExternalId(t, 'mark-read-user').mutation(api.chats.markChatAsRead, { userId, chatId });
+		expect(result.ok).toBe(false);
+	});
+
+	it('updates existing read status record when calling markChatAsRead twice (line 370)', async () => {
+		const chatId = await t.run(async (ctx) =>
+			ctx.db.insert('chats', {
+				userId,
+				title: 'My Chat',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+
+		await asExternalId(t, 'mark-read-user').mutation(api.chats.markChatAsRead, { userId, chatId });
+		const firstTime = await t.run(async (ctx) => {
+			const record = await ctx.db.query('chatReadStatus').filter(q => q.eq(q.field('chatId'), chatId)).unique();
+			return record?.lastReadAt;
+		});
+
+		vi.advanceTimersByTime(1000);
+
+		await asExternalId(t, 'mark-read-user').mutation(api.chats.markChatAsRead, { userId, chatId });
+		const secondTime = await t.run(async (ctx) => {
+			const record = await ctx.db.query('chatReadStatus').filter(q => q.eq(q.field('chatId'), chatId)).unique();
+			return record?.lastReadAt;
+		});
+
+		expect(secondTime).toBeGreaterThan(firstTime!);
+	});
+});
+
+describe('chats.setActiveStream', () => {
+	let t: ReturnType<typeof createConvexTest>;
+	let userId: Id<'users'>;
+	let chatId: Id<'chats'>;
+
+	beforeEach(async () => {
+		vi.useFakeTimers();
+		t = createConvexTest();
+		userId = await t.run(async (ctx) =>
+			ctx.db.insert('users', {
+				externalId: 'stream-user',
+				email: 'stream@example.com',
+				name: 'Stream User',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+		const chat = await asExternalId(t, 'stream-user').mutation(api.chats.create, {
+			userId,
+			title: 'Stream Chat',
+		});
+		chatId = chat.chatId;
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('sets activeStreamId and status to streaming when streamId is provided', async () => {
+		await asExternalId(t, 'stream-user').mutation(api.chats.setActiveStream, {
+			chatId,
+			userId,
+			streamId: 'stream-abc',
+		});
+
+		const chat = await t.run(async (ctx) => ctx.db.get(chatId));
+		expect(chat?.activeStreamId).toBe('stream-abc');
+		expect(chat?.status).toBe('streaming');
+	});
+
+	it('clears activeStreamId and sets status to idle when streamId is null', async () => {
+		await t.run(async (ctx) => ctx.db.patch(chatId, { activeStreamId: 'old-stream', status: 'streaming' }));
+
+		await asExternalId(t, 'stream-user').mutation(api.chats.setActiveStream, {
+			chatId,
+			userId,
+			streamId: null,
+		});
+
+		const chat = await t.run(async (ctx) => ctx.db.get(chatId));
+		expect(chat?.activeStreamId).toBeUndefined();
+		expect(chat?.status).toBe('idle');
+	});
+
+	it('returns null without patching when chat does not belong to user', async () => {
+		const otherId = await t.run(async (ctx) =>
+			ctx.db.insert('users', {
+				externalId: 'other-stream',
+				email: 'other@example.com',
+				name: 'Other',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+		const otherChat = await t.run(async (ctx) =>
+			ctx.db.insert('chats', { userId: otherId, title: 'Other Chat', createdAt: Date.now(), updatedAt: Date.now() })
+		);
+
+		const result = await asExternalId(t, 'stream-user').mutation(api.chats.setActiveStream, {
+			chatId: otherChat,
+			userId,
+			streamId: 'stream-xyz',
+		});
+
+		expect(result).toBeNull();
+		const chat = await t.run(async (ctx) => ctx.db.get(otherChat));
+		expect(chat?.activeStreamId).toBeUndefined();
+	});
+});
+
+describe('chats.getActiveStream', () => {
+	let t: ReturnType<typeof createConvexTest>;
+	let userId: Id<'users'>;
+	let chatId: Id<'chats'>;
+
+	beforeEach(async () => {
+		vi.useFakeTimers();
+		t = createConvexTest();
+		userId = await t.run(async (ctx) =>
+			ctx.db.insert('users', {
+				externalId: 'gas-user',
+				email: 'gas@example.com',
+				name: 'GAS User',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+		const chat = await asExternalId(t, 'gas-user').mutation(api.chats.create, {
+			userId,
+			title: 'GAS Chat',
+		});
+		chatId = chat.chatId;
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('returns null when no active stream', async () => {
+		const result = await asExternalId(t, 'gas-user').query(api.chats.getActiveStream, { chatId, userId });
+		expect(result).toBeNull();
+	});
+
+	it('returns stream ID when one is set', async () => {
+		await t.run(async (ctx) => ctx.db.patch(chatId, { activeStreamId: 'stream-123' }));
+
+		const result = await asExternalId(t, 'gas-user').query(api.chats.getActiveStream, { chatId, userId });
+		expect(result).toBe('stream-123');
+	});
+
+	it('returns null when chat does not belong to user', async () => {
+		const otherId = await t.run(async (ctx) =>
+			ctx.db.insert('users', {
+				externalId: 'other-gas',
+				email: 'other-gas@example.com',
+				name: 'Other GAS',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+		const otherChat = await t.run(async (ctx) =>
+			ctx.db.insert('chats', {
+				userId: otherId,
+				title: 'Other',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+				activeStreamId: 'stream-xyz',
+			})
+		);
+
+		const result = await asExternalId(t, 'gas-user').query(api.chats.getActiveStream, {
+			chatId: otherChat,
+			userId,
+		});
+		expect(result).toBeNull();
+	});
+});

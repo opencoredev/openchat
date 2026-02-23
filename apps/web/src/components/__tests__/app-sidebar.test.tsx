@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, fireEvent } from '@testing-library/react'
+import { act, cleanup, render, screen, fireEvent } from '@testing-library/react'
 
 vi.mock('@tanstack/react-router', () => ({
 	useNavigate: vi.fn(() => vi.fn()),
@@ -105,8 +105,18 @@ vi.mock('../ui/sidebar', () => ({
 }))
 
 vi.mock('@/components/ui/alert-dialog', () => ({
-	AlertDialog: ({ children, open }: any) =>
-		open ? <div data-testid="alert-dialog">{children}</div> : null,
+	AlertDialog: ({ children, open, onOpenChange }: any) =>
+		open ? (
+			<div data-testid="alert-dialog">
+				{children}
+				<button
+					data-testid="dialog-dismiss"
+					onClick={() => onOpenChange?.(false)}
+				>
+					dismiss
+				</button>
+			</div>
+		) : null,
 	AlertDialogContent: ({ children }: any) => (
 		<div data-testid="alert-dialog-content">{children}</div>
 	),
@@ -324,4 +334,167 @@ describe('AppSidebar', () => {
 		fireEvent.click(screen.getByRole('button', { name: /open menu/i }))
 		expect(mockSetOpenMobile).toHaveBeenCalledWith(true)
 	})
+
+
+	it('clicking a chat item navigates to /c/$chatId', () => {
+		vi.mocked(useAuth).mockReturnValue({ user: mockUser } as any)
+		vi.mocked(useQuery)
+			.mockReturnValueOnce(mockConvexUser as any)
+			.mockReturnValueOnce({ chats: [todayChat] } as any)
+		const mockNavigate = vi.fn()
+		vi.mocked(useNavigate).mockReturnValue(mockNavigate)
+		render(<AppSidebar />)
+		const chatBtns = screen.getAllByTestId('sidebar-menu-button')
+		fireEvent.click(chatBtns[0])
+		expect(mockNavigate).toHaveBeenCalledWith({
+			to: '/c/$chatId',
+			params: { chatId: 'chat-1' },
+		})
+	})
+
+	it('clicking a chat item on mobile calls setOpenMobile(false) then navigates', () => {
+		const mockSetOpenMobile = vi.fn()
+		const mockNavigate = vi.fn()
+		vi.mocked(useSidebar).mockReturnValue({
+			open: true,
+			isMobile: true,
+			setOpen: vi.fn(),
+			setOpenMobile: mockSetOpenMobile,
+		} as any)
+		vi.mocked(useNavigate).mockReturnValue(mockNavigate)
+		vi.mocked(useAuth).mockReturnValue({ user: mockUser } as any)
+		vi.mocked(useQuery)
+			.mockReturnValueOnce(mockConvexUser as any)
+			.mockReturnValueOnce({ chats: [todayChat] } as any)
+		render(<AppSidebar />)
+		const chatBtns = screen.getAllByTestId('sidebar-menu-button')
+		fireEvent.click(chatBtns[0])
+		expect(mockSetOpenMobile).toHaveBeenCalledWith(false)
+		expect(mockNavigate).toHaveBeenCalledWith({
+			to: '/c/$chatId',
+			params: { chatId: 'chat-1' },
+		})
+	})
+
+
+	it('clicking the floating "Open sidebar" button calls setOpen(true)', () => {
+		const mockSetOpen = vi.fn()
+		vi.mocked(useSidebar).mockReturnValue({
+			open: false,
+			isMobile: false,
+			setOpen: mockSetOpen,
+			setOpenMobile: vi.fn(),
+		} as any)
+		render(<AppSidebar />)
+		fireEvent.click(screen.getByTitle('Open sidebar'))
+		expect(mockSetOpen).toHaveBeenCalledWith(true)
+	})
+
+	it('clicking the floating "New Chat" button navigates to "/"', () => {
+		const mockNavigate = vi.fn()
+		vi.mocked(useNavigate).mockReturnValue(mockNavigate)
+		render(<AppSidebar />)
+		fireEvent.click(screen.getByTitle('New Chat'))
+		expect(mockNavigate).toHaveBeenCalledWith({ to: '/' })
+	})
+
+
+	it('clicking "Close sidebar" button calls setOpen(false) on desktop', () => {
+		const mockSetOpen = vi.fn()
+		vi.mocked(useSidebar).mockReturnValue({
+			open: true,
+			isMobile: false,
+			setOpen: mockSetOpen,
+			setOpenMobile: vi.fn(),
+		} as any)
+		render(<AppSidebar />)
+		fireEvent.click(screen.getByTitle('Close sidebar'))
+		expect(mockSetOpen).toHaveBeenCalledWith(false)
+	})
+
+	it('clicking "Close sidebar" button calls setOpenMobile(false) on mobile', () => {
+		const mockSetOpenMobile = vi.fn()
+		vi.mocked(useSidebar).mockReturnValue({
+			open: true,
+			isMobile: true,
+			setOpen: vi.fn(),
+			setOpenMobile: mockSetOpenMobile,
+		} as any)
+		render(<AppSidebar />)
+		fireEvent.click(screen.getByTitle('Close sidebar'))
+		expect(mockSetOpenMobile).toHaveBeenCalledWith(false)
+	})
+
+	it('clicking the brand name button in the sidebar navigates to "/"', () => {
+		const mockNavigate = vi.fn()
+		vi.mocked(useNavigate).mockReturnValue(mockNavigate)
+		render(<AppSidebar />)
+
+		const brandBtn = screen.getAllByRole('button').find(
+			(btn) => btn.textContent === 'osschat',
+		)
+		expect(brandBtn).toBeTruthy()
+		fireEvent.click(brandBtn!)
+		expect(mockNavigate).toHaveBeenCalledWith({ to: '/' })
+	})
+
+	it('handleNewChat on mobile calls setOpenMobile(false) before navigating', () => {
+		const mockSetOpenMobile = vi.fn()
+		const mockNavigate = vi.fn()
+		vi.mocked(useSidebar).mockReturnValue({
+			open: true,
+			isMobile: true,
+			setOpen: vi.fn(),
+			setOpenMobile: mockSetOpenMobile,
+		} as any)
+		vi.mocked(useNavigate).mockReturnValue(mockNavigate)
+		render(<AppSidebar />)
+		fireEvent.click(screen.getByText('New Chat'))
+		expect(mockSetOpenMobile).toHaveBeenCalledWith(false)
+		expect(mockNavigate).toHaveBeenCalledWith({ to: '/' })
+	})
+
+
+	it('dismissing the delete chat dialog clears the delete state', () => {
+		vi.mocked(useAuth).mockReturnValue({ user: mockUser } as any)
+		vi.mocked(useQuery)
+			.mockReturnValueOnce(mockConvexUser as any)
+			.mockReturnValueOnce({ chats: [todayChat] } as any)
+		render(<AppSidebar />)
+
+		const deleteBtn = screen.getAllByRole('button', { name: /delete chat/i })[0]
+		fireEvent.click(deleteBtn)
+		expect(screen.getByTestId('alert-dialog')).toBeTruthy()
+
+		fireEvent.click(screen.getByTestId('dialog-dismiss'))
+		expect(screen.queryByTestId('alert-dialog')).toBeNull()
+	})
+
+
+	it('dismissing the bulk delete dialog clears the bulk delete dialog state', () => {
+		const selectedIds = new Set(['chat-1'])
+		;(vi.mocked(useBulkSelectionStore) as any).mockImplementation(
+			(selector: (s: any) => any) =>
+				selector({
+					selectedChatIds: selectedIds,
+					selectChat: vi.fn(),
+					selectAll: vi.fn(),
+					deselectAll: vi.fn(),
+					getSelectedChatIds: vi.fn().mockReturnValue(['chat-1']),
+				}),
+		)
+		render(<AppSidebar />)
+
+		const deleteBtn = screen.getAllByRole('button').find(
+			(btn) => btn.textContent?.trim() === 'Delete',
+		)
+		expect(deleteBtn).toBeTruthy()
+		fireEvent.click(deleteBtn!)
+		expect(screen.getByTestId('alert-dialog')).toBeTruthy()
+
+		fireEvent.click(screen.getByTestId('dialog-dismiss'))
+		expect(screen.queryByTestId('alert-dialog')).toBeNull()
+	})
+
+
 })

@@ -22,6 +22,7 @@ import schema from './schema';
 import { api } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { modules, rateLimiter } from './testSetup.test';
+import { sanitizeFilename } from './lib/sanitize';
 
 // Helper to create convex test instance
 function createConvexTest() {
@@ -591,6 +592,19 @@ describe('saveFileMetadata - File Size Validation', () => {
 				size: 51 * 1024 * 1024,
 			})
 		).rejects.toThrow(/Video file size.*exceeds maximum/);
+	});
+
+	it('should reject document (PDF) exceeding size limit (>10MB) (line 72)', async () => {
+		await expect(
+			asIdentity(t, 'test-user').mutation(api.files.saveFileMetadata, {
+				userId,
+				chatId,
+				storageId,
+				filename: 'huge.pdf',
+				contentType: 'application/pdf',
+				size: 11 * 1024 * 1024,
+			})
+		).rejects.toThrow(/Document file size.*exceeds maximum/);
 	});
 
 	it('should include file size in error message', async () => {
@@ -1184,6 +1198,28 @@ describe('getFileUrl - Basic Functionality', () => {
 			})
 		).rejects.toThrow('Unauthorized: You do not own this file');
 	});
+
+	it('should return a URL string for a valid file owned by the user (line 203)', async () => {
+		_fileId = await t.run(async (ctx) => {
+			return await ctx.db.insert('fileUploads', {
+				userId,
+				chatId,
+				storageId: storageId,
+				filename: 'valid.jpg',
+				contentType: 'image/jpeg',
+				size: 1024,
+				uploadedAt: Date.now(),
+			});
+		});
+
+		const url = await asIdentity(t, 'test-user').query(api.files.getFileUrl, {
+			userId,
+			storageId: storageId,
+		});
+
+		// In convex-test, storage.getUrl returns a string URL for stored blobs
+		expect(typeof url).toBe('string');
+	});
 });
 
 describe('getFilesByChat - Basic Functionality', () => {
@@ -1355,5 +1391,237 @@ describe('getBatchFileUrls - Basic Functionality', () => {
 		});
 
 		expect(results[0].url).toBeNull();
+	});
+});
+
+describe('getFilesByChat - returns files when they exist', () => {
+	let t: ReturnType<typeof convexTest>;
+	let userId: Id<'users'>;
+	let chatId: Id<'chats'>;
+
+	beforeEach(async () => {
+		t = createConvexTest();
+		userId = await t.run(async (ctx) =>
+			ctx.db.insert('users', {
+				externalId: 'files-chat-user',
+				email: 'files-chat@example.com',
+				name: 'Files Chat User',
+				fileUploadCount: 0,
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+		chatId = await t.run(async (ctx) =>
+			ctx.db.insert('chats', {
+				userId,
+				title: 'Files Chat',
+				messageCount: 0,
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+	});
+
+	it('returns files belonging to the chat', async () => {
+		const storageId = await createMockStorageId(t);
+		await t.run(async (ctx) =>
+			ctx.db.insert('fileUploads', {
+				userId,
+				chatId,
+				storageId,
+				filename: 'chat-file.pdf',
+				contentType: 'application/pdf',
+				size: 2048,
+				uploadedAt: Date.now(),
+			})
+		);
+
+		const results = await asIdentity(t, 'files-chat-user').query(api.files.getFilesByChat, { userId, chatId });
+		expect(results.length).toBe(1);
+		expect(results[0].filename).toBe('chat-file.pdf');
+		expect(results[0].contentType).toBe('application/pdf');
+		expect(results[0].size).toBe(2048);
+	});
+
+	it('excludes deleted files from getFilesByChat results', async () => {
+		const storageId = await createMockStorageId(t);
+		await t.run(async (ctx) =>
+			ctx.db.insert('fileUploads', {
+				userId,
+				chatId,
+				storageId,
+				filename: 'deleted.txt',
+				contentType: 'text/plain',
+				size: 10,
+				uploadedAt: Date.now(),
+				deletedAt: Date.now(),
+			})
+		);
+
+		const results = await asIdentity(t, 'files-chat-user').query(api.files.getFilesByChat, { userId, chatId });
+		expect(results.length).toBe(0);
+	});
+
+	it('returns empty array when chat has no files', async () => {
+		const results = await asIdentity(t, 'files-chat-user').query(api.files.getFilesByChat, { userId, chatId });
+		expect(results).toEqual([]);
+	});
+});
+
+describe('getFilesByUser - returns files for user', () => {
+	let t: ReturnType<typeof convexTest>;
+	let userId: Id<'users'>;
+	let chatId: Id<'chats'>;
+
+	beforeEach(async () => {
+		t = createConvexTest();
+		userId = await t.run(async (ctx) =>
+			ctx.db.insert('users', {
+				externalId: 'files-user-user',
+				email: 'files-user@example.com',
+				name: 'Files User User',
+				fileUploadCount: 0,
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+		chatId = await t.run(async (ctx) =>
+			ctx.db.insert('chats', {
+				userId,
+				title: 'User Files Chat',
+				messageCount: 0,
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+	});
+
+	it('returns files belonging to the user', async () => {
+		const storageId = await createMockStorageId(t);
+		await t.run(async (ctx) =>
+			ctx.db.insert('fileUploads', {
+				userId,
+				chatId,
+				storageId,
+				filename: 'user-file.png',
+				contentType: 'image/png',
+				size: 4096,
+				uploadedAt: Date.now(),
+			})
+		);
+
+		const results = await asIdentity(t, 'files-user-user').query(api.files.getFilesByUser, { userId });
+		expect(results.length).toBe(1);
+		expect(results[0].filename).toBe('user-file.png');
+		expect(results[0].chatId).toBe(chatId);
+	});
+
+	it('excludes deleted files from getFilesByUser results', async () => {
+		const storageId = await createMockStorageId(t);
+		await t.run(async (ctx) =>
+			ctx.db.insert('fileUploads', {
+				userId,
+				chatId,
+				storageId,
+				filename: 'gone.txt',
+				contentType: 'text/plain',
+				size: 5,
+				uploadedAt: Date.now(),
+				deletedAt: Date.now(),
+			})
+		);
+
+		const results = await asIdentity(t, 'files-user-user').query(api.files.getFilesByUser, { userId });
+		expect(results.length).toBe(0);
+	});
+
+	it('returns empty array when user has no files', async () => {
+		const results = await asIdentity(t, 'files-user-user').query(api.files.getFilesByUser, { userId });
+		expect(results).toEqual([]);
+	});
+});
+
+describe('deleteFile rate limit (line 306)', () => {
+	let t: ReturnType<typeof convexTest>;
+	let userId: Id<'users'>;
+	let chatId: Id<'chats'>;
+
+	beforeEach(async () => {
+		t = createConvexTest();
+		userId = await t.run(async (ctx) =>
+			ctx.db.insert('users', {
+				externalId: 'rl-delete-user',
+				email: 'rl-delete@example.com',
+				name: 'RL Delete User',
+				fileUploadCount: 0,
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+		chatId = await t.run(async (ctx) =>
+			ctx.db.insert('chats', {
+				userId,
+				title: 'RL Delete Chat',
+				messageCount: 0,
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			})
+		);
+	});
+
+	it('throws after fileDelete capacity exhausted (capacity 5)', async () => {
+		const storageIds: Id<'_storage'>[] = [];
+		for (let i = 0; i < 6; i++) {
+			const storageId = await t.run(async (ctx) => {
+				const blob = new Blob([`test${i}`], { type: 'text/plain' });
+				return ctx.storage.store(blob);
+			});
+			storageIds.push(storageId);
+			await t.run(async (ctx) =>
+				ctx.db.insert('fileUploads', {
+					userId,
+					chatId,
+					storageId,
+					filename: `file${i}.txt`,
+					contentType: 'text/plain',
+					size: 5,
+					uploadedAt: Date.now(),
+				})
+			);
+		}
+
+		for (let i = 0; i < 5; i++) {
+			await asIdentity(t, 'rl-delete-user').mutation(api.files.deleteFile, {
+				userId,
+				storageId: storageIds[i]!,
+			});
+		}
+
+		await expect(
+			asIdentity(t, 'rl-delete-user').mutation(api.files.deleteFile, {
+				userId,
+				storageId: storageIds[5]!,
+			})
+		).rejects.toThrow();
+	});
+});
+
+describe('sanitizeFilename - length truncation without extension (line 116)', () => {
+	it('truncates filename when dot is near the start (not near end)', () => {
+		const longName = 'a.b' + 'x'.repeat(300);
+		const result = sanitizeFilename(longName, 50);
+		expect(result.length).toBeLessThanOrEqual(50);
+	});
+
+	it('truncates filename when there is no dot', () => {
+		const longName = 'a'.repeat(300);
+		const result = sanitizeFilename(longName, 50);
+		expect(result.length).toBe(50);
+	});
+
+	it('truncates filename with dot at position 0', () => {
+		const longName = '.hidden' + 'x'.repeat(300);
+		const result = sanitizeFilename(longName, 20);
+		expect(result.length).toBeLessThanOrEqual(20);
 	});
 });

@@ -101,7 +101,9 @@ export function useForkMessage({
 					messageId: forkMessageDoc._id,
 				});
 
-				await cleanupStaleJobs({ userId: convexUserId }).catch(() => {});
+				await cleanupStaleJobs({ userId: convexUserId }).catch((cleanupError) => {
+					console.warn("[ForkMessage] Failed to cleanup stale jobs", cleanupError);
+				});
 
 				const assistantMsgId = crypto.randomUUID();
 				await startBackgroundStream({
