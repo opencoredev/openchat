@@ -93,6 +93,11 @@ describe("getBenchmarkColor", () => {
 		const color = getBenchmarkColor(null);
 		expect(color).toContain("muted");
 	});
+
+	it("returns rose class for very low score (line 47)", () => {
+		const color = getBenchmarkColor(5);
+		expect(color).toContain("rose");
+	});
 });
 
 describe("hasBenchmarkData", () => {

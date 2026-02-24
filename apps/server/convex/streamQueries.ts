@@ -1,7 +1,9 @@
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { requireAuthUserId } from "./lib/auth";
 import { chainOfThoughtPartValidator, streamOptionsValidator } from "./streamJobs";
+import type { ChainOfThoughtPart } from "./streamUtils";
 
 const streamJobReturnShape = v.union(
 	v.object({
@@ -29,14 +31,14 @@ const streamJobReturnShape = v.union(
 );
 
 function pickJobFields(job: {
-	_id: any;
+	_id: Id<"streamJobs">;
 	status: string;
 	model: string;
 	provider: string;
-	options?: any;
+	options?: Record<string, unknown>;
 	content: string;
 	reasoning?: string;
-	chainOfThoughtParts?: any[];
+	chainOfThoughtParts?: ChainOfThoughtPart[];
 	thinkingTimeMs?: number;
 	thinkingTimeSec?: number;
 	reasoningCharCount?: number;

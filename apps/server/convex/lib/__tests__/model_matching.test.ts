@@ -105,4 +105,12 @@ describe("buildMatchingMap", () => {
 
 		expect(map.size).toBe(0);
 	});
+
+	it("uses exact provider/slug match when no manual override exists (line 96)", () => {
+		const map = buildMatchingMap(
+			[createAAModel("new-unique-model", "some-provider")],
+			["some-provider/new-unique-model"],
+		);
+		expect(map.get("new-unique-model")).toBe("some-provider/new-unique-model");
+	});
 });

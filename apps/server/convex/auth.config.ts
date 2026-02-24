@@ -1,9 +1,10 @@
 import type { AuthConfig } from "convex/server";
+import { requireEnv } from "./env";
 
 export default {
 	providers: [
 		{
-			domain: process.env.CONVEX_SITE_URL!,
+			domain: requireEnv("CONVEX_SITE_URL"),
 			applicationID: "convex",
 		},
 	],

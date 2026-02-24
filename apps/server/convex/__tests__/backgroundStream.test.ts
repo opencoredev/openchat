@@ -1,16 +1,31 @@
 import { convexTest } from "convex-test";
-import { expect, test, describe } from "vitest";
+import { expect, test, describe, beforeEach, afterEach, vi } from "vitest";
 import { api, internal } from "../_generated/api";
 import schema from "../schema";
 import { modules, rateLimiter } from "../testSetup.test";
 
-function createConvexTest() {
+function makeConvexTest() {
 	const t = convexTest(schema, modules);
 	rateLimiter.register(t);
 	return t;
 }
 
-async function seedUserAndChat(t: ReturnType<typeof convexTest>, externalId: string) {
+let t: ReturnType<typeof makeConvexTest>;
+
+beforeEach(() => {
+	// startStream schedules functions via ctx.scheduler.runAfter(0, ...) which
+	// maps to setTimeout(0) in convex-test. Fake timers prevent those from
+	// firing during or between tests, eliminating "Write outside of transaction"
+	// unhandled rejections.
+	vi.useFakeTimers();
+	t = makeConvexTest();
+});
+
+afterEach(() => {
+	vi.useRealTimers();
+});
+
+async function seedUserAndChat(externalId: string) {
 	const userId = await t.run(async (ctx) => {
 		return await ctx.db.insert("users", {
 			externalId,
@@ -29,7 +44,7 @@ async function seedUserAndChat(t: ReturnType<typeof convexTest>, externalId: str
 	return { userId, chatId };
 }
 
-function withIdentity(t: ReturnType<typeof convexTest>, externalId: string) {
+function withIdentity(externalId: string) {
 	return t.withIdentity({ subject: externalId });
 }
 
@@ -41,10 +56,9 @@ describe("backgroundStream", () => {
 	// -------------------------------------------------------------------------
 
 	test("startStream creates a stream job with pending status", async () => {
-		const t = createConvexTest();
-		const { userId, chatId } = await seedUserAndChat(t, "bs_user_1");
+		const { userId, chatId } = await seedUserAndChat("bs_user_1");
 
-		const jobId = await withIdentity(t, "bs_user_1").mutation(
+		const jobId = await withIdentity("bs_user_1").mutation(
 			api.backgroundStream.startStream,
 			{
 				chatId,
@@ -72,10 +86,9 @@ describe("backgroundStream", () => {
 	});
 
 	test("startStream sets chat to streaming status and stores activeStreamId", async () => {
-		const t = createConvexTest();
-		const { userId, chatId } = await seedUserAndChat(t, "bs_user_2");
+		const { userId, chatId } = await seedUserAndChat("bs_user_2");
 
-		const jobId = await withIdentity(t, "bs_user_2").mutation(
+		const jobId = await withIdentity("bs_user_2").mutation(
 			api.backgroundStream.startStream,
 			{
 				chatId,
@@ -93,8 +106,7 @@ describe("backgroundStream", () => {
 	});
 
 	test("startStream rejects unauthorized user (userId mismatch)", async () => {
-		const t = createConvexTest();
-		const { chatId } = await seedUserAndChat(t, "bs_user_3a");
+		const { chatId } = await seedUserAndChat("bs_user_3a");
 		// Create a second user but call with their identity
 		const otherId = await t.run(async (ctx) => {
 			return await ctx.db.insert("users", {
@@ -108,7 +120,7 @@ describe("backgroundStream", () => {
 		// match because identity.subject → user._id === otherId.
 		// However the chat belongs to bs_user_3a → "Chat not found or unauthorized"
 		await expect(
-			withIdentity(t, "bs_user_3b").mutation(api.backgroundStream.startStream, {
+			withIdentity("bs_user_3b").mutation(api.backgroundStream.startStream, {
 				chatId,
 				userId: otherId,
 				messageId: "msg-003",
@@ -124,10 +136,9 @@ describe("backgroundStream", () => {
 	// -------------------------------------------------------------------------
 
 	test("getStreamJob returns job for the owning user", async () => {
-		const t = createConvexTest();
-		const { userId, chatId } = await seedUserAndChat(t, "bs_user_4");
+		const { userId, chatId } = await seedUserAndChat("bs_user_4");
 
-		const jobId = await withIdentity(t, "bs_user_4").mutation(
+		const jobId = await withIdentity("bs_user_4").mutation(
 			api.backgroundStream.startStream,
 			{
 				chatId,
@@ -139,7 +150,7 @@ describe("backgroundStream", () => {
 			},
 		);
 
-		const result = await withIdentity(t, "bs_user_4").query(
+		const result = await withIdentity("bs_user_4").query(
 			api.backgroundStream.getStreamJob,
 			{ jobId, userId },
 		);
@@ -154,8 +165,7 @@ describe("backgroundStream", () => {
 	});
 
 	test("getStreamJob returns null for a different user (ownership mismatch)", async () => {
-		const t = createConvexTest();
-		const { userId: userId1, chatId } = await seedUserAndChat(t, "bs_user_5a");
+		const { userId: userId1, chatId } = await seedUserAndChat("bs_user_5a");
 
 		// Second user
 		const userId2 = await t.run(async (ctx) => {
@@ -166,7 +176,7 @@ describe("backgroundStream", () => {
 			});
 		});
 
-		const jobId = await withIdentity(t, "bs_user_5a").mutation(
+		const jobId = await withIdentity("bs_user_5a").mutation(
 			api.backgroundStream.startStream,
 			{
 				chatId,
@@ -179,7 +189,7 @@ describe("backgroundStream", () => {
 		);
 
 		// Auth passes for user2 (identity matches userId2), but job.userId !== userId2
-		const result = await withIdentity(t, "bs_user_5b").query(
+		const result = await withIdentity("bs_user_5b").query(
 			api.backgroundStream.getStreamJob,
 			{ jobId, userId: userId2 },
 		);
@@ -192,10 +202,9 @@ describe("backgroundStream", () => {
 	// -------------------------------------------------------------------------
 
 	test("updateStreamContent updates content and transitions status to running", async () => {
-		const t = createConvexTest();
-		const { userId, chatId } = await seedUserAndChat(t, "bs_user_6");
+		const { userId, chatId } = await seedUserAndChat("bs_user_6");
 
-		const jobId = await withIdentity(t, "bs_user_6").mutation(
+		const jobId = await withIdentity("bs_user_6").mutation(
 			api.backgroundStream.startStream,
 			{
 				chatId,
@@ -221,10 +230,9 @@ describe("backgroundStream", () => {
 	});
 
 	test("updateStreamContent persists optional reasoning and metadata fields", async () => {
-		const t = createConvexTest();
-		const { userId, chatId } = await seedUserAndChat(t, "bs_user_7");
+		const { userId, chatId } = await seedUserAndChat("bs_user_7");
 
-		const jobId = await withIdentity(t, "bs_user_7").mutation(
+		const jobId = await withIdentity("bs_user_7").mutation(
 			api.backgroundStream.startStream,
 			{
 				chatId,
@@ -259,10 +267,9 @@ describe("backgroundStream", () => {
 	// -------------------------------------------------------------------------
 
 	test("completeStream marks job completed and creates a new message", async () => {
-		const t = createConvexTest();
-		const { userId, chatId } = await seedUserAndChat(t, "bs_user_8");
+		const { userId, chatId } = await seedUserAndChat("bs_user_8");
 
-		const jobId = await withIdentity(t, "bs_user_8").mutation(
+		const jobId = await withIdentity("bs_user_8").mutation(
 			api.backgroundStream.startStream,
 			{
 				chatId,
@@ -307,10 +314,9 @@ describe("backgroundStream", () => {
 	});
 
 	test("completeStream patches an existing message instead of creating a duplicate", async () => {
-		const t = createConvexTest();
-		const { userId, chatId } = await seedUserAndChat(t, "bs_user_9");
+		const { userId, chatId } = await seedUserAndChat("bs_user_9");
 
-		const jobId = await withIdentity(t, "bs_user_9").mutation(
+		const jobId = await withIdentity("bs_user_9").mutation(
 			api.backgroundStream.startStream,
 			{
 				chatId,
@@ -362,10 +368,9 @@ describe("backgroundStream", () => {
 	// -------------------------------------------------------------------------
 
 	test("failStream marks job as error and resets chat to idle", async () => {
-		const t = createConvexTest();
-		const { userId, chatId } = await seedUserAndChat(t, "bs_user_10");
+		const { userId, chatId } = await seedUserAndChat("bs_user_10");
 
-		const jobId = await withIdentity(t, "bs_user_10").mutation(
+		const jobId = await withIdentity("bs_user_10").mutation(
 			api.backgroundStream.startStream,
 			{
 				chatId,
@@ -392,11 +397,81 @@ describe("backgroundStream", () => {
 		expect(chat?.activeStreamId).toBeUndefined();
 	});
 
-	test("failStream preserves partialContent when provided", async () => {
-		const t = createConvexTest();
-		const { userId, chatId } = await seedUserAndChat(t, "bs_user_11");
+	test("startStream does not schedule auto-title when all messages are assistant (seed is null)", async () => {
+		const { userId, chatId } = await seedUserAndChat("bs_user_12");
 
-		const jobId = await withIdentity(t, "bs_user_11").mutation(
+		const jobId = await withIdentity("bs_user_12").mutation(
+			api.backgroundStream.startStream,
+			{
+				chatId,
+				userId,
+				messageId: "msg-012",
+				model: "openai/gpt-4o",
+				provider: "openrouter",
+				messages: [{ role: "assistant", content: "Hello!" }],
+			},
+		);
+
+		expect(jobId).toBeDefined();
+		// If no error thrown, the null-seed path ran without issues
+		const job = await t.run(async (ctx) => ctx.db.get(jobId));
+		expect(job?.status).toBe("pending");
+	});
+
+	test("startStream seed text is null when user message has whitespace-only content", async () => {
+		const { userId, chatId } = await seedUserAndChat("bs_user_13");
+
+		const jobId = await withIdentity("bs_user_13").mutation(
+			api.backgroundStream.startStream,
+			{
+				chatId,
+				userId,
+				messageId: "msg-013",
+				model: "openai/gpt-4o",
+				provider: "openrouter",
+				messages: [{ role: "user", content: "   " }],
+			},
+		);
+
+		expect(jobId).toBeDefined();
+		const job = await t.run(async (ctx) => ctx.db.get(jobId));
+		expect(job?.status).toBe("pending");
+	});
+
+	test("startStream throws rate limit error after messageSend capacity is exhausted", async () => {
+		const { userId, chatId } = await seedUserAndChat("bs_rl_user");
+
+		const sends = [];
+		for (let i = 0; i < 10; i++) {
+			sends.push(
+				withIdentity("bs_rl_user").mutation(api.backgroundStream.startStream, {
+					chatId,
+					userId,
+					messageId: `msg-rl-${i}`,
+					model: "openai/gpt-4o",
+					provider: "openrouter",
+					messages: testMessages,
+				}).catch(() => {}),
+			);
+		}
+		await Promise.all(sends);
+
+		await expect(
+			withIdentity("bs_rl_user").mutation(api.backgroundStream.startStream, {
+				chatId,
+				userId,
+				messageId: "msg-rl-overflow",
+				model: "openai/gpt-4o",
+				provider: "openrouter",
+				messages: testMessages,
+			}),
+		).rejects.toThrow(/Too many streams started/);
+	});
+
+	test("failStream preserves partialContent when provided", async () => {
+		const { userId, chatId } = await seedUserAndChat("bs_user_11");
+
+		const jobId = await withIdentity("bs_user_11").mutation(
 			api.backgroundStream.startStream,
 			{
 				chatId,

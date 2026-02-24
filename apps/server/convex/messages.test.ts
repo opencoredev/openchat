@@ -11,7 +11,7 @@
  * - Edge cases and error handling
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { convexTest } from 'convex-test';
 import schema from './schema';
 import { api } from './_generated/api';
@@ -686,5 +686,1107 @@ describe('messages.streamUpsert', () => {
 
     const msg = await t.run(async (ctx) => await ctx.db.get(result.messageId!));
     expect(msg?.role).toBe('assistant');
+  });
+
+  it('completed user message uses its own createdAt for lastMessageAt', async () => {
+    const customTime = 999999;
+
+    await asExternalId(t, externalId).mutation(api.messages.streamUpsert, {
+      chatId,
+      userId,
+      role: 'user',
+      content: 'User message',
+      status: 'completed',
+      createdAt: customTime,
+    });
+
+    const chat = await t.run(async (ctx) => await ctx.db.get(chatId));
+    expect(chat?.lastMessageAt).toBe(customTime);
+  });
+
+  it('streaming status does not update chat lastMessageAt', async () => {
+    const chatBefore = await t.run(async (ctx) => await ctx.db.get(chatId));
+    const lastMessageAtBefore = chatBefore?.lastMessageAt;
+
+    await asExternalId(t, externalId).mutation(api.messages.streamUpsert, {
+      chatId,
+      userId,
+      role: 'assistant',
+      content: 'Streaming...',
+      status: 'streaming',
+    });
+
+    const chatAfter = await t.run(async (ctx) => await ctx.db.get(chatId));
+    expect(chatAfter?.lastMessageAt).toBe(lastMessageAtBefore);
+  });
+
+  it('updating existing message preserves content and status correctly', async () => {
+    const initial = await asExternalId(t, externalId).mutation(api.messages.streamUpsert, {
+      chatId,
+      userId,
+      role: 'assistant',
+      content: 'Initial',
+    });
+
+    await asExternalId(t, externalId).mutation(api.messages.streamUpsert, {
+      chatId,
+      userId,
+      messageId: initial.messageId,
+      role: 'assistant',
+      content: 'Updated',
+      status: 'completed',
+    });
+
+    const msg = await t.run(async (ctx) => await ctx.db.get(initial.messageId!));
+    expect(msg?.role).toBe('assistant');
+    expect(msg?.content).toBe('Updated');
+    expect(msg?.status).toBe('completed');
+  });
+});
+
+describe('messages.editAndRegenerate', () => {
+  let t: ReturnType<typeof createConvexTest>;
+  let userId: Id<'users'>;
+  let chatId: Id<'chats'>;
+  let messageId: Id<'messages'>;
+  let externalId: string;
+
+  beforeEach(async () => {
+    t = createConvexTest();
+    externalId = 'edit-user';
+    userId = await t.run(async (ctx) =>
+      ctx.db.insert('users', {
+        externalId,
+        email: 'edit@example.com',
+        name: 'Edit User',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+    );
+    chatId = await t.run(async (ctx) =>
+      ctx.db.insert('chats', {
+        userId,
+        title: 'Test Chat',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        messageCount: 3,
+      })
+    );
+    messageId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId,
+        role: 'user',
+        content: 'Original content',
+        createdAt: 1000,
+        status: 'completed',
+      })
+    );
+  });
+
+  it('returns messageId and zero softDeletedCount when no messages after target', async () => {
+    const result = await asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+      chatId,
+      userId,
+      messageId,
+      newContent: 'Updated content',
+    });
+
+    expect(result.messageId).toBe(messageId);
+    expect(result.softDeletedCount).toBe(0);
+  });
+
+  it('updates the message content to trimmed new content', async () => {
+    await asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+      chatId,
+      userId,
+      messageId,
+      newContent: '  New content  ',
+    });
+
+    const msg = await t.run(async (ctx) => ctx.db.get(messageId));
+    expect(msg?.content).toBe('New content');
+  });
+
+  it('soft-deletes messages after the target message', async () => {
+    const afterMsgId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId,
+        role: 'assistant',
+        content: 'After message',
+        createdAt: 2000,
+        status: 'completed',
+      })
+    );
+
+    await asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+      chatId,
+      userId,
+      messageId,
+      newContent: 'Updated',
+    });
+
+    const afterMsg = await t.run(async (ctx) => ctx.db.get(afterMsgId));
+    expect(afterMsg?.deletedAt).toBeDefined();
+  });
+
+  it('returns correct softDeletedCount', async () => {
+    await t.run(async (ctx) => {
+      await ctx.db.insert('messages', {
+        chatId,
+        role: 'assistant',
+        content: 'After 1',
+        createdAt: 2000,
+        status: 'completed',
+      });
+      await ctx.db.insert('messages', {
+        chatId,
+        role: 'user',
+        content: 'After 2',
+        createdAt: 3000,
+        status: 'completed',
+      });
+    });
+
+    const result = await asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+      chatId,
+      userId,
+      messageId,
+      newContent: 'Updated',
+    });
+
+    expect(result.softDeletedCount).toBe(2);
+  });
+
+  it('decrements chat messageCount by softDeletedCount', async () => {
+    await t.run(async (ctx) => {
+      await ctx.db.insert('messages', {
+        chatId,
+        role: 'assistant',
+        content: 'After 1',
+        createdAt: 2000,
+        status: 'completed',
+      });
+      await ctx.db.patch(chatId, { messageCount: 5 });
+    });
+
+    await asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+      chatId,
+      userId,
+      messageId,
+      newContent: 'Updated',
+    });
+
+    const chat = await t.run(async (ctx) => ctx.db.get(chatId));
+    expect(chat?.messageCount).toBe(4);
+  });
+
+  it('clears chat activeStreamId', async () => {
+    await t.run(async (ctx) => ctx.db.patch(chatId, { activeStreamId: 'job-123' }));
+
+    await asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+      chatId,
+      userId,
+      messageId,
+      newContent: 'Updated',
+    });
+
+    const chat = await t.run(async (ctx) => ctx.db.get(chatId));
+    expect(chat?.activeStreamId).toBeUndefined();
+  });
+
+  it('sets chat status to idle', async () => {
+    await t.run(async (ctx) => ctx.db.patch(chatId, { status: 'streaming' }));
+
+    await asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+      chatId,
+      userId,
+      messageId,
+      newContent: 'Updated',
+    });
+
+    const chat = await t.run(async (ctx) => ctx.db.get(chatId));
+    expect(chat?.status).toBe('idle');
+  });
+
+  it('updates chat updatedAt', async () => {
+    const before = Date.now();
+
+    await asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+      chatId,
+      userId,
+      messageId,
+      newContent: 'Updated',
+    });
+
+    const chat = await t.run(async (ctx) => ctx.db.get(chatId));
+    expect(chat?.updatedAt).toBeGreaterThanOrEqual(before);
+  });
+
+  it('throws when user does not own the chat', async () => {
+    const otherExternalId = 'other-edit-user';
+    const otherUserId = await t.run(async (ctx) =>
+      ctx.db.insert('users', {
+        externalId: otherExternalId,
+        email: 'other@example.com',
+        name: 'Other User',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+    );
+
+    await expect(
+      asExternalId(t, otherExternalId).mutation(api.messages.editAndRegenerate, {
+        chatId,
+        userId: otherUserId,
+        messageId,
+        newContent: 'Updated',
+      })
+    ).rejects.toThrow('Chat not found');
+  });
+
+  it('throws when the message does not exist', async () => {
+    await t.run(async (ctx) => ctx.db.delete(messageId));
+
+    await expect(
+      asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+        chatId,
+        userId,
+        messageId,
+        newContent: 'Updated',
+      })
+    ).rejects.toThrow('Message not found or not a user message');
+  });
+
+  it('throws when message is an assistant message', async () => {
+    const assistantMsgId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId,
+        role: 'assistant',
+        content: 'I am assistant',
+        createdAt: 500,
+        status: 'completed',
+      })
+    );
+
+    await expect(
+      asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+        chatId,
+        userId,
+        messageId: assistantMsgId,
+        newContent: 'Updated',
+      })
+    ).rejects.toThrow('Message not found or not a user message');
+  });
+
+  it('throws when message is already soft-deleted', async () => {
+    const deletedMsgId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId,
+        role: 'user',
+        content: 'Deleted message',
+        createdAt: 500,
+        status: 'completed',
+        deletedAt: Date.now(),
+      })
+    );
+
+    await expect(
+      asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+        chatId,
+        userId,
+        messageId: deletedMsgId,
+        newContent: 'Updated',
+      })
+    ).rejects.toThrow('Message not found or not a user message');
+  });
+
+  it('throws when newContent is empty string', async () => {
+    await expect(
+      asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+        chatId,
+        userId,
+        messageId,
+        newContent: '',
+      })
+    ).rejects.toThrow('Message content cannot be empty');
+  });
+
+  it('throws when newContent is whitespace only', async () => {
+    await expect(
+      asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+        chatId,
+        userId,
+        messageId,
+        newContent: '   \n\t   ',
+      })
+    ).rejects.toThrow('Message content cannot be empty');
+  });
+
+  it('cancels running stream jobs', async () => {
+    const streamJobId = await t.run(async (ctx) =>
+      ctx.db.insert('streamJobs', {
+        chatId,
+        userId,
+        messageId: 'msg_123',
+        status: 'running',
+        model: 'gpt-4o',
+        provider: 'openrouter',
+        messages: [],
+        content: '',
+        createdAt: Date.now(),
+      })
+    );
+
+    await asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+      chatId,
+      userId,
+      messageId,
+      newContent: 'Updated',
+    });
+
+    const job = await t.run(async (ctx) => ctx.db.get(streamJobId));
+    expect(job?.status).toBe('completed');
+  });
+
+  it('cancels pending stream jobs', async () => {
+    const streamJobId = await t.run(async (ctx) =>
+      ctx.db.insert('streamJobs', {
+        chatId,
+        userId,
+        messageId: 'msg_123',
+        status: 'pending',
+        model: 'gpt-4o',
+        provider: 'openrouter',
+        messages: [],
+        content: '',
+        createdAt: Date.now(),
+      })
+    );
+
+    await asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+      chatId,
+      userId,
+      messageId,
+      newContent: 'Updated',
+    });
+
+    const job = await t.run(async (ctx) => ctx.db.get(streamJobId));
+    expect(job?.status).toBe('completed');
+  });
+
+  it('does not delete messages at the same createdAt as target', async () => {
+    const sameMsgId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId,
+        role: 'assistant',
+        content: 'Same time message',
+        createdAt: 1000,
+        status: 'completed',
+      })
+    );
+
+    await asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+      chatId,
+      userId,
+      messageId,
+      newContent: 'Updated',
+    });
+
+    const sameMsg = await t.run(async (ctx) => ctx.db.get(sameMsgId));
+    expect(sameMsg?.deletedAt).toBeUndefined();
+  });
+
+  it('preserves messages before the target', async () => {
+    const beforeMsgId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId,
+        role: 'user',
+        content: 'Before message',
+        createdAt: 500,
+        status: 'completed',
+      })
+    );
+
+    await asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+      chatId,
+      userId,
+      messageId,
+      newContent: 'Updated',
+    });
+
+    const beforeMsg = await t.run(async (ctx) => ctx.db.get(beforeMsgId));
+    expect(beforeMsg?.deletedAt).toBeUndefined();
+  });
+
+  it('does not delete the target message itself', async () => {
+    await asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+      chatId,
+      userId,
+      messageId,
+      newContent: 'Updated',
+    });
+
+    const msg = await t.run(async (ctx) => ctx.db.get(messageId));
+    expect(msg?.deletedAt).toBeUndefined();
+  });
+
+  it('soft-deletes multiple messages after target', async () => {
+    await t.run(async (ctx) => {
+      for (let i = 0; i < 3; i++) {
+        await ctx.db.insert('messages', {
+          chatId,
+          role: i % 2 === 0 ? 'assistant' : 'user',
+          content: `After message ${i}`,
+          createdAt: 2000 + i * 100,
+          status: 'completed',
+        });
+      }
+    });
+
+    const result = await asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+      chatId,
+      userId,
+      messageId,
+      newContent: 'Updated',
+    });
+
+    expect(result.softDeletedCount).toBe(3);
+  });
+
+  it('requires authentication', async () => {
+    await expect(
+      t.mutation(api.messages.editAndRegenerate, {
+        chatId,
+        userId,
+        messageId,
+        newContent: 'Updated',
+      })
+    ).rejects.toThrow();
+  });
+
+  it('treats missing messageCount as 0 (line 219 branch)', async () => {
+    const chatNoCount = await t.run(async (ctx) =>
+      ctx.db.insert('chats', {
+        userId,
+        title: 'No Count Chat',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+    );
+    const msgId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId: chatNoCount,
+        role: 'user',
+        content: 'User msg',
+        createdAt: 1000,
+        status: 'completed',
+      })
+    );
+    const afterMsgId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId: chatNoCount,
+        role: 'assistant',
+        content: 'After msg',
+        createdAt: 2000,
+        status: 'completed',
+      })
+    );
+
+    const result = await asExternalId(t, externalId).mutation(api.messages.editAndRegenerate, {
+      chatId: chatNoCount,
+      userId,
+      messageId: msgId,
+      newContent: 'Updated',
+    });
+
+    expect(result.softDeletedCount).toBe(1);
+    const chat = await t.run(async (ctx) => ctx.db.get(chatNoCount));
+    expect(chat?.messageCount).toBe(0);
+    const afterMsg = await t.run(async (ctx) => ctx.db.get(afterMsgId));
+    expect(afterMsg?.deletedAt).toBeDefined();
+  });
+});
+
+describe('messages.retryMessage', () => {
+  let t: ReturnType<typeof createConvexTest>;
+  let userId: Id<'users'>;
+  let chatId: Id<'chats'>;
+  let messageId: Id<'messages'>;
+  let externalId: string;
+
+  beforeEach(async () => {
+    t = createConvexTest();
+    externalId = 'retry-user';
+    userId = await t.run(async (ctx) =>
+      ctx.db.insert('users', {
+        externalId,
+        email: 'retry@example.com',
+        name: 'Retry User',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+    );
+    chatId = await t.run(async (ctx) =>
+      ctx.db.insert('chats', {
+        userId,
+        title: 'Test Chat',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        messageCount: 3,
+      })
+    );
+    messageId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId,
+        role: 'user',
+        content: 'Original user message',
+        createdAt: 1000,
+        status: 'completed',
+      })
+    );
+  });
+
+  it('returns userContent and zero softDeletedCount when no messages after', async () => {
+    const result = await asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+      chatId,
+      userId,
+      messageId,
+    });
+
+    expect(result.userContent).toBe('Original user message');
+    expect(result.softDeletedCount).toBe(0);
+  });
+
+  it('returns the original user message content unchanged', async () => {
+    const result = await asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+      chatId,
+      userId,
+      messageId,
+    });
+
+    expect(result.userContent).toBe('Original user message');
+  });
+
+  it('soft-deletes all messages after the target', async () => {
+    const afterMsgId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId,
+        role: 'assistant',
+        content: 'After message',
+        createdAt: 2000,
+        status: 'completed',
+      })
+    );
+
+    await asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+      chatId,
+      userId,
+      messageId,
+    });
+
+    const afterMsg = await t.run(async (ctx) => ctx.db.get(afterMsgId));
+    expect(afterMsg?.deletedAt).toBeDefined();
+  });
+
+  it('returns correct softDeletedCount', async () => {
+    await t.run(async (ctx) => {
+      await ctx.db.insert('messages', {
+        chatId,
+        role: 'assistant',
+        content: 'After 1',
+        createdAt: 2000,
+        status: 'completed',
+      });
+      await ctx.db.insert('messages', {
+        chatId,
+        role: 'user',
+        content: 'After 2',
+        createdAt: 3000,
+        status: 'completed',
+      });
+    });
+
+    const result = await asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+      chatId,
+      userId,
+      messageId,
+    });
+
+    expect(result.softDeletedCount).toBe(2);
+  });
+
+  it('decrements chat messageCount by softDeletedCount', async () => {
+    await t.run(async (ctx) => {
+      await ctx.db.insert('messages', {
+        chatId,
+        role: 'assistant',
+        content: 'After 1',
+        createdAt: 2000,
+        status: 'completed',
+      });
+      await ctx.db.patch(chatId, { messageCount: 4 });
+    });
+
+    await asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+      chatId,
+      userId,
+      messageId,
+    });
+
+    const chat = await t.run(async (ctx) => ctx.db.get(chatId));
+    expect(chat?.messageCount).toBe(3);
+  });
+
+  it('clears chat activeStreamId', async () => {
+    await t.run(async (ctx) => ctx.db.patch(chatId, { activeStreamId: 'job-abc' }));
+
+    await asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+      chatId,
+      userId,
+      messageId,
+    });
+
+    const chat = await t.run(async (ctx) => ctx.db.get(chatId));
+    expect(chat?.activeStreamId).toBeUndefined();
+  });
+
+  it('sets chat status to idle', async () => {
+    await t.run(async (ctx) => ctx.db.patch(chatId, { status: 'streaming' }));
+
+    await asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+      chatId,
+      userId,
+      messageId,
+    });
+
+    const chat = await t.run(async (ctx) => ctx.db.get(chatId));
+    expect(chat?.status).toBe('idle');
+  });
+
+  it('updates chat updatedAt', async () => {
+    const before = Date.now();
+
+    await asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+      chatId,
+      userId,
+      messageId,
+    });
+
+    const chat = await t.run(async (ctx) => ctx.db.get(chatId));
+    expect(chat?.updatedAt).toBeGreaterThanOrEqual(before);
+  });
+
+  it('throws when user does not own the chat', async () => {
+    const otherExternalId = 'other-retry-user';
+    const otherUserId = await t.run(async (ctx) =>
+      ctx.db.insert('users', {
+        externalId: otherExternalId,
+        email: 'other@example.com',
+        name: 'Other',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+    );
+
+    await expect(
+      asExternalId(t, otherExternalId).mutation(api.messages.retryMessage, {
+        chatId,
+        userId: otherUserId,
+        messageId,
+      })
+    ).rejects.toThrow('Chat not found');
+  });
+
+  it('throws when the message does not exist', async () => {
+    await t.run(async (ctx) => ctx.db.delete(messageId));
+
+    await expect(
+      asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+        chatId,
+        userId,
+        messageId,
+      })
+    ).rejects.toThrow('Message not found');
+  });
+
+  it('throws when message is an assistant message', async () => {
+    const assistantMsgId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId,
+        role: 'assistant',
+        content: 'I am assistant',
+        createdAt: 500,
+        status: 'completed',
+      })
+    );
+
+    await expect(
+      asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+        chatId,
+        userId,
+        messageId: assistantMsgId,
+      })
+    ).rejects.toThrow('Message not found');
+  });
+
+  it('throws when message is already soft-deleted', async () => {
+    const deletedMsgId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId,
+        role: 'user',
+        content: 'Deleted',
+        createdAt: 500,
+        status: 'completed',
+        deletedAt: Date.now(),
+      })
+    );
+
+    await expect(
+      asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+        chatId,
+        userId,
+        messageId: deletedMsgId,
+      })
+    ).rejects.toThrow('Message not found');
+  });
+
+  it('cancels running stream jobs', async () => {
+    const streamJobId = await t.run(async (ctx) =>
+      ctx.db.insert('streamJobs', {
+        chatId,
+        userId,
+        messageId: 'msg_xyz',
+        status: 'running',
+        model: 'gpt-4o',
+        provider: 'openrouter',
+        messages: [],
+        content: '',
+        createdAt: Date.now(),
+      })
+    );
+
+    await asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+      chatId,
+      userId,
+      messageId,
+    });
+
+    const job = await t.run(async (ctx) => ctx.db.get(streamJobId));
+    expect(job?.status).toBe('completed');
+  });
+
+  it('cancels pending stream jobs', async () => {
+    const streamJobId = await t.run(async (ctx) =>
+      ctx.db.insert('streamJobs', {
+        chatId,
+        userId,
+        messageId: 'msg_xyz',
+        status: 'pending',
+        model: 'gpt-4o',
+        provider: 'openrouter',
+        messages: [],
+        content: '',
+        createdAt: Date.now(),
+      })
+    );
+
+    await asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+      chatId,
+      userId,
+      messageId,
+    });
+
+    const job = await t.run(async (ctx) => ctx.db.get(streamJobId));
+    expect(job?.status).toBe('completed');
+  });
+
+  it('does not delete the target message itself', async () => {
+    await asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+      chatId,
+      userId,
+      messageId,
+    });
+
+    const msg = await t.run(async (ctx) => ctx.db.get(messageId));
+    expect(msg?.deletedAt).toBeUndefined();
+  });
+
+  it('preserves messages before the target', async () => {
+    const beforeMsgId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId,
+        role: 'user',
+        content: 'Before message',
+        createdAt: 500,
+        status: 'completed',
+      })
+    );
+
+    await asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+      chatId,
+      userId,
+      messageId,
+    });
+
+    const beforeMsg = await t.run(async (ctx) => ctx.db.get(beforeMsgId));
+    expect(beforeMsg?.deletedAt).toBeUndefined();
+  });
+
+  it('handles multiple messages after target correctly', async () => {
+    const msgIds = await t.run(async (ctx) => {
+      const ids: Id<'messages'>[] = [];
+      for (let i = 0; i < 4; i++) {
+        ids.push(await ctx.db.insert('messages', {
+          chatId,
+          role: i % 2 === 0 ? 'assistant' : 'user',
+          content: `After ${i}`,
+          createdAt: 2000 + i * 100,
+          status: 'completed',
+        }));
+      }
+      return ids;
+    });
+
+    const result = await asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+      chatId,
+      userId,
+      messageId,
+    });
+
+    expect(result.softDeletedCount).toBe(4);
+    for (const id of msgIds) {
+      const msg = await t.run(async (ctx) => ctx.db.get(id));
+      expect(msg?.deletedAt).toBeDefined();
+    }
+  });
+
+  it('messageCount does not go below zero', async () => {
+    await t.run(async (ctx) => ctx.db.patch(chatId, { messageCount: 0 }));
+
+    await asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+      chatId,
+      userId,
+      messageId,
+    });
+
+    const chat = await t.run(async (ctx) => ctx.db.get(chatId));
+    expect(chat?.messageCount).toBe(0);
+  });
+
+  it('requires authentication', async () => {
+    await expect(
+      t.mutation(api.messages.retryMessage, {
+        chatId,
+        userId,
+        messageId,
+      })
+    ).rejects.toThrow();
+  });
+
+  it('treats missing messageCount as 0 when decrementing (line 298 branch)', async () => {
+    const chatNoCount = await t.run(async (ctx) =>
+      ctx.db.insert('chats', {
+        userId,
+        title: 'No Count Chat',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+    );
+    const msgId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId: chatNoCount,
+        role: 'user',
+        content: 'Retry me',
+        createdAt: 1000,
+        status: 'completed',
+      })
+    );
+    const afterMsgId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId: chatNoCount,
+        role: 'assistant',
+        content: 'After',
+        createdAt: 2000,
+        status: 'completed',
+      })
+    );
+
+    const result = await asExternalId(t, externalId).mutation(api.messages.retryMessage, {
+      chatId: chatNoCount,
+      userId,
+      messageId: msgId,
+    });
+
+    expect(result.softDeletedCount).toBe(1);
+    const chat = await t.run(async (ctx) => ctx.db.get(chatNoCount));
+    expect(chat?.messageCount).toBe(0);
+    const afterMsg = await t.run(async (ctx) => ctx.db.get(afterMsgId));
+    expect(afterMsg?.deletedAt).toBeDefined();
+  });
+});
+
+describe('messages rate limits', () => {
+  let t: ReturnType<typeof createConvexTest>;
+  let userId: Id<'users'>;
+  let chatId: Id<'chats'>;
+  let externalId: string;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    t = createConvexTest();
+    externalId = 'rl-user';
+    userId = await t.run(async (ctx) =>
+      ctx.db.insert('users', {
+        externalId,
+        email: 'rl@example.com',
+        name: 'RL User',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+    );
+    const chat = await t.withIdentity({ subject: externalId }).mutation(api.chats.create, {
+      userId,
+      title: 'RL Chat',
+    });
+    chatId = chat.chatId;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('throws rate limit error after messageSend capacity is exhausted (line 77)', async () => {
+    for (let i = 0; i < 10; i++) {
+      await t.withIdentity({ subject: externalId }).mutation(api.messages.send, {
+        chatId,
+        userId,
+        userMessage: { content: `Msg ${i}` },
+      });
+    }
+    await expect(
+      t.withIdentity({ subject: externalId }).mutation(api.messages.send, {
+        chatId,
+        userId,
+        userMessage: { content: 'Over limit' },
+      })
+    ).rejects.toThrow();
+  });
+
+  it('send stores attachments with uploadedAt (line 94)', async () => {
+    const storageId = await t.run(async (ctx) => {
+      const blob = new Blob(['test'], { type: 'text/plain' });
+      return ctx.storage.store(blob);
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert('fileUploads', {
+        userId,
+        chatId,
+        storageId,
+        filename: 'test.txt',
+        contentType: 'text/plain',
+        size: 4,
+        uploadedAt: Date.now(),
+      });
+    });
+
+    const result = await t.withIdentity({ subject: externalId }).mutation(api.messages.send, {
+      chatId,
+      userId,
+      userMessage: {
+        content: 'Message with attachment',
+        attachments: [
+          {
+            storageId,
+            filename: 'test.txt',
+            contentType: 'text/plain',
+            size: 4,
+          },
+        ],
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    const msgs = await t.withIdentity({ subject: externalId }).query(api.messages.list, { chatId, userId });
+    expect(msgs[0].attachments?.length).toBe(1);
+    expect(msgs[0].attachments?.[0].uploadedAt).toBeDefined();
+  });
+
+  it('throws rate limit error in editAndRegenerate after capacity exhausted (line 165)', async () => {
+    const msgId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId,
+        role: 'user',
+        content: 'Original',
+        createdAt: Date.now(),
+        status: 'completed',
+      })
+    );
+
+    for (let i = 0; i < 10; i++) {
+      await t.withIdentity({ subject: externalId }).mutation(api.messages.editAndRegenerate, {
+        chatId,
+        userId,
+        messageId: msgId,
+        newContent: `Edit ${i}`,
+      });
+    }
+
+    await expect(
+      t.withIdentity({ subject: externalId }).mutation(api.messages.editAndRegenerate, {
+        chatId,
+        userId,
+        messageId: msgId,
+        newContent: 'Over limit',
+      })
+    ).rejects.toThrow();
+  });
+
+  it('throws rate limit error in retryMessage after capacity exhausted (line 252)', async () => {
+    const msgId = await t.run(async (ctx) =>
+      ctx.db.insert('messages', {
+        chatId,
+        role: 'user',
+        content: 'Retry me',
+        createdAt: Date.now(),
+        status: 'completed',
+      })
+    );
+
+    for (let i = 0; i < 10; i++) {
+      await t.withIdentity({ subject: externalId }).mutation(api.messages.retryMessage, {
+        chatId,
+        userId,
+        messageId: msgId,
+      });
+    }
+
+    await expect(
+      t.withIdentity({ subject: externalId }).mutation(api.messages.retryMessage, {
+        chatId,
+        userId,
+        messageId: msgId,
+      })
+    ).rejects.toThrow();
+  });
+
+  it('throws rate limit error in streamUpsert after messageStreamUpsert capacity exhausted (line 361)', async () => {
+    for (let i = 0; i < 50; i++) {
+      await t.withIdentity({ subject: externalId }).mutation(api.messages.streamUpsert, {
+        chatId,
+        userId,
+        role: 'assistant',
+        content: `Stream ${i}`,
+      });
+    }
+
+    await expect(
+      t.withIdentity({ subject: externalId }).mutation(api.messages.streamUpsert, {
+        chatId,
+        userId,
+        role: 'assistant',
+        content: 'Over limit',
+      })
+    ).rejects.toThrow();
   });
 });

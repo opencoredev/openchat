@@ -16,6 +16,7 @@ import { expect, test, describe } from "vitest";
 import { api } from "../_generated/api";
 import schema from "../schema";
 import { modules, rateLimiter } from '../testSetup.test';
+import { formatWaitTime, throwRateLimitError } from "./rateLimitUtils";
 
 // Helper to create convex test instance with components registered
 function createConvexTest() {
@@ -658,5 +659,39 @@ describe("rateLimiter - error messages", () => {
 		// Should mention when to retry
 		expect(caughtError).not.toBeNull();
 		expect(caughtError!.message.toLowerCase()).toMatch(/try again/);
+	});
+});
+
+describe("rateLimitUtils (pure functions)", () => {
+	test("formatWaitTime returns 'in X seconds' when retryAfterMs is provided", () => {
+		expect(formatWaitTime(3000)).toBe("in 3 seconds");
+		expect(formatWaitTime(1500)).toBe("in 2 seconds");
+		expect(formatWaitTime(1000)).toBe("in 1 seconds");
+	});
+
+	test("formatWaitTime returns 'later' when retryAfterMs is undefined (line 14)", () => {
+		expect(formatWaitTime(undefined)).toBe("later");
+	});
+
+	test("throwRateLimitError throws with formatted message", () => {
+		expect(() => throwRateLimitError("messages", 5000)).toThrow(
+			"Too many messages. Please try again in 5 seconds.",
+		);
+	});
+
+	test("throwRateLimitError uses 'later' when no retryAfterMs", () => {
+		expect(() => throwRateLimitError("requests")).toThrow(
+			"Too many requests. Please try again later.",
+		);
+	});
+
+	test("throwRateLimitError throws an error with name RateLimitError", () => {
+		let caught: Error | null = null;
+		try {
+			throwRateLimitError("test");
+		} catch (e) {
+			caught = e as Error;
+		}
+		expect(caught?.name).toBe("RateLimitError");
 	});
 });

@@ -1,5 +1,13 @@
 type ExitCode = number | null;
 
+declare const Bun: {
+	spawn(options: {
+		cmd: string[];
+		env: NodeJS.ProcessEnv;
+		stdio: ["inherit", "inherit", "inherit"];
+	}): { exited: Promise<ExitCode> };
+};
+
 function sanitizeNodeOptions(nodeOptions: string | undefined): string | undefined {
 	if (!nodeOptions) return nodeOptions;
 
@@ -44,9 +52,11 @@ env.NODE_OPTIONS = [sanitizedNodeOptions, "--disable-warning=localstorage-file"]
 	.join(" ");
 
 const checkRedisExit = await run(["bun", "./scripts/check-redis.ts"], env);
-if (checkRedisExit !== 0) {
+if (checkRedisExit !== 0 && process.env.NODE_ENV === "production") {
 	process.exit(checkRedisExit ?? 1);
 }
 
 const devExit = await run(["bunx", "turbo", "-F", "web", "-F", "server", "dev"], env);
 process.exit(devExit ?? 1);
+
+export {};

@@ -36,7 +36,17 @@ vi.mock("@/components/ui/tooltip", () => ({
 }));
 
 vi.mock("@/components/ui/dialog", () => ({
-	Dialog: ({ children }: any) => <>{children}</>,
+	Dialog: ({ children, open, onOpenChange }: any) => (
+		<>
+			{open && (
+				<button
+					data-testid="dialog-close-btn"
+					onClick={() => onOpenChange?.(false)}
+				/>
+			)}
+			{children}
+		</>
+	),
 	DialogContent: ({ children }: any) => <div>{children}</div>,
 	DialogHeader: ({ children }: any) => <div>{children}</div>,
 	DialogTitle: ({ children }: any) => <div>{children}</div>,
@@ -305,6 +315,17 @@ describe("ModelSelector", () => {
 		expect(onValueChange).toHaveBeenCalled();
 	});
 
+	it("calls scrollIntoView when ArrowDown highlights an element with data-index", async () => {
+		const scrollIntoView = vi.fn();
+		Element.prototype.scrollIntoView = scrollIntoView;
+		render(<ModelSelector value="anthropic/claude-3.5-sonnet" onValueChange={vi.fn()} />);
+		await openDropdown();
+		await act(async () => {
+			fireEvent.keyDown(document, { key: "ArrowDown" });
+		});
+		expect(scrollIntoView).toHaveBeenCalled();
+	});
+
 	it("closes the dropdown when the Escape key is pressed", async () => {
 		render(
 			<ModelSelector
@@ -319,6 +340,102 @@ describe("ModelSelector", () => {
 			fireEvent.keyDown(document, { key: "Escape" });
 		});
 		expect(trigger.getAttribute("aria-expanded")).toBe("false");
+	});
+
+	it("closes the dropdown when the Tab key is pressed", async () => {
+		render(
+			<ModelSelector
+				value="anthropic/claude-3.5-sonnet"
+				onValueChange={vi.fn()}
+			/>,
+		);
+		const trigger = screen.getByRole("button", { name: "Select model" });
+		await openDropdown();
+		expect(trigger.getAttribute("aria-expanded")).toBe("true");
+		await act(async () => {
+			fireEvent.keyDown(document, { key: "Tab" });
+		});
+		expect(trigger.getAttribute("aria-expanded")).toBe("false");
+	});
+
+	it("navigates up with ArrowUp key", async () => {
+		const onValueChange = vi.fn();
+		render(
+			<ModelSelector value="openai/gpt-4o" onValueChange={onValueChange} />,
+		);
+		await openDropdown();
+		await act(async () => {
+			fireEvent.keyDown(document, { key: "ArrowDown" });
+		});
+		await act(async () => {
+			fireEvent.keyDown(document, { key: "ArrowDown" });
+		});
+		await act(async () => {
+			fireEvent.keyDown(document, { key: "ArrowUp" });
+		});
+		await act(async () => {
+			fireEvent.keyDown(document, { key: "Enter" });
+		});
+		expect(onValueChange).toHaveBeenCalled();
+	});
+
+	it("closes the dropdown when clicking the trigger while it is open", async () => {
+		render(
+			<ModelSelector
+				value="anthropic/claude-3.5-sonnet"
+				onValueChange={vi.fn()}
+			/>,
+		);
+		const trigger = screen.getByRole("button", { name: "Select model" });
+		await openDropdown();
+		expect(trigger.getAttribute("aria-expanded")).toBe("true");
+		await act(async () => {
+			fireEvent.click(trigger);
+		});
+		expect(trigger.getAttribute("aria-expanded")).toBe("false");
+	});
+
+	it("closes the dropdown when clicking outside of it", async () => {
+		render(
+			<ModelSelector
+				value="anthropic/claude-3.5-sonnet"
+				onValueChange={vi.fn()}
+			/>,
+		);
+		const trigger = screen.getByRole("button", { name: "Select model" });
+		await openDropdown();
+		expect(trigger.getAttribute("aria-expanded")).toBe("true");
+		await act(async () => {
+			fireEvent.mouseDown(document.body);
+		});
+		expect(trigger.getAttribute("aria-expanded")).toBe("false");
+	});
+
+	it("calls toggleFavorite when the star button on a model item is clicked", async () => {
+		const toggleFavorite = vi.fn();
+		vi.mocked(useFavoriteModels).mockReturnValue({
+			favorites: new Set<string>(),
+			toggleFavorite,
+			isFavorite: vi.fn(() => false),
+			addDefaults: vi.fn(),
+			missingDefaultsCount: 0,
+			hasMissingDefaults: false,
+			isLoading: false,
+			isAuthenticated: false,
+		});
+		render(
+			<ModelSelector
+				value="anthropic/claude-3.5-sonnet"
+				onValueChange={vi.fn()}
+			/>,
+		);
+		await openDropdown();
+		const favBtns = screen.getAllByTitle("Add to favorites");
+		expect(favBtns.length).toBeGreaterThan(0);
+		await act(async () => {
+			fireEvent.click(favBtns[0]);
+		});
+		expect(toggleFavorite).toHaveBeenCalled();
 	});
 });
 
@@ -360,4 +477,5 @@ describe("ConnectedModelSelector", () => {
 		});
 		expect(mockSetSelectedModel).toHaveBeenCalledWith("openai/gpt-4o");
 	});
+
 });

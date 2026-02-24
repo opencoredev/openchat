@@ -21,6 +21,12 @@ import { createLogger } from "./lib/logger";
 
 const logger = createLogger("Cron");
 
+const ALERT_THRESHOLDS = {
+	softDeletedChatRatio: 0.2,
+	softDeletedMessageRatio: 0.25,
+	maxUsers: 1_000_000,
+} as const;
+
 const crons = cronJobs();
 
 crons.interval("refresh benchmarks", { hours: 8 }, internal.benchmarks.fetchAndStoreBenchmarks);
@@ -227,7 +233,44 @@ export const generateDatabaseStats = internalMutation({
 
 			logger.info("Database statistics", stats);
 
-			// TODO: Send alerts if any metrics exceed thresholds
+			const alerts: string[] = [];
+			const chatTotal = stats.tables.chats.total;
+			const chatSoftDeleted = stats.tables.chats.softDeleted;
+			const messageTotal = stats.tables.messages.total;
+			const messageSoftDeleted = stats.tables.messages.softDeleted;
+			const usersTotal = stats.tables.users.total;
+
+			if (
+				chatTotal > 0 &&
+				chatSoftDeleted / chatTotal > ALERT_THRESHOLDS.softDeletedChatRatio
+			) {
+				alerts.push(
+					`High soft-deleted chat ratio: ${chatSoftDeleted}/${chatTotal} exceeds ${Math.round(ALERT_THRESHOLDS.softDeletedChatRatio * 100)}%`,
+				);
+			}
+
+			if (
+				messageTotal > 0 &&
+				messageSoftDeleted / messageTotal > ALERT_THRESHOLDS.softDeletedMessageRatio
+			) {
+				alerts.push(
+					`High soft-deleted message ratio: ${messageSoftDeleted}/${messageTotal} exceeds ${Math.round(ALERT_THRESHOLDS.softDeletedMessageRatio * 100)}%`,
+				);
+			}
+
+			if (usersTotal > ALERT_THRESHOLDS.maxUsers) {
+				alerts.push(
+					`User count threshold exceeded: ${usersTotal} > ${ALERT_THRESHOLDS.maxUsers}`,
+				);
+			}
+
+			if (alerts.length > 0) {
+				logger.warn("Database metrics exceeded alert thresholds", {
+					alertCount: alerts.length,
+					alerts,
+					stats,
+				});
+			}
 
 			logger.info("Generate database stats - Completed");
 

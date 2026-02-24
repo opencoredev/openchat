@@ -57,21 +57,20 @@ export const createAuth = (
 		convex({ authConfig }),
 		// Enable cross-domain auth for frontend on different domain (localhost:3000 -> convex.site)
 		crossDomain({ siteUrl }),
+		...(isPreview
+			? [
+				(() => {
+					if (!PRODUCTION_CONVEX_SITE_URL) {
+						throw new Error("PRODUCTION_CONVEX_SITE_URL environment variable is not set");
+					}
+					return oAuthProxy({
+						productionURL: PRODUCTION_CONVEX_SITE_URL,
+						currentURL: convexSiteUrl,
+					});
+				})(),
+			]
+			: []),
 	];
-
-	// Add oAuthProxy plugin for preview environments
-	// This routes OAuth callbacks through production and redirects back to preview
-	if (isPreview) {
-		if (!PRODUCTION_CONVEX_SITE_URL) {
-			throw new Error("PRODUCTION_CONVEX_SITE_URL environment variable is not set");
-		}
-		plugins.push(
-			oAuthProxy({
-				productionURL: PRODUCTION_CONVEX_SITE_URL,
-				currentURL: convexSiteUrl,
-			}) as unknown as typeof plugins[number]
-		);
-	}
 
 	const trustedOrigins = [
 		PRODUCTION_CONVEX_SITE_URL,
@@ -132,11 +131,11 @@ export const createAuth = (
 							}
 						: {}),
 				},
-	// Trust explicitly configured origins (no wildcards for security)
-	trustedOrigins,
+		// Trust explicitly configured origins (no wildcards for security)
+		trustedOrigins,
 		plugins,
 	});
-	
+
 	return auth;
 };
 
@@ -147,6 +146,11 @@ export const createAuth = (
 export const getCurrentUser = query({
 	args: {},
 	handler: async (ctx) => {
-		return authComponent.getAuthUser(ctx as unknown as GenericCtx<DataModel>);
+		const identity = await ctx.auth.getUserIdentity();
+		if (!identity) return null;
+		return await ctx.db
+			.query("users")
+			.withIndex("by_external_id", (q) => q.eq("externalId", identity.subject))
+			.unique();
 	},
 });

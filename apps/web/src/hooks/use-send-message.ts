@@ -129,7 +129,8 @@ export function useSendMessage({
 					clientMessageId: userMsgId,
 					createdAt: userCreatedAt,
 				},
-			}).catch(() => {
+			}).catch((persistError) => {
+				console.warn("[PersistentChat] Failed to persist user message", persistError);
 				toast.error("Message may not be saved", {
 					description:
 						"We could not persist your message. Please resend if it is missing after refresh.",
@@ -137,7 +138,9 @@ export function useSendMessage({
 			});
 
 			try {
-				await cleanupStaleJobs({ userId: convexUserId }).catch(() => {});
+				await cleanupStaleJobs({ userId: convexUserId }).catch((cleanupError) => {
+					console.warn("[PersistentChat] Failed to cleanup stale jobs", cleanupError);
+				});
 
 				const allMsgs = messages.map((m) => {
 					const textPart = m.parts.find(

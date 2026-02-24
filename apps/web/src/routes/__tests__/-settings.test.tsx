@@ -221,4 +221,20 @@ describe("SettingsPage", () => {
 		await renderSettings();
 		expect(screen.queryByText("Account")).toBeNull();
 	});
+
+	it("calls signOut when Sign out button is clicked (line 90)", async () => {
+		const { signOut } = await import("@/lib/auth-client");
+		await renderSettings();
+		fireEvent.click(screen.getByText("Sign out"));
+		expect(signOut).toHaveBeenCalled();
+	});
+
+	it("Route.head() returns SEO meta tags (line 15)", async () => {
+		const mod = await import("../settings");
+		const Route = mod.Route as any;
+		const head = Route.head();
+		expect(head).toBeDefined();
+		expect(Array.isArray(head.meta)).toBe(true);
+		expect(head.meta.some((m: any) => m.title === "Settings - osschat")).toBe(true);
+	});
 });

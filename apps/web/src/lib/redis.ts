@@ -1,5 +1,4 @@
-import type { Redis as UpstashRedis } from "@upstash/redis";
-import { upstashRedis } from "@/lib/upstash";
+import { isRedisConfigured, redisStore } from "@/lib/upstash";
 
 const STREAM_TTL_SECONDS = 3600;
 const STREAM_ERROR_TTL_SECONDS = 600;
@@ -32,27 +31,25 @@ export interface StreamMeta {
 	error?: string;
 }
 
-export function getRedisClient(): UpstashRedis | null {
-	return upstashRedis;
+export function getRedisClient() {
+	return isRedisConfigured() ? redisStore : null;
 }
 
 export function isRedisAvailable(): boolean {
-	return upstashRedis !== null;
+	return isRedisConfigured();
 }
 
 export async function ensureRedisConnected(): Promise<boolean> {
-	if (!upstashRedis) return false;
 	try {
-		await upstashRedis.ping();
-		return true;
+		return await redisStore.ping();
 	} catch (error) {
-		console.error("[Upstash Redis] Ping failed:", error);
+		console.error("[Redis] Ping failed:", error);
 		return false;
 	}
 }
 
-async function getConnectedClient(): Promise<UpstashRedis | null> {
-	return upstashRedis;
+async function getConnectedClient() {
+	return isRedisConfigured() ? redisStore : null;
 }
 
 function parseStreamMeta(value: unknown): StreamMeta | null {

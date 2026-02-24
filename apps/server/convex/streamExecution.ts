@@ -132,11 +132,11 @@ export const executeStream = internalAction({
 			});
 		};
 
-		try {
-			const timeoutMs = 5 * 60 * 1000;
-			const controller = new AbortController();
-			const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+		const timeoutMs = 5 * 60 * 1000;
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+		try {
 			const openRouter = createOpenRouter({ apiKey });
 			const aiModel = openRouter(job.model);
 
@@ -155,12 +155,13 @@ export const executeStream = internalAction({
 				abortSignal: controller.signal,
 				maxOutputTokens,
 				providerOptions: {
-					openrouter: openRouterOptions as Record<string, any>,
+					openrouter: openRouterOptions,
 				},
 			};
 
 			const webSearchRequested = Boolean(job.options?.enableWebSearch);
 			const supportsToolCalls = job.options?.supportsToolCalls !== false;
+			const valyuApiKey = VALYU_API_KEY ?? null;
 			let webSearchMode: "none" | "tool" | "unavailable" = "none";
 			let webSearchUnavailableReason: string | null = null;
 			let availableSearches = 0;
@@ -173,11 +174,11 @@ export const executeStream = internalAction({
 				if (!searchLimit.canSearch) {
 					webSearchMode = "unavailable";
 					webSearchUnavailableReason = "Daily search limit reached. Please try again tomorrow.";
-				} else if (supportsToolCalls && VALYU_API_KEY) {
+				} else if (supportsToolCalls && valyuApiKey) {
 					webSearchMode = "tool";
 				} else {
 					webSearchMode = "unavailable";
-					webSearchUnavailableReason = !VALYU_API_KEY
+					webSearchUnavailableReason = !valyuApiKey
 						? "Web search is not configured on the server."
 						: "This model does not support tool calls required for web search.";
 				}
@@ -202,13 +203,13 @@ export const executeStream = internalAction({
 				];
 			}
 
-			if (webSearchMode === "tool") {
+			if (webSearchMode === "tool" && valyuApiKey) {
 				const contextChunks = await executePrefetchedSearches(
 					ctx,
 					job.userId,
 					latestUserMessage,
 					availableSearches,
-					VALYU_API_KEY!,
+					valyuApiKey,
 					state,
 					persistProgress,
 				);
@@ -380,8 +381,6 @@ export const executeStream = internalAction({
 				});
 			}
 
-			clearTimeout(timeoutId);
-
 			const totalDurationMs = state.streamCompletedTime - job.createdAt;
 			const timeToFirstTokenMs = state.firstTextDeltaTime
 				? state.firstTextDeltaTime - job.createdAt
@@ -406,7 +405,13 @@ export const executeStream = internalAction({
 								usageCents,
 							});
 							break;
-						} catch {
+						} catch (usageError) {
+							void logger.warn("incrementAiUsage failed", {
+								jobId: args.jobId,
+								attempt,
+								error:
+									usageError instanceof Error ? usageError.message : "Unknown error",
+							});
 							if (attempt === 1) break;
 						}
 					}
@@ -475,6 +480,8 @@ export const executeStream = internalAction({
 				error: "An error occurred while processing your request.",
 				partialContent: state.fullContent,
 			});
+		} finally {
+			clearTimeout(timeoutId);
 		}
 	},
 });

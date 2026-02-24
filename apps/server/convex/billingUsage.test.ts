@@ -118,6 +118,28 @@ describe("normalizeUsagePayload", () => {
 		expect(result.promptTokens).toBeUndefined();
 		expect(result.completionTokens).toBeUndefined();
 	});
+
+	test("extracts reasoningTokens from camelCase outputTokensDetails (lines 50-51, 57-58)", () => {
+		const result = normalizeUsagePayload({
+			outputTokensDetails: { reasoningTokens: 42 },
+		});
+		expect(result.reasoningTokens).toBe(42);
+	});
+
+	test("extracts reasoning_tokens from snake_case output_tokens_details (line 48-49, 55-56)", () => {
+		const result = normalizeUsagePayload({
+			output_tokens_details: { reasoning_tokens: 17 },
+		});
+		expect(result.reasoningTokens).toBe(17);
+	});
+
+	test("returns undefined reasoningTokens when outputTokensDetails is null", () => {
+		const result = normalizeUsagePayload({
+			output_tokens_details: null,
+			outputTokensDetails: null,
+		});
+		expect(result.reasoningTokens).toBeUndefined();
+	});
 });
 
 describe("roundCents", () => {
@@ -332,6 +354,24 @@ describe("users.incrementAiUsage", () => {
 		const user = await t.run(async (ctx) => ctx.db.get(userId));
 		expect(user?.aiUsageCents).toBe(5);
 		expect(user?.aiUsageDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+	});
+
+	test("treats missing aiUsageCents as 0 when date matches today (line 95 ?? branch)", async () => {
+		const today = new Date().toISOString().split("T")[0];
+		await t.run(async (ctx) => {
+			await ctx.db.patch(userId, {
+				aiUsageDate: today,
+				aiUsageCents: undefined,
+			});
+		});
+
+		const result = await t.mutation(internal.users.incrementAiUsage, {
+			userId,
+			usageCents: 3,
+		});
+
+		expect(result.usedCents).toBe(3);
+		expect(result.overLimit).toBe(false);
 	});
 });
 

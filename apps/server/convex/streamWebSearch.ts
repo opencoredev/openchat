@@ -1,4 +1,5 @@
 import { webSearch } from "@valyu/ai-sdk";
+import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import {
 	compactWebSearchOutput,
@@ -13,8 +14,13 @@ import {
 import type { StreamState } from "./streamUtils";
 
 export async function executePrefetchedSearches(
-	ctx: { runMutation: (fn: any, args: any) => Promise<unknown> },
-	userId: string,
+	ctx: {
+		runMutation: (
+			fn: typeof internal.search.incrementSearchUsageInternal,
+			args: { userId: Id<"users"> },
+		) => Promise<unknown>;
+	},
+	userId: Id<"users">,
 	latestUserMessage: string,
 	availableSearches: number,
 	VALYU_API_KEY: string,

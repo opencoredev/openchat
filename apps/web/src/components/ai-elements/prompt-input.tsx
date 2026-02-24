@@ -259,7 +259,8 @@ export const PromptInput = ({
 				reader.onerror = () => resolve(null);
 				reader.readAsDataURL(blob);
 			});
-		} catch {
+		} catch (error) {
+			console.warn("[PromptInput] Failed to convert blob URL", error);
 			return null;
 		}
 	};
@@ -315,17 +316,22 @@ export const PromptInput = ({
 									controller.textInput.clear();
 								}
 							})
-							.catch(() => {});
+							.catch((submitError) => {
+								console.warn("[PromptInput] Async submit failed", submitError);
+							});
 					} else {
 						clear();
 						if (usingProvider) {
 							controller.textInput.clear();
 						}
 					}
-				} catch {
+				} catch (submitError) {
+					console.warn("[PromptInput] Submit handler threw", submitError);
 				}
 			})
-			.catch(() => {});
+			.catch((conversionError) => {
+				console.warn("[PromptInput] File conversion failed", conversionError);
+			});
 	};
 
 	const inner = (

@@ -1,7 +1,7 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { createFileRoute } from "@tanstack/react-router";
 import { json } from "@tanstack/react-start";
-import { shouldFailClosedForMissingUpstash, upstashRedis } from "@/lib/upstash";
+import { redisStore, shouldFailClosedForMissingUpstash, upstashRedis } from "@/lib/upstash";
 
 const MODELS_CACHE_KEY = "openchat:models";
 const MODELS_CACHE_TTL_SECONDS = 60 * 60 * 4;
@@ -67,14 +67,12 @@ async function fetchModelsFromOpenRouter(): Promise<Response> {
 
 		const payload = await response.text();
 
-		if (upstashRedis) {
-			try {
-				await upstashRedis.set(MODELS_CACHE_KEY, payload, {
-					ex: MODELS_CACHE_TTL_SECONDS,
-				});
-			} catch (error) {
-				console.warn("[Models API] Failed to write cache:", error);
-			}
+		try {
+			await redisStore.set(MODELS_CACHE_KEY, payload, {
+				ex: MODELS_CACHE_TTL_SECONDS,
+			});
+		} catch (error) {
+			console.warn("[Models API] Failed to write cache:", error);
 		}
 
 		return new Response(payload, {
@@ -176,12 +174,8 @@ export const Route = createFileRoute("/api/models")({
 					}
 				}
 
-				if (!upstashRedis) {
-					return fetchModelsFromOpenRouter();
-				}
-
 				try {
-					const cached = await upstashRedis.get<string | Record<string, unknown>>(MODELS_CACHE_KEY);
+					const cached = await redisStore.get<string | Record<string, unknown>>(MODELS_CACHE_KEY);
 					if (cached) {
 						const body = typeof cached === "string" ? cached : JSON.stringify(cached);
 						return new Response(body, {

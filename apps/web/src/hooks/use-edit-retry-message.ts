@@ -133,7 +133,9 @@ export function useEditRetryMessage({
 
 				setMessages(keptMessages);
 
-				await cleanupStaleJobs({ userId: convexUserId }).catch(() => {});
+				await cleanupStaleJobs({ userId: convexUserId }).catch((cleanupError) => {
+					console.warn("[EditMessage] Failed to cleanup stale jobs", cleanupError);
+				});
 
 				const assistantMsgId = crypto.randomUUID();
 				const allMsgs = keptMessages
@@ -299,7 +301,9 @@ export function useEditRetryMessage({
 
 				setMessages(keptMessages);
 
-				await cleanupStaleJobs({ userId: convexUserId }).catch(() => {});
+				await cleanupStaleJobs({ userId: convexUserId }).catch((cleanupError) => {
+					console.warn("[RetryMessage] Failed to cleanup stale jobs", cleanupError);
+				});
 
 				const assistantMsgId = crypto.randomUUID();
 				const allMsgs = keptMessages

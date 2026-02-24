@@ -16,13 +16,45 @@ import { api } from "./_generated/api";
 import schema from "./schema";
 import { modules, rateLimiter } from "./testSetup.test";
 
-function asExternalId(t: any, externalId: string) {
+type DbStatsDoc = { value?: number };
+
+type DbStatsQueryCtx = {
+	db: {
+		query: (table: "dbStats") => {
+			withIndex: (
+				indexName: "by_key",
+				builder: (q: { eq: (field: "key", value: string) => unknown }) => unknown,
+			) => {
+				unique: () => Promise<DbStatsDoc | null>;
+			};
+		};
+	};
+};
+
+type UsersByExternalIdQueryCtx = {
+	db: {
+		query: (table: "users") => {
+			withIndex: (
+				indexName: "by_external_id",
+				builder: (q: { eq: (field: "externalId", value: string) => unknown }) => unknown,
+			) => {
+				collect: () => Promise<unknown[]>;
+			};
+		};
+	};
+};
+
+function hasMessage(error: unknown): error is { message: string } {
+	return typeof error === "object" && error !== null && "message" in error;
+}
+
+function asExternalId(t: ReturnType<typeof createConvexTest>, externalId: string) {
 	return t.withIdentity({ subject: externalId });
 }
 
 // Helper to create convex test instance with components registered
 function createConvexTest() {
-	const t = convexTest(schema, modules);
+	const t = convexTest(schema as unknown as Parameters<typeof convexTest>[0], modules);
 	rateLimiter.register(t);
 	return t;
 }
@@ -166,9 +198,10 @@ describe("users.ensure", () => {
 		});
 
 		const stat = await t.run(async (ctx) => {
-			return await (ctx.db as any)
+			const typedCtx = ctx as unknown as DbStatsQueryCtx;
+			return await typedCtx.db
 				.query("dbStats")
-				.withIndex("by_key", (q: any) => q.eq("key", "users_total"))
+				.withIndex("by_key", (q) => q.eq("key", "users_total"))
 				.unique();
 		});
 
@@ -187,9 +220,10 @@ describe("users.ensure", () => {
 		});
 
 		const stat = await t.run(async (ctx) => {
-			return await (ctx.db as any)
+			const typedCtx = ctx as unknown as DbStatsQueryCtx;
+			return await typedCtx.db
 				.query("dbStats")
-				.withIndex("by_key", (q: any) => q.eq("key", "users_total"))
+				.withIndex("by_key", (q) => q.eq("key", "users_total"))
 				.unique();
 		});
 
@@ -207,11 +241,8 @@ describe("users.ensure", () => {
 					await userT.mutation(api.users.ensure, {
 						externalId: "user_rate_limit",
 					});
-				} catch (error: any) {
-					if (
-						error?.message &&
-						error.message.includes("Too many authentication attempts")
-					) {
+				} catch (error: unknown) {
+					if (hasMessage(error) && error.message.includes("Too many authentication attempts")) {
 						rateLimitHit = true;
 						break;
 					}
@@ -432,8 +463,8 @@ describe("users.saveOpenRouterKey", () => {
 						userId,
 						encryptedKey: `key_${i}`,
 					});
-				} catch (error: any) {
-				if (error.message && error.message.includes("Too many API key updates")) {
+				} catch (error: unknown) {
+				if (hasMessage(error) && error.message.includes("Too many API key updates")) {
 					rateLimitHit = true;
 					break;
 				}
@@ -575,8 +606,8 @@ describe("users.removeOpenRouterKey", () => {
 					await userT.mutation(api.users.removeOpenRouterKey, {
 						userId,
 					});
-				} catch (error: any) {
-				if (error.message && error.message.includes("Too many API key removals")) {
+				} catch (error: unknown) {
+				if (hasMessage(error) && error.message.includes("Too many API key removals")) {
 					rateLimitHit = true;
 					break;
 				}
@@ -718,9 +749,10 @@ describe("users concurrent operations", () => {
 
 		// Should only have one user in the database
 		const users = await t.run(async (ctx) => {
-			return await (ctx.db as any)
+			const typedCtx = ctx as unknown as UsersByExternalIdQueryCtx;
+			return await typedCtx.db
 				.query("users")
-				.withIndex("by_external_id", (q: any) =>
+				.withIndex("by_external_id", (q) =>
 					q.eq("externalId", "user_concurrent")
 				)
 				.collect();

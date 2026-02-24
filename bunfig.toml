@@ -1,2 +1,8 @@
 [install]
 # linker = "isolated"
+
+[test]
+# The project uses vitest as its test runner (bun run test).
+# This root prevents `bun test` from accidentally picking up vitest
+# test files, which use vitest-specific APIs incompatible with Bun's runner.
+root = "./.bun-tests"
