@@ -589,6 +589,8 @@ describe("chatTitle.generateAndSetTitleInternal", () => {
 	afterEach(() => {
 		vi.useRealTimers();
 		vi.restoreAllMocks();
+		vi.unstubAllEnvs();
+		vi.unstubAllGlobals();
 	});
 
 	test("returns chat_not_found when chat does not exist (line 148)", async () => {
@@ -734,6 +736,8 @@ describe("chatTitle.generateTitle action", () => {
 	afterEach(() => {
 		vi.useRealTimers();
 		vi.restoreAllMocks();
+		vi.unstubAllEnvs();
+		vi.unstubAllGlobals();
 	});
 
 	test("returns null when seedText is empty", async () => {

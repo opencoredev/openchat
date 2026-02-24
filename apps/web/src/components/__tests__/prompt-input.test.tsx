@@ -405,6 +405,7 @@ describe("PromptInput – drag and drop on form", () => {
 			writable: false,
 		});
 		form.dispatchEvent(dragOverEvent);
+		expect(preventDefaultSpy).toHaveBeenCalled();
 	});
 });
 
@@ -456,11 +457,13 @@ describe("PromptInput – global drag and drop", () => {
 			value: { files: [], items: [], types: ["Files"] },
 			writable: false,
 		});
+		const preventDefaultSpy = vi.fn();
 		Object.defineProperty(dragOverEvent, "preventDefault", {
-			value: vi.fn(),
+			value: preventDefaultSpy,
 			writable: false,
 		});
 		document.dispatchEvent(dragOverEvent);
+		expect(preventDefaultSpy).toHaveBeenCalled();
 	});
 });
 
@@ -566,14 +569,35 @@ describe("PromptInput – onSubmit returns Promise", () => {
 });
 
 describe("PromptInput – syncHiddenInput", () => {
-	it("resets file input value when files cleared with syncHiddenInput", () => {
+	it("resets file input value when files are cleared", async () => {
 		const { container } = render(
 			<PromptInput syncHiddenInput onSubmit={vi.fn()}>
 				<PromptInputTextarea />
+				<PromptInputSubmit />
 			</PromptInput>,
 		);
+
 		const fileInputs = container.querySelectorAll('input[type="file"]');
-		expect(fileInputs.length).toBeGreaterThanOrEqual(1);
+		const hiddenInput = fileInputs[0] as HTMLInputElement;
+		const file = new File(["content"], "sync-test.png", { type: "image/png" });
+		Object.defineProperty(hiddenInput, "files", {
+			value: [file],
+			configurable: true,
+		});
+
+		fireEvent.change(hiddenInput);
+		Object.defineProperty(hiddenInput, "value", {
+			value: "C:\\fakepath\\sync-test.png",
+			writable: true,
+			configurable: true,
+		});
+
+		const form = container.querySelector("form")!;
+		fireEvent.submit(form);
+
+		await waitFor(() => {
+			expect(hiddenInput.value).toBe("");
+		});
 	});
 });
 

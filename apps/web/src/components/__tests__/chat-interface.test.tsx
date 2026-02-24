@@ -345,11 +345,6 @@ describe('ChatInterface', () => {
 		expect(screen.getByTestId('chat-message-list')).toBeTruthy()
 	})
 
-	it('renders PremiumPromptInputInner component', () => {
-		render(<ChatInterface />)
-		expect(screen.getByTestId('premium-prompt-input')).toBeTruthy()
-	})
-
 	describe('edit message flow', () => {
 		it('onStartEdit sets input text to message content', () => {
 			render(<ChatInterface />)

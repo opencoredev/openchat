@@ -172,10 +172,6 @@ describe("streamQueries", () => {
 			const chatId = await seedChat(t, userId);
 			const jobId = await seedStreamJob(t, userId, chatId, "running");
 
-			await t.run(async (ctx) => {
-				await ctx.db.patch(chatId, { activeStreamId: jobId });
-			});
-
 			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamQueries.getActiveStreamJob, {
 				chatId,
 				userId,

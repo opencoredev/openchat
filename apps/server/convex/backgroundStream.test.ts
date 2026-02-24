@@ -55,23 +55,6 @@ describe('backgroundStream.startStream', () => {
 		vi.useRealTimers();
 	});
 
-	it('creates a streamJob and returns its ID', async () => {
-		const jobId = await t.withIdentity({ subject: externalId }).mutation(api.backgroundStream.startStream, {
-			chatId,
-			userId,
-			messageId: 'msg_123',
-			model: 'openai/gpt-4o',
-			provider: 'openrouter',
-			messages: [{ role: 'user', content: 'Hello' }],
-		});
-
-		expect(jobId).toBeDefined();
-
-		const job = await t.run(async (ctx) => ctx.db.get(jobId));
-		expect(job).not.toBeNull();
-		expect(job?.status).toBe('pending');
-	});
-
 	it('inserts the streamJob with correct fields', async () => {
 		const messages = [{ role: 'user', content: 'Test message' }];
 

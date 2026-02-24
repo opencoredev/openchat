@@ -361,7 +361,7 @@ describe("users.incrementAiUsage", () => {
 		await t.run(async (ctx) => {
 			await ctx.db.patch(userId, {
 				aiUsageDate: today,
-				aiUsageCents: undefined,
+				aiUsageCents: null,
 			});
 		});
 
