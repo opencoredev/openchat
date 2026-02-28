@@ -103,6 +103,7 @@ export const list = query({
 			tokensPerSecond: msg.tokensPerSecond,
 			timeToFirstTokenMs: msg.timeToFirstTokenMs,
 			totalDurationMs: msg.totalDurationMs,
+			compareGroup: msg.compareGroup,
 		}));
 	},
 });

@@ -221,6 +221,7 @@ export function convexMessageToUIMessage(msg: {
 		completionTokens: number;
 		totalTokens: number;
 	};
+	compareGroup?: string;
 }): UIMessage {
 	return {
 		id: msg.clientMessageId || msg._id,
@@ -244,6 +245,7 @@ export function convexMessageToUIMessage(msg: {
 			totalDurationMs: msg.totalDurationMs,
 			tokenUsage: msg.tokenUsage,
 			resumedFromActiveStream: msg.status === "streaming",
+			compareGroup: msg.compareGroup,
 		},
 		parts: normalizeMessageParts({
 			content: msg.content,

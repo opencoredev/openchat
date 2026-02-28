@@ -12,7 +12,9 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { ConnectedModelSelector } from "@/components/model-selector";
-import { PillButton, ReasoningToggleButton, WebSearchToggleButton, SendButton } from "./prompt-toolbar";
+import { CompareModelSelector } from "@/components/compare-model-selector";
+import { PillButton, ReasoningToggleButton, WebSearchToggleButton, CompareToggleButton, SendButton } from "./prompt-toolbar";
+import { useCompareStore } from "@/stores/compare";
 
 export interface PremiumPromptInputProps {
 	onSubmit: (message: PromptInputMessage) => Promise<void>;
@@ -32,6 +34,7 @@ export function PremiumPromptInputInner({
 	const controller = usePromptInputController();
 	const hasContent = controller.textInput.value.trim().length > 0;
 	const fileInputRef = useRef<HTMLInputElement>(null);
+	const compareEnabled = useCompareStore((s) => s.compareEnabled);
 
 	const handleAttachClick = () => {
 		fileInputRef.current?.click();
@@ -86,8 +89,12 @@ export function PremiumPromptInputInner({
 				/>
 
 				<PromptInputFooter className="px-2 md:px-3 pb-2 md:pb-3 pt-1 gap-1.5 md:gap-2">
-					<PromptInputTools className="gap-1.5 md:gap-2 flex-1 min-w-0">
+					<PromptInputTools className="gap-1.5 md:gap-2 flex-1 min-w-0 flex-wrap">
 						<ConnectedModelSelector disabled={isLoading} />
+						{compareEnabled && (
+							<CompareModelSelector disabled={isLoading} />
+						)}
+						<CompareToggleButton disabled={isLoading} />
 						<ReasoningToggleButton disabled={isLoading} />
 						<WebSearchToggleButton disabled={isLoading} />
 						<PillButton

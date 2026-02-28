@@ -152,6 +152,8 @@ export default defineSchema({
 		timeToFirstTokenMs: v.optional(v.number()),
 		totalDurationMs: v.optional(v.number()),
 		streamId: v.optional(v.string()),
+		// Multi-model comparison: groups messages that were generated in parallel for comparison
+		compareGroup: v.optional(v.string()),
 		// Legacy field — present on some existing documents but no longer written.
 		// Kept so schema validation passes for old rows.
 		messageMetadata: v.optional(
@@ -297,10 +299,13 @@ export default defineSchema({
 		startedAt: v.optional(v.number()),
 		completedAt: v.optional(v.number()),
 		createdAt: v.number(),
+		// Multi-model comparison: groups parallel stream jobs that should be displayed side-by-side
+		compareGroup: v.optional(v.string()),
 	})
 		.index("by_chat", ["chatId", "status"])
 		.index("by_user", ["userId", "status"])
-		.index("by_status", ["status", "createdAt"]),
+		.index("by_status", ["status", "createdAt"])
+		.index("by_compare_group", ["chatId", "compareGroup"]),
 	benchmarks: defineTable({
 		openRouterModelId: v.string(),
 		aaSlug: v.string(),
