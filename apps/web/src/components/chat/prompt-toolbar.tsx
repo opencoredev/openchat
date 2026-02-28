@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
-import { ArrowUpIcon, BrainIcon, GlobeIcon, SquareIcon } from "lucide-react";
+import { ArrowUpIcon, BrainIcon, GlobeIcon, GitCompareArrowsIcon, SquareIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getModelById, getModelCapabilities, useModelStore, useModels } from "@/stores/model";
 import { useWebSearch } from "@/stores/provider";
+import { useCompareStore } from "@/stores/compare";
 import { useAuth } from "@/lib/auth-client";
 
 export interface ToolbarToggleProps {
@@ -138,6 +139,20 @@ export function WebSearchToggleButton({ disabled }: ToolbarToggleProps) {
 				(isLimitReached && !webSearchEnabled)
 			}
 			onClick={handleClick}
+		/>
+	);
+}
+
+export function CompareToggleButton({ disabled }: ToolbarToggleProps) {
+	const { compareEnabled, toggleCompare } = useCompareStore();
+
+	return (
+		<PillButton
+			icon={<GitCompareArrowsIcon className="size-4" />}
+			label="Compare"
+			active={compareEnabled}
+			disabled={disabled}
+			onClick={toggleCompare}
 		/>
 	);
 }

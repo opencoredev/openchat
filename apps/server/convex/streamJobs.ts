@@ -138,11 +138,28 @@ export const completeStream = internalMutation({
 			completedAt: Date.now(),
 		});
 
-		await ctx.db.patch(job.chatId, {
-			activeStreamId: undefined,
-			status: "idle",
-			updatedAt: Date.now(),
-		});
+		// For compare groups, only reset chat status when ALL sibling jobs are done
+		let shouldResetChat = true;
+		if (job.compareGroup) {
+			const siblingJobs = await ctx.db
+				.query("streamJobs")
+				.withIndex("by_compare_group", (q) =>
+					q.eq("chatId", job.chatId).eq("compareGroup", job.compareGroup)
+				)
+				.collect();
+			const allDone = siblingJobs.every(
+				(j) => j.status === "completed" || j.status === "error",
+			);
+			shouldResetChat = allDone;
+		}
+
+		if (shouldResetChat) {
+			await ctx.db.patch(job.chatId, {
+				activeStreamId: undefined,
+				status: "idle",
+				updatedAt: Date.now(),
+			});
+		}
 
 		const existingMessage = await ctx.db
 			.query("messages")
@@ -187,6 +204,7 @@ export const completeStream = internalMutation({
 				status: "completed",
 				userId: job.userId,
 				createdAt: Date.now(),
+				compareGroup: job.compareGroup,
 			});
 		} else {
 			await ctx.db.patch(existingMessage._id, {
@@ -219,6 +237,7 @@ export const completeStream = internalMutation({
 					webSearchEnabled,
 				},
 				status: "completed",
+				compareGroup: job.compareGroup,
 			});
 		}
 	},
@@ -241,11 +260,28 @@ export const failStream = internalMutation({
 			completedAt: Date.now(),
 		});
 
-		await ctx.db.patch(job.chatId, {
-			activeStreamId: undefined,
-			status: "idle",
-			updatedAt: Date.now(),
-		});
+		// For compare groups, only reset chat status when ALL sibling jobs are done
+		let shouldResetChat = true;
+		if (job.compareGroup) {
+			const siblingJobs = await ctx.db
+				.query("streamJobs")
+				.withIndex("by_compare_group", (q) =>
+					q.eq("chatId", job.chatId).eq("compareGroup", job.compareGroup)
+				)
+				.collect();
+			const allDone = siblingJobs.every(
+				(j) => j.status === "completed" || j.status === "error",
+			);
+			shouldResetChat = allDone;
+		}
+
+		if (shouldResetChat) {
+			await ctx.db.patch(job.chatId, {
+				activeStreamId: undefined,
+				status: "idle",
+				updatedAt: Date.now(),
+			});
+		}
 	},
 });
 

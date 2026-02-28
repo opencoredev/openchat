@@ -8,6 +8,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { getModelById, getModelCapabilities } from "@/stores/model";
 import { useModelStore } from "@/stores/model";
 import { useProviderStore } from "@/stores/provider";
+import { useCompareStore } from "@/stores/compare";
 import { analytics } from "@/lib/analytics";
 import { shouldTriggerAutoTitle } from "@/lib/title-generation";
 import type { Model } from "@/stores/model";
@@ -57,6 +58,7 @@ export function useSendMessage({
 	const createChat = useMutation(api.chats.create);
 	const sendMessages = useMutation(api.messages.send);
 	const startBackgroundStream = useMutation(api.backgroundStream.startStream);
+	const startCompareStreams = useMutation(api.backgroundStream.startCompareStreams);
 	const cleanupStaleJobs = useMutation(api.backgroundStream.cleanupStaleJobs);
 
 	const sendMessage = useCallback(
@@ -150,56 +152,144 @@ export function useSendMessage({
 				});
 				allMsgs.push({ role: "user", content: message.text });
 
-				await startBackgroundStream({
-					chatId: targetChatId as Id<"chats">,
-					userId: convexUserId,
-					messageId: assistantMsgId,
-					model: runtimeModelId,
-					provider: activeProvider,
-					messages: allMsgs,
-					options: {
-						enableReasoning: runtimeReasoningEnabled,
-						reasoningEffort: runtimeReasoningEffort,
-						enableWebSearch: webSearchEnabled,
-						supportsToolCalls: runtimeSupportsToolCalls,
-					},
-				});
+				// Check if compare mode is enabled
+				const compareState = useCompareStore.getState();
+				const isCompareMode = compareState.compareEnabled && compareState.compareModelId && compareState.compareModelId !== runtimeModelId;
 
-				setStatus("streaming");
-				streamingRef.current = {
-					id: assistantMsgId,
-					content: "",
-					reasoning: "",
-					chainHash: "[]",
-				};
+				if (isCompareMode) {
+					// Multi-model compare mode: launch two streams in parallel
+					const compareGroup = crypto.randomUUID();
+					const assistantMsgIdB = crypto.randomUUID();
 
-				const initialParts: UIMessage["parts"] = [];
-				if (runtimeReasoningEffort !== "none") {
-					const reasoningPart: ReasoningPartWithState = {
-						type: "reasoning",
-						text: "",
-						state: "streaming",
-					};
-					initialParts.push(reasoningPart as UIMessage["parts"][number]);
-				}
-				initialParts.push({ type: "text", text: "", state: "streaming" });
-
-				setMessages((prev) => [
-					...prev,
-					{
-						id: assistantMsgId,
-						role: "assistant",
-						parts: initialParts,
-						metadata: {
-							reasoningRequested: runtimeReasoningEffort !== "none",
-							modelId: runtimeModelId,
-							provider: activeProvider,
+					await startCompareStreams({
+						chatId: targetChatId as Id<"chats">,
+						userId: convexUserId,
+						models: [
+							{
+								messageId: assistantMsgId,
+								model: runtimeModelId,
+								provider: activeProvider,
+							},
+							{
+								messageId: assistantMsgIdB,
+								model: compareState.compareModelId,
+								provider: activeProvider,
+							},
+						],
+						messages: allMsgs,
+						options: {
+							enableReasoning: runtimeReasoningEnabled,
 							reasoningEffort: runtimeReasoningEffort,
-							webSearchEnabled,
-							resumedFromActiveStream: false,
+							enableWebSearch: webSearchEnabled,
+							supportsToolCalls: runtimeSupportsToolCalls,
 						},
-					},
-				]);
+						compareGroup,
+					});
+
+					setStatus("streaming");
+					streamingRef.current = {
+						id: assistantMsgId,
+						content: "",
+						reasoning: "",
+						chainHash: "[]",
+					};
+					useCompareStore.getState().setActiveCompareGroup(compareGroup);
+
+					const initialPartsA: UIMessage["parts"] = [];
+					const initialPartsB: UIMessage["parts"] = [];
+					if (runtimeReasoningEffort !== "none") {
+						const reasoningPartA: ReasoningPartWithState = { type: "reasoning", text: "", state: "streaming" };
+						const reasoningPartB: ReasoningPartWithState = { type: "reasoning", text: "", state: "streaming" };
+						initialPartsA.push(reasoningPartA as UIMessage["parts"][number]);
+						initialPartsB.push(reasoningPartB as UIMessage["parts"][number]);
+					}
+					initialPartsA.push({ type: "text", text: "", state: "streaming" });
+					initialPartsB.push({ type: "text", text: "", state: "streaming" });
+
+					setMessages((prev) => [
+						...prev,
+						{
+							id: assistantMsgId,
+							role: "assistant",
+							parts: initialPartsA,
+							metadata: {
+								reasoningRequested: runtimeReasoningEffort !== "none",
+								modelId: runtimeModelId,
+								provider: activeProvider,
+								reasoningEffort: runtimeReasoningEffort,
+								webSearchEnabled,
+								resumedFromActiveStream: false,
+								compareGroup,
+							},
+						},
+						{
+							id: assistantMsgIdB,
+							role: "assistant",
+							parts: initialPartsB,
+							metadata: {
+								reasoningRequested: runtimeReasoningEffort !== "none",
+								modelId: compareState.compareModelId,
+								provider: activeProvider,
+								reasoningEffort: runtimeReasoningEffort,
+								webSearchEnabled,
+								resumedFromActiveStream: false,
+								compareGroup,
+							},
+						},
+					]);
+				} else {
+					// Standard single-model mode
+					await startBackgroundStream({
+						chatId: targetChatId as Id<"chats">,
+						userId: convexUserId,
+						messageId: assistantMsgId,
+						model: runtimeModelId,
+						provider: activeProvider,
+						messages: allMsgs,
+						options: {
+							enableReasoning: runtimeReasoningEnabled,
+							reasoningEffort: runtimeReasoningEffort,
+							enableWebSearch: webSearchEnabled,
+							supportsToolCalls: runtimeSupportsToolCalls,
+						},
+					});
+
+					setStatus("streaming");
+					streamingRef.current = {
+						id: assistantMsgId,
+						content: "",
+						reasoning: "",
+						chainHash: "[]",
+					};
+
+					const initialParts: UIMessage["parts"] = [];
+					if (runtimeReasoningEffort !== "none") {
+						const reasoningPart: ReasoningPartWithState = {
+							type: "reasoning",
+							text: "",
+							state: "streaming",
+						};
+						initialParts.push(reasoningPart as UIMessage["parts"][number]);
+					}
+					initialParts.push({ type: "text", text: "", state: "streaming" });
+
+					setMessages((prev) => [
+						...prev,
+						{
+							id: assistantMsgId,
+							role: "assistant",
+							parts: initialParts,
+							metadata: {
+								reasoningRequested: runtimeReasoningEffort !== "none",
+								modelId: runtimeModelId,
+								provider: activeProvider,
+								reasoningEffort: runtimeReasoningEffort,
+								webSearchEnabled,
+								resumedFromActiveStream: false,
+							},
+						},
+					]);
+				}
 
 				const shouldQueueAutoTitle = shouldTriggerAutoTitle({
 					startedWithoutChatId,
@@ -281,6 +371,7 @@ export function useSendMessage({
 			createChat,
 			sendMessages,
 			startBackgroundStream,
+			startCompareStreams,
 			cleanupStaleJobs,
 			chatIdRef,
 			streamingRef,

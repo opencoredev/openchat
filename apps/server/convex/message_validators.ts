@@ -101,6 +101,8 @@ export const messageDoc = v.object({
 	tokensPerSecond: v.optional(v.number()),
 	timeToFirstTokenMs: v.optional(v.number()),
 	totalDurationMs: v.optional(v.number()),
+	// Multi-model comparison group identifier
+	compareGroup: v.optional(v.string()),
 });
 
 // Type for tool invocation data (DEPRECATED)

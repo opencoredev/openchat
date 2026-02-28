@@ -118,3 +118,49 @@ export const getActiveStreamJob = query({
 		return pickJobFields(running);
 	},
 });
+
+/**
+ * Get all active stream jobs for a compare group in a chat.
+ * Returns all running/pending jobs that share the same compareGroup.
+ */
+export const getActiveCompareStreamJobs = query({
+	args: {
+		chatId: v.id("chats"),
+		userId: v.id("users"),
+		compareGroup: v.string(),
+	},
+	returns: v.array(v.object({
+		_id: v.id("streamJobs"),
+		status: v.string(),
+		model: v.string(),
+		provider: v.string(),
+		options: v.optional(streamOptionsValidator),
+		content: v.string(),
+		reasoning: v.optional(v.string()),
+		chainOfThoughtParts: v.optional(v.array(chainOfThoughtPartValidator)),
+		thinkingTimeMs: v.optional(v.number()),
+		thinkingTimeSec: v.optional(v.number()),
+		reasoningCharCount: v.optional(v.number()),
+		reasoningChunkCount: v.optional(v.number()),
+		reasoningTokenCount: v.optional(v.number()),
+		reasoningRequested: v.optional(v.boolean()),
+		webSearchUsed: v.optional(v.boolean()),
+		webSearchCallCount: v.optional(v.number()),
+		toolCallCount: v.optional(v.number()),
+		error: v.optional(v.string()),
+		messageId: v.string(),
+	})),
+	handler: async (ctx, args) => {
+		const userId = await requireAuthUserId(ctx, args.userId);
+		const jobs = await ctx.db
+			.query("streamJobs")
+			.withIndex("by_compare_group", (q) =>
+				q.eq("chatId", args.chatId).eq("compareGroup", args.compareGroup)
+			)
+			.collect();
+
+		return jobs
+			.filter((job) => job.userId === userId)
+			.map((job) => pickJobFields(job));
+	},
+});
