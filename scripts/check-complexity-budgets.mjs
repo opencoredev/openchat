@@ -31,7 +31,7 @@ const EXPLICIT_EXCEPTIONS = new Set([
 ]);
 
 const FUNCTION_START_PATTERN = /(?:async\s+)?function(?:\s+\w+)?\s*\([^)]*\)\s*\{|\([^)]*\)\s*=>\s*\{|\b[A-Za-z_$][\w$]*\s*=>\s*\{/g;
-const BRANCH_PATTERN = /\b(?:if|else\s+if|for|while|case|catch)\b|&&|\|\||\?/g;
+const BRANCH_PATTERN = /\b(?:if|else\s+if|for|while|case|catch)\b|&&|\|\||\?(?![.?])/g;
 
 function skip(path) {
 	if (IGNORE_SUFFIXES.some((suffix) => path.endsWith(suffix))) {
