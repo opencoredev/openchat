@@ -93,7 +93,7 @@ function sanitizeGeneratedTitle(input: string): string {
 	}
 
 	title = title.replace(/\s+/g, " ").replace(/[.?!]+$/, "").trim();
-	title = title.replace(/<[^>]*>/g, "").trim();
+	title = title.replace(/[<>]/g, "").trim();
 	if (!title) return "";
 	return title.slice(0, TITLE_MAX_LENGTH);
 }
