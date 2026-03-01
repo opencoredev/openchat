@@ -21,6 +21,14 @@ const PRODUCTION_CONVEX_SITE_URL = process.env.PRODUCTION_CONVEX_SITE_URL;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const AUTH_EMAIL_FROM = process.env.AUTH_EMAIL_FROM;
 
+const escapeHtml = (value: string): string =>
+	value
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
+
 /**
  * Better Auth component client for Convex integration.
  * Provides adapter for database operations and helper methods.
@@ -94,8 +102,9 @@ export const createAuth = (
 			enabled: true,
 			minPasswordLength: 8,
 			maxPasswordLength: 128,
-			requireEmailVerification: false,
+			requireEmailVerification: !isPreview,
 			sendResetPassword: async ({ user, url }: { user: { email: string }; url: string }) => {
+				const safeUrl = escapeHtml(url);
 				if (!RESEND_API_KEY || !AUTH_EMAIL_FROM) {
 					void logger.warn("Password reset email provider is not configured", {
 						email: user.email,
@@ -115,7 +124,7 @@ export const createAuth = (
 						from: AUTH_EMAIL_FROM,
 						to: user.email,
 						subject: "Reset your osschat password",
-						html: `<p>Reset your password by clicking the link below:</p><p><a href="${url}">${url}</a></p><p>If you did not request this, you can ignore this email.</p>`,
+						html: `<p>Reset your password by clicking the link below:</p><p><a href="${safeUrl}">${safeUrl}</a></p><p>If you did not request this, you can ignore this email.</p>`,
 					}),
 				});
 

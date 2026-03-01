@@ -6,7 +6,7 @@ const logger = createLogger("migrations.profiles");
 
 export const migrateProfilesToNewTable = internalMutation({
 	args: {
-		cursor: v.optional(v.id("users")),
+		cursor: v.optional(v.string()),
 		batchSize: v.optional(v.number()),
 		dryRun: v.optional(v.boolean()),
 	},
@@ -17,17 +17,12 @@ export const migrateProfilesToNewTable = internalMutation({
 		void logger.info("Migrate profiles to new table started", { batchSize, dryRun });
 
 		try {
-			const usersQuery = ctx.db.query("users").order("asc");
-			const allUsers = await usersQuery.take(batchSize + 1);
-
-			let users = allUsers;
-			const cursor = args.cursor;
-			if (cursor) {
-				users = allUsers.filter((u) => u._id > cursor);
-			}
-
-			const hasMore = users.length > batchSize;
-			const batch = hasMore ? users.slice(0, batchSize) : users;
+			const usersPage = await ctx.db.query("users").order("asc").paginate({
+				numItems: batchSize,
+				cursor: args.cursor ?? null,
+			});
+			const batch = usersPage.page;
+			const hasMore = !usersPage.isDone;
 
 			void logger.info("Processing users", { count: batch.length });
 
@@ -90,7 +85,7 @@ export const migrateProfilesToNewTable = internalMutation({
 				migrated,
 				skipped,
 				hasMore,
-				nextCursor: hasMore && batch.length > 0 ? batch[batch.length - 1]._id : null,
+				nextCursor: hasMore ? usersPage.continueCursor : null,
 				errors: errors.length,
 				errorDetails: errors.slice(0, 10),
 			};
@@ -102,12 +97,20 @@ export const migrateProfilesToNewTable = internalMutation({
 });
 
 export const verifyProfileMigration = internalMutation({
-	args: {},
-	handler: async (ctx) => {
+	args: {
+		cursor: v.optional(v.string()),
+		batchSize: v.optional(v.number()),
+	},
+	handler: async (ctx, args) => {
+		const batchSize = args.batchSize ?? 100;
 		void logger.info("Verify profile migration started");
 
 		try {
-			const users = await ctx.db.query("users").collect();
+			const usersPage = await ctx.db.query("users").order("asc").paginate({
+				numItems: batchSize,
+				cursor: args.cursor ?? null,
+			});
+			const users = usersPage.page;
 			const missingProfiles: string[] = [];
 			const dataMismatches: Array<{
 				userId: string;
@@ -176,6 +179,8 @@ export const verifyProfileMigration = internalMutation({
 			return {
 				success: true,
 				totalUsers: users.length,
+				hasMore: !usersPage.isDone,
+				nextCursor: usersPage.isDone ? null : usersPage.continueCursor,
 				missingProfiles: missingProfiles.length,
 				dataMismatches: dataMismatches.length,
 				missingSamples: missingProfiles.slice(0, 10),

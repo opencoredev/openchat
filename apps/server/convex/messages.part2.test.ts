@@ -11,7 +11,7 @@
  * - Edge cases and error handling
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { convexTest } from 'convex-test';
 import schema from './schema';
 import { api } from './_generated/api';
@@ -491,4 +491,3 @@ describe('messages.editAndRegenerate', () => {
     expect(afterMsg?.deletedAt).toBeDefined();
   });
 });
-

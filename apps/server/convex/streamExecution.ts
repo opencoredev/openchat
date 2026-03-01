@@ -406,7 +406,7 @@ export const executeStream = internalAction({
 							});
 							break;
 						} catch (usageError) {
-							void logger.warn("incrementAiUsage failed", {
+							await logger.warn("incrementAiUsage failed", {
 								jobId: args.jobId,
 								attempt,
 								error:

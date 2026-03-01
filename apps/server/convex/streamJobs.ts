@@ -23,6 +23,8 @@ export const streamOptionsValidator = v.object({
 	maxSteps: v.optional(v.number()),
 });
 
+const streamJobOptionsReturnValidator = v.record(v.string(), v.any());
+
 const executeStreamRef = "streamExecution:executeStream" as unknown as FunctionReference<
 	"action",
 	"internal",
@@ -63,7 +65,7 @@ const streamJobReturnShape = v.union(
 		status: v.string(),
 		model: v.string(),
 		provider: v.string(),
-		options: v.optional(streamOptionsValidator),
+		options: v.optional(streamJobOptionsReturnValidator),
 		content: v.string(),
 		reasoning: v.optional(v.string()),
 		chainOfThoughtParts: v.optional(v.array(chainOfThoughtPartValidator)),

@@ -14,7 +14,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { convexTest } from 'convex-test';
 import schema from './schema';
-import { api, internal } from './_generated/api';
+import { api } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { modules, rateLimiter } from './testSetup.test';
 

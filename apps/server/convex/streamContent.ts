@@ -37,9 +37,10 @@ export const updateStreamContent = internalMutation({
 		)),
 		error: v.optional(v.string()),
 	},
+	returns: v.null(),
 	handler: async (ctx, args) => {
 		const job = await ctx.db.get(args.jobId);
-		if (!job) return;
+		if (!job) return null;
 
 		const updates: Record<string, unknown> = {
 			content: args.content,
@@ -68,6 +69,7 @@ export const updateStreamContent = internalMutation({
 		if (args.error !== undefined) updates.error = args.error;
 
 		await ctx.db.patch(args.jobId, updates);
+		return null;
 	},
 });
 
@@ -95,9 +97,10 @@ export const completeStream = internalMutation({
 			totalTokens: v.number(),
 		})),
 	},
+	returns: v.null(),
 	handler: async (ctx, args) => {
 		const job = await ctx.db.get(args.jobId);
-		if (!job) return;
+		if (!job) return null;
 
 		const derivedToolParts = (args.chainOfThoughtParts ?? []).filter(
 			(part) => part.type === "tool",
@@ -212,6 +215,7 @@ export const completeStream = internalMutation({
 				status: "completed",
 			});
 		}
+		return null;
 	},
 });
 
@@ -221,9 +225,10 @@ export const failStream = internalMutation({
 		error: v.string(),
 		partialContent: v.optional(v.string()),
 	},
+	returns: v.null(),
 	handler: async (ctx, args) => {
 		const job = await ctx.db.get(args.jobId);
-		if (!job) return;
+		if (!job) return null;
 
 		await ctx.db.patch(args.jobId, {
 			status: "error",
@@ -237,5 +242,6 @@ export const failStream = internalMutation({
 			status: "idle",
 			updatedAt: Date.now(),
 		});
+		return null;
 	},
 });
