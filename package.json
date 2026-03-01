@@ -5,6 +5,7 @@
     "@vitest/coverage-v8": "^4.0.18",
     "baseline-browser-mapping": "^2.9.19",
     "convex": "^1.31.7",
+    "happy-dom": "^17.6.3",
     "oxlint": "^1.43.0",
     "turbo": "^2.8.9",
     "vitest": "^4.0.18"
