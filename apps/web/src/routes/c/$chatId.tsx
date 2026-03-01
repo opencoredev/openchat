@@ -8,7 +8,7 @@
 
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-client";
-import { ChatInterface } from "@/components/chat-interface";
+import { ChatInterface } from "@/components/chat";
 import { Button } from "@/components/ui/button";
 import { convexClient } from "@/lib/convex";
 

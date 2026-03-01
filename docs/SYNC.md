@@ -26,7 +26,7 @@ All reads use the `ConvexHttpClient`, which respects `CONVEX_URL`/`NEXT_PUBLIC_C
 Convex watches give us live updates out of the box, but the current Next.js surface still relies on request/response patterns. When we adopt Convex subscriptions on the client, the existing mutations already emit consistent timestamps and ids, so the change will be additive: wire `convex/react` hooks in the chat room and sidebar, and rely on the same queries used for SSR.
 
 ## Operational notes
-- `convex/http.ts` exposes `/health`, which docker-compose and Dokploy use for readiness checks.
+- `convex/http.ts` exposes `/health`, used for deployment readiness checks.
 - `convex-rules.txt` documents the “new function syntax” expectations. Keep new work aligned so codegen remains stable across the monorepo.
 
 ## Open questions

@@ -20,7 +20,6 @@ export const modules = {
   './benchmarks.ts': () => import('./benchmarks'),
   './backgroundStream.ts': () => import('./backgroundStream'),
   './streamJobs.ts': () => import('./streamJobs'),
-  './streamQueries.ts': () => import('./streamQueries'),
   './streamExecution.ts': () => import('./streamExecution'),
   './chatExport.ts': () => import('./chatExport'),
   './chatFork.ts': () => import('./chatFork'),

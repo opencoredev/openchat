@@ -24,7 +24,7 @@ export default defineConfig({
 		exclude: [
 			"apps/**/tests/**",
 			"**/node_modules/**",
-			"apps/server/convex/testSetup.test.ts",
+			"**/testSetup.test.ts",
 		],
 		coverage: {
 			provider: "v8",

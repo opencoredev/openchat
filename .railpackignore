@@ -60,12 +60,6 @@ oxlint.config.*
 
 # Docker files (not needed inside container)
 Dockerfile*
-docker-compose*.yml
-docker/
-.dockerignore
-
-# Railway configs (used at build time, not runtime)
-railway.toml
 
 # Convex local artifacts
 apps/server/.convex

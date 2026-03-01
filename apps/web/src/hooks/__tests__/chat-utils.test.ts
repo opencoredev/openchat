@@ -99,6 +99,14 @@ describe("getUserFriendlyError", () => {
 		expect(getUserFriendlyError("Unauthorized access")).toContain("Session expired");
 	});
 
+	test("maps missing API key errors", () => {
+		expect(getUserFriendlyError("No API key available")).toContain("Connect your OpenRouter");
+	});
+
+	test("maps OpenRouter authentication errors", () => {
+		expect(getUserFriendlyError("OpenRouter authentication failed")).toContain("Reconnect your OpenRouter");
+	});
+
 	test("maps authentication errors", () => {
 		expect(getUserFriendlyError("authentication failed")).toContain("Session expired");
 	});

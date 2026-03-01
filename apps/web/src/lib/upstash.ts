@@ -335,7 +335,7 @@ if (!upstashRedis) {
 }
 
 if (SHOULD_USE_LOCAL_REDIS && REDIS_URL) {
-	console.log(`[Redis] Using local Redis backend at ${REDIS_URL}`);
+      console.info(`[Redis] Using local Redis backend at ${REDIS_URL}`);
 }
 
 if (!workflowClient && IS_PRODUCTION) {

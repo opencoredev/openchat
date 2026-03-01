@@ -17,6 +17,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as OpenrouterCallbackRouteImport } from './routes/openrouter/callback'
 import { Route as CChatIdRouteImport } from './routes/c/$chatId'
 import { Route as AuthSignInRouteImport } from './routes/auth/sign-in'
+import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-password'
+import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiTypingRouteImport } from './routes/api/typing'
 import { Route as ApiOpenrouterKeyRouteImport } from './routes/api/openrouter-key'
@@ -64,6 +66,16 @@ const CChatIdRoute = CChatIdRouteImport.update({
 const AuthSignInRoute = AuthSignInRouteImport.update({
   id: '/auth/sign-in',
   path: '/auth/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
+  id: '/auth/reset-password',
+  path: '/auth/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
+  id: '/auth/forgot-password',
+  path: '/auth/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
@@ -119,6 +131,8 @@ export interface FileRoutesByFullPath {
   '/api/openrouter-key': typeof ApiOpenrouterKeyRoute
   '/api/typing': typeof ApiTypingRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/forgot-password': typeof AuthForgotPasswordRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/c/$chatId': typeof CChatIdRoute
   '/openrouter/callback': typeof OpenrouterCallbackRoute
@@ -137,6 +151,8 @@ export interface FileRoutesByTo {
   '/api/openrouter-key': typeof ApiOpenrouterKeyRoute
   '/api/typing': typeof ApiTypingRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/forgot-password': typeof AuthForgotPasswordRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/c/$chatId': typeof CChatIdRoute
   '/openrouter/callback': typeof OpenrouterCallbackRoute
@@ -156,6 +172,8 @@ export interface FileRoutesById {
   '/api/openrouter-key': typeof ApiOpenrouterKeyRoute
   '/api/typing': typeof ApiTypingRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/forgot-password': typeof AuthForgotPasswordRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/c/$chatId': typeof CChatIdRoute
   '/openrouter/callback': typeof OpenrouterCallbackRoute
@@ -176,6 +194,8 @@ export interface FileRouteTypes {
     | '/api/openrouter-key'
     | '/api/typing'
     | '/auth/callback'
+    | '/auth/forgot-password'
+    | '/auth/reset-password'
     | '/auth/sign-in'
     | '/c/$chatId'
     | '/openrouter/callback'
@@ -194,6 +214,8 @@ export interface FileRouteTypes {
     | '/api/openrouter-key'
     | '/api/typing'
     | '/auth/callback'
+    | '/auth/forgot-password'
+    | '/auth/reset-password'
     | '/auth/sign-in'
     | '/c/$chatId'
     | '/openrouter/callback'
@@ -212,6 +234,8 @@ export interface FileRouteTypes {
     | '/api/openrouter-key'
     | '/api/typing'
     | '/auth/callback'
+    | '/auth/forgot-password'
+    | '/auth/reset-password'
     | '/auth/sign-in'
     | '/c/$chatId'
     | '/openrouter/callback'
@@ -231,6 +255,8 @@ export interface RootRouteChildren {
   ApiOpenrouterKeyRoute: typeof ApiOpenrouterKeyRoute
   ApiTypingRoute: typeof ApiTypingRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
+  AuthResetPasswordRoute: typeof AuthResetPasswordRoute
   AuthSignInRoute: typeof AuthSignInRoute
   CChatIdRoute: typeof CChatIdRoute
   OpenrouterCallbackRoute: typeof OpenrouterCallbackRoute
@@ -296,6 +322,20 @@ declare module '@tanstack/react-router' {
       path: '/auth/sign-in'
       fullPath: '/auth/sign-in'
       preLoaderRoute: typeof AuthSignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/reset-password': {
+      id: '/auth/reset-password'
+      path: '/auth/reset-password'
+      fullPath: '/auth/reset-password'
+      preLoaderRoute: typeof AuthResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/forgot-password': {
+      id: '/auth/forgot-password'
+      path: '/auth/forgot-password'
+      fullPath: '/auth/forgot-password'
+      preLoaderRoute: typeof AuthForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/callback': {
@@ -367,6 +407,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiOpenrouterKeyRoute: ApiOpenrouterKeyRoute,
   ApiTypingRoute: ApiTypingRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  AuthForgotPasswordRoute: AuthForgotPasswordRoute,
+  AuthResetPasswordRoute: AuthResetPasswordRoute,
   AuthSignInRoute: AuthSignInRoute,
   CChatIdRoute: CChatIdRoute,
   OpenrouterCallbackRoute: OpenrouterCallbackRoute,

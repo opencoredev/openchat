@@ -219,6 +219,40 @@ export async function signUpWithEmail(
   });
 }
 
+type PasswordResetResult = {
+  error: string | null;
+};
+
+async function postAuthJson(path: string, body: Record<string, unknown>): Promise<PasswordResetResult> {
+  try {
+    const response = await fetch(`${env.CONVEX_SITE_URL}/api/auth${path}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+      credentials: "include",
+    });
+
+    if (response.ok) {
+      return { error: null };
+    }
+
+    const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+    return { error: payload?.message ?? "Request failed. Please try again." };
+  } catch {
+    return { error: "Request failed. Please try again." };
+  }
+}
+
+export async function requestPasswordReset(email: string, redirectTo: string): Promise<PasswordResetResult> {
+  return postAuthJson("/request-password-reset", { email, redirectTo });
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<PasswordResetResult> {
+  return postAuthJson("/reset-password", { token, newPassword });
+}
+
 /**
  * Sensitive sessionStorage keys that store chat content, drafts, and stream data.
  * These must be cleared on sign-out to prevent data leakage on shared devices.

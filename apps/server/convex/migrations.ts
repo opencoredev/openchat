@@ -32,12 +32,10 @@ export const clearJwks = internalMutation({
 		try {
 			// First find all JWKS records using the correct input format
 			const jwksRecords = await ctx.runQuery(components.betterAuth.adapter.findMany, {
-				input: {
-					model: "jwks",
-					where: [],
-				},
+				model: "jwks",
+				where: [],
 				paginationOpts: { numItems: 100, cursor: null },
-			} as any);
+			});
 			
 			console.log(`[Migration] Found ${jwksRecords.page.length} JWKS records`);
 			
@@ -48,7 +46,7 @@ export const clearJwks = internalMutation({
 					where: [],
 				},
 				paginationOpts: { numItems: 100, cursor: null },
-			} as any);
+			});
 			
 			console.log("[Migration] Clear JWKS - Completed", result);
 			return { success: true, count: jwksRecords.page.length };
@@ -418,7 +416,6 @@ export const removeOnboardingFields = internalMutation({
 
 				const results = await Promise.allSettled(
 					batch.map(async (user) => {
-						// Check if user has any onboarding fields to remove
 						const hasOnboardingFields =
 							"onboardingCompletedAt" in user ||
 							"displayName" in user ||
@@ -431,15 +428,24 @@ export const removeOnboardingFields = internalMutation({
 									`[Migration] [DRY RUN] Would remove onboarding fields from user ${user._id}`
 								);
 							} else {
-								// Remove onboarding fields by setting them to undefined
-								// Type assertion needed because these fields are deprecated and no longer in schema
-								await ctx.db.patch(user._id, {
-									onboardingCompletedAt: undefined,
-									displayName: undefined,
-									preferredTone: undefined,
-									customInstructions: undefined,
+								await ctx.db.replace(user._id, {
+									externalId: user.externalId,
+									email: user.email,
+									name: user.name,
+									avatarUrl: user.avatarUrl,
+									encryptedOpenRouterKey: user.encryptedOpenRouterKey,
+									fileUploadCount: user.fileUploadCount,
+									searchUsageCount: user.searchUsageCount,
+									searchUsageDate: user.searchUsageDate,
+									aiUsageCents: user.aiUsageCents,
+									aiUsageDate: user.aiUsageDate,
+									banned: user.banned,
+									bannedAt: user.bannedAt,
+									banReason: user.banReason,
+									banExpiresAt: user.banExpiresAt,
+									createdAt: user.createdAt,
 									updatedAt: Date.now(),
-								} as any);
+								});
 								console.log(
 									`[Migration] Removed onboarding fields from user ${user._id}`
 								);

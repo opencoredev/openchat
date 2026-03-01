@@ -39,7 +39,6 @@
             "group": "Self-Hosting",
             "icon": "server",
             "pages": [
-              "self-hosting/docker",
               "self-hosting/environment"
             ]
           }
@@ -90,4 +89,3 @@
   },
   "mermaid": {}
 }
-

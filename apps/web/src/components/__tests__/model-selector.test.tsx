@@ -53,7 +53,7 @@ vi.mock("@/components/ui/dialog", () => ({
 }));
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, render, screen, fireEvent, act } from "@testing-library/react";
+import { cleanup, render, screen, fireEvent, act, within } from "@testing-library/react";
 import { ModelSelector, ConnectedModelSelector } from "../model-selector";
 import type { Model } from "@/stores/model";
 import { useModels, getModelById, useModelStore } from "@/stores/model";
@@ -217,6 +217,23 @@ describe("ModelSelector", () => {
 		});
 		expect(screen.getByText("GPT-4o")).toBeTruthy();
 		expect(screen.queryByText("Free Test Model")).toBeNull();
+	});
+
+	it("filters models by provider when a provider logo is selected", async () => {
+		render(
+			<ModelSelector
+				value="anthropic/claude-3.5-sonnet"
+				onValueChange={vi.fn()}
+			/>,
+		);
+		await openDropdown();
+		await act(async () => {
+			fireEvent.click(screen.getByTitle("OpenAI"));
+		});
+		const listbox = within(screen.getByRole("listbox", { name: "Models" }));
+		expect(listbox.getByText("GPT-4o")).toBeTruthy();
+		expect(listbox.queryByText("Claude 3.5 Sonnet")).toBeNull();
+		expect(listbox.queryByText("Free Test Model")).toBeNull();
 	});
 
 	it("shows 'No models found' when the search query has no results", async () => {

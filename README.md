@@ -49,7 +49,6 @@ Frontend on `localhost:3000`, Convex starts automatically.
 | Method | |
 |--------|---|
 | **Vercel + Convex Cloud** | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/opencoredev/openchat) |
-| **Docker** | `docker compose up -d` |
 
 Full setup in [deployment docs](docs/deployment/).
 

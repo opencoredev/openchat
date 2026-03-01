@@ -174,21 +174,7 @@ const apiUrl = getEnvVar("API_URL", "http://localhost:3000");
 const secret = getEnvVar("SECRET");
 ```
 
-## Docker / Production Deployment
-
-### Docker Compose
-
-Update `docker-compose.yml` environment section:
-
-```yaml
-environment:
-  NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3001}
-  NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://localhost:3000}
-  NEXT_PUBLIC_CONVEX_URL: ${NEXT_PUBLIC_CONVEX_URL}
-  WORKOS_CLIENT_ID: ${WORKOS_CLIENT_ID}
-  WORKOS_API_KEY: ${WORKOS_API_KEY}
-  WORKOS_COOKIE_PASSWORD: ${WORKOS_COOKIE_PASSWORD}
-```
+## Production Deployment
 
 ### Production Checklist
 
