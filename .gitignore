@@ -23,7 +23,6 @@ ISSUES_COMPREHENSIVE.txt
 preflight.yml
 !.github/workflows/preflight.yml
 session-ses_*.md
-bun.lock
 plan.txt
 migration-report.json
 bts.jsonc

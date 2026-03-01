@@ -76,7 +76,10 @@ export const migrateProfilesToNewTable = internalMutation({
 			await logger.info(message);
 
 			if (errors.length > 0) {
-				await logger.error("Encountered migration errors", errors, { count: errors.length });
+				await logger.error("Encountered migration errors", undefined, {
+					count: errors.length,
+					errorDetails: errors.slice(0, 10),
+				});
 			}
 
 			return {

@@ -83,7 +83,6 @@ export const removeOnboardingFields = internalMutation({
 						userId: user._id,
 						errorMessage,
 					});
-					throw error;
 				}
 			}
 

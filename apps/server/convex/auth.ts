@@ -142,7 +142,7 @@ export const createAuth = (
 			},
 		},
 		emailVerification: {
-			sendOnSignUp: false,
+			sendOnSignUp: !isPreview,
 			sendVerificationEmail: async ({ user, url }: { user: { email: string }; url: string }) => {
 				void logger.info("Verification email sent", { email: user.email, url });
 			},

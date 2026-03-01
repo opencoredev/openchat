@@ -27,7 +27,10 @@ export const incrementAiUsage = internalMutation({
 		}
 
 		if (args.usageCents > MAX_SINGLE_REQUEST_CENTS) {
-			void logger.error("Rejected suspiciously high usage", null, { usageCents: args.usageCents, userId: args.userId });
+			await logger.error("Rejected suspiciously high usage", undefined, {
+				usageCents: args.usageCents,
+				userId: args.userId,
+			});
 			return {
 				usedCents: 0,
 				remainingCents: DAILY_AI_LIMIT_CENTS,
@@ -37,7 +40,10 @@ export const incrementAiUsage = internalMutation({
 
 		const user = await ctx.db.get(args.userId);
 		if (!user) {
-			void logger.warn("User not found for usage recording", { userId: args.userId, usageCents: args.usageCents });
+			await logger.warn("User not found for usage recording", {
+				userId: args.userId,
+				usageCents: args.usageCents,
+			});
 			return {
 				usedCents: 0,
 				remainingCents: DAILY_AI_LIMIT_CENTS,
