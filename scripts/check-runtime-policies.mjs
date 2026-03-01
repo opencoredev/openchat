@@ -38,7 +38,7 @@ async function main() {
 				violations.push({ rule: "no-cast-crutches", file, match });
 			}
 
-			for (const match of collectMatches(content, /catch\s*\([^)]*\)\s*\{\s*\}/g)) {
+			for (const match of collectMatches(content, /catch\s*(?:\([^)]*\))?\s*\{\s*\}/g)) {
 				violations.push({ rule: "no-empty-catch", file, match });
 			}
 

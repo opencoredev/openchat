@@ -49,8 +49,8 @@ export const incrementAiUsage = internalMutation({
 		const previousCents =
 			user.aiUsageDate === currentDate ? (user.aiUsageCents ?? 0) : 0;
 
-		const alreadyOverLimit = previousCents >= DAILY_AI_LIMIT_CENTS;
 		const nextCents = Math.max(0, previousCents + args.usageCents);
+		const overLimit = nextCents >= DAILY_AI_LIMIT_CENTS;
 
 		await ctx.db.patch(args.userId, {
 			aiUsageCents: nextCents,
@@ -61,7 +61,7 @@ export const incrementAiUsage = internalMutation({
 		return {
 			usedCents: nextCents,
 			remainingCents: Math.max(0, DAILY_AI_LIMIT_CENTS - nextCents),
-			overLimit: alreadyOverLimit,
+			overLimit,
 		};
 	},
 });

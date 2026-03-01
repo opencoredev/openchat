@@ -14,7 +14,7 @@ export const migrateChainOfThoughtParts = internalMutation({
 		const batchSize = args.batchSize ?? 100;
 		const dryRun = args.dryRun ?? false;
 
-		void logger.info("Migrate chainOfThoughtParts started", { batchSize, dryRun });
+		await logger.info("Migrate chainOfThoughtParts started", { batchSize, dryRun });
 
 		try {
 			const messagesPage = await ctx.db.query("messages").order("asc").paginate({
@@ -30,7 +30,7 @@ export const migrateChainOfThoughtParts = internalMutation({
 					(!message.chainOfThoughtParts || message.chainOfThoughtParts.length === 0),
 			);
 
-			void logger.info("Found messages to migrate", { count: messagesToMigrate.length });
+			await logger.info("Found messages to migrate", { count: messagesToMigrate.length });
 
 			let migrated = 0;
 			let errors = 0;
@@ -78,7 +78,7 @@ export const migrateChainOfThoughtParts = internalMutation({
 
 					if (parts.length > 0) {
 						if (dryRun) {
-							void logger.info("Dry run would migrate message", {
+							await logger.info("Dry run would migrate message", {
 								messageId: message._id,
 								partsCount: parts.length,
 							});
@@ -86,7 +86,7 @@ export const migrateChainOfThoughtParts = internalMutation({
 							await ctx.db.patch(message._id, {
 								chainOfThoughtParts: parts,
 							});
-							void logger.info("Migrated message", {
+							await logger.info("Migrated message", {
 								messageId: message._id,
 								partsCount: parts.length,
 							});
@@ -95,11 +95,11 @@ export const migrateChainOfThoughtParts = internalMutation({
 					}
 				} catch (error) {
 					errors += 1;
-					void logger.error("Error migrating message", error, { messageId: message._id });
+					await logger.error("Error migrating message", error, { messageId: message._id });
 				}
 			}
 
-			void logger.info("Processed migration batch", {
+			await logger.info("Processed migration batch", {
 				processed: messagesToMigrate.length,
 				total: messagesToMigrate.length,
 			});
@@ -107,10 +107,10 @@ export const migrateChainOfThoughtParts = internalMutation({
 			const doneMessage = dryRun
 				? `[Migration] Migrate chainOfThoughtParts - Dry run completed (${migrated} messages would be migrated)`
 				: `[Migration] Migrate chainOfThoughtParts - Completed (${migrated} messages migrated)`;
-			void logger.info(doneMessage);
+			await logger.info(doneMessage);
 
 			if (errors > 0) {
-				void logger.error("Encountered migration errors", { count: errors });
+				await logger.error("Encountered migration errors", { count: errors });
 			}
 
 			return {
@@ -124,7 +124,7 @@ export const migrateChainOfThoughtParts = internalMutation({
 				nextCursor: messagesPage.isDone ? null : messagesPage.continueCursor,
 			};
 		} catch (error) {
-			void logger.error("Migrate chainOfThoughtParts failed", error);
+			await logger.error("Migrate chainOfThoughtParts failed", error);
 			throw error;
 		}
 	},

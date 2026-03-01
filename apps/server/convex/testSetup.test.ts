@@ -10,12 +10,32 @@
 
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-// betterAuth component schema – static import so register() stays synchronous
-// eslint-disable-next-line import/no-extraneous-dependencies
-import betterAuthSchemaDefault from '../../../node_modules/@convex-dev/better-auth/dist/component/schema.js';
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
+
+const require = createRequire(import.meta.url);
+
+const resolvePackageModuleUrl = (
+	packageName: string,
+	relativeModulePath: string,
+) => {
+	const packageJsonPath = require.resolve(`${packageName}/package.json`);
+	const packageRoot = dirname(packageJsonPath);
+	return pathToFileURL(join(packageRoot, relativeModulePath)).href;
+};
+
+const { default: betterAuthSchemaDefault } = await import(
+	/* @vite-ignore */ resolvePackageModuleUrl(
+		"@convex-dev/better-auth",
+		"dist/component/schema.js",
+	),
+);
+
+const loadModule = (modulePath: string): Promise<unknown> => import(modulePath);
 
 // Create modules object that convex-test expects (lazy-loaded functions)
-export const modules = {
+export const modules: Record<string, () => Promise<unknown>> = {
   './auth.config.ts': () => import('./auth.config'),
   './benchmarks.ts': () => import('./benchmarks'),
   './backgroundStream.ts': () => import('./backgroundStream'),
@@ -48,8 +68,8 @@ export const modules = {
   './lib/model_matching.ts': () => import('./lib/model_matching'),
   './lib/rateLimiter.ts': () => import('./lib/rateLimiter'),
   './config/constants.ts': () => import('./config/constants'),
-  './_generated/api.ts': () => import('./_generated/api'),
-  './_generated/server.ts': () => import('./_generated/server'),
+  './_generated/api.ts': () => loadModule('./_generated/api'),
+  './_generated/server.ts': () => loadModule('./_generated/server'),
 };
 
 // Rate limiter component schema (manually defined since @convex-dev/rate-limiter doesn't export it properly)
@@ -65,14 +85,44 @@ const rateLimiterComponentSchema = defineSchema({
 
 // Rate limiter component modules (using proper package imports)
 // Import directly from the package without hardcoded paths
-const rateLimiterComponentModules = {
+const rateLimiterComponentModules: Record<string, () => Promise<unknown>> = {
 	// Bun respects package "exports" and blocks deep imports.
 	// Use relative file imports into node_modules to load component modules.
-	'./internal.ts': () => import('../../../node_modules/@convex-dev/rate-limiter/dist/component/internal.js'),
-	'./lib.ts': () => import('../../../node_modules/@convex-dev/rate-limiter/dist/component/lib.js'),
-	'./schema.ts': () => import('../../../node_modules/@convex-dev/rate-limiter/dist/component/schema.js'),
-	'./_generated/api.ts': () => import('../../../node_modules/@convex-dev/rate-limiter/dist/component/_generated/api.js'),
-	'./_generated/server.ts': () => import('../../../node_modules/@convex-dev/rate-limiter/dist/component/_generated/server.js'),
+	'./internal.ts': () =>
+		import(
+			/* @vite-ignore */ resolvePackageModuleUrl(
+				"@convex-dev/rate-limiter",
+				"dist/component/internal.js",
+			),
+		),
+	'./lib.ts': () =>
+		import(
+			/* @vite-ignore */ resolvePackageModuleUrl(
+				"@convex-dev/rate-limiter",
+				"dist/component/lib.js",
+			),
+		),
+	'./schema.ts': () =>
+		import(
+			/* @vite-ignore */ resolvePackageModuleUrl(
+				"@convex-dev/rate-limiter",
+				"dist/component/schema.js",
+			),
+		),
+	'./_generated/api.ts': () =>
+		import(
+			/* @vite-ignore */ resolvePackageModuleUrl(
+				"@convex-dev/rate-limiter",
+				"dist/component/_generated/api.js",
+			),
+		),
+	'./_generated/server.ts': () =>
+		import(
+			/* @vite-ignore */ resolvePackageModuleUrl(
+				"@convex-dev/rate-limiter",
+				"dist/component/_generated/server.js",
+			),
+		),
 };
 
 /**
@@ -98,11 +148,35 @@ export { rateLimiterComponentSchema, rateLimiterComponentModules };
 // ---------------------------------------------------------------------------
 
 // betterAuth component modules (lazy-loaded to avoid import side effects)
-const betterAuthComponentModules = {
-	'./adapter.ts': () => import('../../../node_modules/@convex-dev/better-auth/dist/component/adapter.js'),
-	'./schema.ts': () => import('../../../node_modules/@convex-dev/better-auth/dist/component/schema.js'),
-	'./_generated/api.ts': () => import('../../../node_modules/@convex-dev/better-auth/dist/component/_generated/api.js'),
-	'./_generated/server.ts': () => import('../../../node_modules/@convex-dev/better-auth/dist/component/_generated/server.js'),
+const betterAuthComponentModules: Record<string, () => Promise<unknown>> = {
+	'./adapter.ts': () =>
+		import(
+			/* @vite-ignore */ resolvePackageModuleUrl(
+				"@convex-dev/better-auth",
+				"dist/component/adapter.js",
+			),
+		),
+	'./schema.ts': () =>
+		import(
+			/* @vite-ignore */ resolvePackageModuleUrl(
+				"@convex-dev/better-auth",
+				"dist/component/schema.js",
+			),
+		),
+	'./_generated/api.ts': () =>
+		import(
+			/* @vite-ignore */ resolvePackageModuleUrl(
+				"@convex-dev/better-auth",
+				"dist/component/_generated/api.js",
+			),
+		),
+	'./_generated/server.ts': () =>
+		import(
+			/* @vite-ignore */ resolvePackageModuleUrl(
+				"@convex-dev/better-auth",
+				"dist/component/_generated/server.js",
+			),
+		),
 };
 
 // betterAuth schema imported at top of file (stays synchronous).

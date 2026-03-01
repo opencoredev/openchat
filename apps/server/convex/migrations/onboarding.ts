@@ -36,7 +36,7 @@ export const removeOnboardingFields = internalMutation({
 		const batchSize = args.batchSize ?? 100;
 		const dryRun = args.dryRun ?? false;
 
-		void logger.info("Remove onboarding fields started", { batchSize, dryRun });
+		await logger.info("Remove onboarding fields started", { batchSize, dryRun });
 
 		try {
 			const usersPage = await ctx.db.query("users").order("asc").paginate({
@@ -44,62 +44,59 @@ export const removeOnboardingFields = internalMutation({
 				cursor: args.cursor ?? null,
 			});
 			const users = usersPage.page;
-			void logger.info("Processing users", { count: users.length });
+			await logger.info("Processing users", { count: users.length });
 
 			let processed = 0;
 			let updated = 0;
 			const errors: Array<{ userId: string; error: string }> = [];
 
-			const results = await Promise.allSettled(
-				users.map(async (user) => {
-					const hasOnboardingFields =
-						"onboardingCompletedAt" in user
-						|| "displayName" in user
-						|| "preferredTone" in user
-						|| "customInstructions" in user;
+			for (const user of users) {
+				const hasOnboardingFields =
+					"onboardingCompletedAt" in user
+					|| "displayName" in user
+					|| "preferredTone" in user
+					|| "customInstructions" in user;
 
-					if (!hasOnboardingFields) {
-						return { userId: user._id, updated: false };
-					}
+				if (!hasOnboardingFields) {
+					continue;
+				}
 
-					if (dryRun) {
-						void logger.info("Dry run would remove onboarding fields", {
-							userId: user._id,
-						});
-						return { userId: user._id, updated: true };
-					}
+				if (dryRun) {
+					await logger.info("Dry run would remove onboarding fields", {
+						userId: user._id,
+					});
+					updated++;
+					continue;
+				}
 
+				try {
 					await ctx.db.replace(user._id, buildReplacementUser(user));
-
-					void logger.info("Removed onboarding fields", { userId: user._id });
-					return { userId: user._id, updated: true };
-				}),
-			);
-
-			for (const result of results) {
-				if (result.status === "rejected") {
-					const errorMessage =
-						result.reason instanceof Error ? result.reason.message : String(result.reason);
+					await logger.info("Removed onboarding fields", { userId: user._id });
+					updated++;
+				} catch (error) {
+					const errorMessage = error instanceof Error ? error.message : String(error);
 					errors.push({
-						userId: "unknown",
+						userId: user._id,
 						error: errorMessage,
 					});
-					void logger.error("Error processing user in batch", errorMessage);
-				} else if (result.value.updated) {
-					updated++;
+					await logger.error("Error processing user in batch", error, {
+						userId: user._id,
+						errorMessage,
+					});
+					throw error;
 				}
 			}
 
 			processed += users.length;
-			void logger.info("Processed users", { processed, total: users.length });
+			await logger.info("Processed users", { processed, total: users.length });
 
 			const message = dryRun
 				? `[Migration] Remove onboarding fields - Dry run completed (${updated} users would be updated)`
 				: `[Migration] Remove onboarding fields - Completed (${updated} users updated)`;
-			void logger.info(message);
+			await logger.info(message);
 
 			if (errors.length > 0) {
-				void logger.error("Encountered migration errors", errors, { count: errors.length });
+				await logger.error("Encountered migration errors", errors, { count: errors.length });
 			}
 
 			return {
@@ -114,7 +111,7 @@ export const removeOnboardingFields = internalMutation({
 				errorDetails: errors.slice(0, 10),
 			};
 		} catch (error) {
-			void logger.error("Remove onboarding fields failed", error);
+			await logger.error("Remove onboarding fields failed", error);
 			throw error;
 		}
 	},

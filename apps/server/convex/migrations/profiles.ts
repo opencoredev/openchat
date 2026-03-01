@@ -14,7 +14,7 @@ export const migrateProfilesToNewTable = internalMutation({
 		const batchSize = args.batchSize ?? 100;
 		const dryRun = args.dryRun ?? false;
 
-		void logger.info("Migrate profiles to new table started", { batchSize, dryRun });
+		await logger.info("Migrate profiles to new table started", { batchSize, dryRun });
 
 		try {
 			const usersPage = await ctx.db.query("users").order("asc").paginate({
@@ -24,7 +24,7 @@ export const migrateProfilesToNewTable = internalMutation({
 			const batch = usersPage.page;
 			const hasMore = !usersPage.isDone;
 
-			void logger.info("Processing users", { count: batch.length });
+			await logger.info("Processing users", { count: batch.length });
 
 			let migrated = 0;
 			let skipped = 0;
@@ -43,7 +43,7 @@ export const migrateProfilesToNewTable = internalMutation({
 					}
 
 					if (dryRun) {
-						void logger.info("Dry run would create profile", { userId: user._id });
+						await logger.info("Dry run would create profile", { userId: user._id });
 						migrated++;
 						continue;
 					}
@@ -59,24 +59,24 @@ export const migrateProfilesToNewTable = internalMutation({
 						updatedAt: user.updatedAt ?? now,
 					});
 					migrated++;
-					void logger.info("Created profile", { userId: user._id });
+					await logger.info("Created profile", { userId: user._id });
 				} catch (error) {
 					const errorMessage = error instanceof Error ? error.message : String(error);
 					errors.push({
 						userId: user._id,
 						error: errorMessage,
 					});
-					void logger.error("Error creating profile", error, { userId: user._id, errorMessage });
+					await logger.error("Error creating profile", error, { userId: user._id, errorMessage });
 				}
 			}
 
 			const message = dryRun
 				? `[Migration] Migrate profiles - Dry run completed (${migrated} profiles would be created, ${skipped} skipped)`
 				: `[Migration] Migrate profiles - Batch completed (${migrated} profiles created, ${skipped} skipped)`;
-			void logger.info(message);
+			await logger.info(message);
 
 			if (errors.length > 0) {
-				void logger.error("Encountered migration errors", errors, { count: errors.length });
+				await logger.error("Encountered migration errors", errors, { count: errors.length });
 			}
 
 			return {
@@ -90,7 +90,7 @@ export const migrateProfilesToNewTable = internalMutation({
 				errorDetails: errors.slice(0, 10),
 			};
 		} catch (error) {
-			void logger.error("Migrate profiles to new table failed", error);
+			await logger.error("Migrate profiles to new table failed", error);
 			throw error;
 		}
 	},
@@ -103,7 +103,7 @@ export const verifyProfileMigration = internalMutation({
 	},
 	handler: async (ctx, args) => {
 		const batchSize = args.batchSize ?? 100;
-		void logger.info("Verify profile migration started");
+		await logger.info("Verify profile migration started");
 
 		try {
 			const usersPage = await ctx.db.query("users").order("asc").paginate({
@@ -154,27 +154,35 @@ export const verifyProfileMigration = internalMutation({
 						profileValue: profile.encryptedOpenRouterKey,
 					});
 				}
+				if ((user.fileUploadCount ?? 0) !== (profile.fileUploadCount ?? 0)) {
+					dataMismatches.push({
+						userId: user._id,
+						field: "fileUploadCount",
+						userValue: user.fileUploadCount ?? 0,
+						profileValue: profile.fileUploadCount ?? 0,
+					});
+				}
 			}
 
 			if (missingProfiles.length > 0) {
-				void logger.info("Found users without profiles", {
+				await logger.info("Found users without profiles", {
 					count: missingProfiles.length,
 					sample: missingProfiles.slice(0, 10),
 				});
 			}
 
 			if (dataMismatches.length > 0) {
-				void logger.info("Found profile data mismatches", {
+				await logger.info("Found profile data mismatches", {
 					count: dataMismatches.length,
 					sample: dataMismatches.slice(0, 10),
 				});
 			}
 
 			if (missingProfiles.length === 0 && dataMismatches.length === 0) {
-				void logger.info("All profiles are consistent");
+				await logger.info("All profiles are consistent");
 			}
 
-			void logger.info("Verify profile migration completed");
+			await logger.info("Verify profile migration completed");
 
 			return {
 				success: true,
@@ -187,7 +195,7 @@ export const verifyProfileMigration = internalMutation({
 				mismatchSamples: dataMismatches.slice(0, 10),
 			};
 		} catch (error) {
-			void logger.error("Verify profile migration failed", error);
+			await logger.error("Verify profile migration failed", error);
 			throw error;
 		}
 	},

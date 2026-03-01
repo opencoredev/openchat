@@ -1,18 +1,9 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
+import { chainOfThoughtPartValidator } from "./message_validators";
 import { isWebSearchToolName } from "./streamUtils";
 
-export const chainOfThoughtPartValidator = v.object({
-	type: v.union(v.literal("reasoning"), v.literal("tool")),
-	index: v.number(),
-	text: v.optional(v.string()),
-	toolName: v.optional(v.string()),
-	toolCallId: v.optional(v.string()),
-	state: v.optional(v.string()),
-	input: v.optional(v.any()),
-	output: v.optional(v.any()),
-	errorText: v.optional(v.string()),
-});
+export { chainOfThoughtPartValidator } from "./message_validators";
 
 export const updateStreamContent = internalMutation({
 	args: {

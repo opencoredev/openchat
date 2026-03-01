@@ -156,13 +156,6 @@ export const startStream = mutation({
 			throw new Error("Chat not found or unauthorized");
 		}
 
-		if (args.provider === "osschat") {
-			const user = await ctx.db.get(userId);
-			if (!user) {
-				throw new Error("User not found");
-			}
-		}
-
 		const existingActiveStream = await ctx.db
 			.query("streamJobs")
 			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId).eq("status", "running"))
