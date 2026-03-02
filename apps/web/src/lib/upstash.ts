@@ -1,7 +1,7 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import { Client as WorkflowClient } from "@upstash/workflow";
-import { createClient } from "redis";
+import { createClient, type RedisClientType } from "redis";
 
 const UPSTASH_REDIS_REST_URL = process.env.UPSTASH_REDIS_REST_URL?.trim();
 const UPSTASH_REDIS_REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
@@ -26,60 +26,35 @@ const SHOULD_USE_UPSTASH_REDIS = IS_PRODUCTION || SHOULD_USE_UPSTASH_IN_DEV;
 const SHOULD_USE_LOCAL_REDIS =
 	!IS_PRODUCTION && !SHOULD_USE_UPSTASH_IN_DEV && (REDIS_URL?.length ?? 0) > 0;
 
-type LocalRedisState = {
-	client: ReturnType<typeof createClient> | null;
-	connectPromise: Promise<ReturnType<typeof createClient> | null> | null;
-	unavailable: boolean;
-};
+let localRedisClient: RedisClientType | null = null;
+let localRedisConnectPromise: Promise<RedisClientType | null> | null = null;
+let localRedisUnavailable = false;
 
-type GlobalWithLocalRedisState = typeof globalThis & {
-	__openchatLocalRedisState?: LocalRedisState;
-};
-
-const globalForLocalRedis = globalThis as GlobalWithLocalRedisState;
-const localRedisState =
-	globalForLocalRedis.__openchatLocalRedisState ??
-	(globalForLocalRedis.__openchatLocalRedisState = {
-		client: null,
-		connectPromise: null,
-		unavailable: false,
-	});
-
-function parseRedisValue<T>(value: unknown): T | null {
-	if (value === null || value === undefined) return null;
-	if (typeof value !== "string") return value as T;
-	try {
-		return JSON.parse(value) as T;
-	} catch {
-		return value as unknown as T;
-	}
-}
-
-async function getLocalRedisClient(): Promise<ReturnType<typeof createClient> | null> {
-	if (!SHOULD_USE_LOCAL_REDIS || localRedisState.unavailable) return null;
-	if (localRedisState.client) return localRedisState.client;
-	if (localRedisState.connectPromise) return localRedisState.connectPromise;
+async function getLocalRedisClient(): Promise<RedisClientType | null> {
+	if (!SHOULD_USE_LOCAL_REDIS || localRedisUnavailable) return null;
+	if (localRedisClient) return localRedisClient;
+	if (localRedisConnectPromise) return localRedisConnectPromise;
 
 	const url = REDIS_URL;
 	if (!url) return null;
 
 	const client = createClient({ url });
-	localRedisState.connectPromise = client
+	localRedisConnectPromise = client
 		.connect()
 		.then(() => {
-			localRedisState.client = client;
+			localRedisClient = client;
 			return client;
 		})
 		.catch((error) => {
-			localRedisState.unavailable = true;
+			localRedisUnavailable = true;
 			console.warn("[Redis] Failed to connect to local Redis:", error);
 			return null;
 		})
 		.finally(() => {
-			localRedisState.connectPromise = null;
+			localRedisConnectPromise = null;
 		});
 
-	return localRedisState.connectPromise;
+	return localRedisConnectPromise;
 }
 
 type RatelimitDecision = {
@@ -116,11 +91,7 @@ export const redisStore = {
 	},
 	async set(key: string, value: string, options?: { ex?: number }): Promise<void> {
 		if (upstashRedis) {
-			if (options?.ex !== undefined) {
-				await upstashRedis.set(key, value, { ex: options.ex });
-			} else {
-				await upstashRedis.set(key, value);
-			}
+			await upstashRedis.set(key, value, options);
 			return;
 		}
 
@@ -141,7 +112,7 @@ export const redisStore = {
 		const local = await getLocalRedisClient();
 		if (!local) return null;
 		const value = await local.get(key);
-		return parseRedisValue<T>(value);
+		return (value as T | null) ?? null;
 	},
 	async getdel<T = string>(key: string): Promise<T | null> {
 		if (upstashRedis) {
@@ -152,7 +123,7 @@ export const redisStore = {
 		const local = await getLocalRedisClient();
 		if (!local) return null;
 		const value = await local.sendCommand(["GETDEL", key]);
-		return parseRedisValue<T>(value);
+		return (value as T | null) ?? null;
 	},
 	async del(...keys: string[]): Promise<number> {
 		if (keys.length === 0) return 0;
@@ -364,7 +335,7 @@ if (!upstashRedis) {
 }
 
 if (SHOULD_USE_LOCAL_REDIS && REDIS_URL) {
-	console.log(`[Redis] Using local Redis backend at ${REDIS_URL}`);
+      console.info(`[Redis] Using local Redis backend at ${REDIS_URL}`);
 }
 
 if (!workflowClient && IS_PRODUCTION) {

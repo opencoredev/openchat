@@ -1,4 +1,5 @@
 import { internalAction } from "./_generated/server";
+import { LOCAL_APP_URL } from "./lib/constants";
 import { createLogger } from "./lib/logger";
 
 const logger = createLogger("previewSeed");
@@ -17,7 +18,7 @@ const logger = createLogger("previewSeed");
 export default internalAction(async (_ctx) => {
 	const deployment = process.env.DEPLOYMENT;
 	const nodeEnv = process.env.NODE_ENV;
-	const appUrl = process.env.APP_URL || "http://localhost:3000";
+	const appUrl = process.env.APP_URL || LOCAL_APP_URL;
 
 	void logger.info("Running in deployment", { deployment, nodeEnv });
 	void logger.info("App URL", { appUrl });

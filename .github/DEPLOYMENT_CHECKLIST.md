@@ -9,7 +9,6 @@ Use this checklist to track the setup and testing of automatic Convex deployment
   - [ ] `scripts/run-migrations.ts`
   - [ ] `.github/workflows/README.md`
   - [ ] `docs/deployment.md`
-  - [ ] `DEPLOYMENT_SETUP.md`
 
 - [ ] Add GitHub Secret: `CONVEX_DEPLOY_KEY`
   - [ ] Obtain key from Convex Dashboard or Vercel
@@ -143,7 +142,6 @@ Use this checklist to track the setup and testing of automatic Convex deployment
 - [ ] Team knows where to find help
   - [ ] `.github/workflows/README.md`
   - [ ] `docs/deployment.md`
-  - [ ] `DEPLOYMENT_SETUP.md`
 
 ## Final Verification
 

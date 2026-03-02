@@ -32,12 +32,10 @@ export const clearJwks = internalMutation({
 		try {
 			// First find all JWKS records using the correct input format
 			const jwksRecords = await ctx.runQuery(components.betterAuth.adapter.findMany, {
-				input: {
-					model: "jwks",
-					where: [],
-				},
+				model: "jwks",
+				where: [],
 				paginationOpts: { numItems: 100, cursor: null },
-			} as any);
+			});
 			
 			console.log(`[Migration] Found ${jwksRecords.page.length} JWKS records`);
 			
@@ -48,7 +46,7 @@ export const clearJwks = internalMutation({
 					where: [],
 				},
 				paginationOpts: { numItems: 100, cursor: null },
-			} as any);
+			});
 			
 			console.log("[Migration] Clear JWKS - Completed", result);
 			return { success: true, count: jwksRecords.page.length };
@@ -418,7 +416,6 @@ export const removeOnboardingFields = internalMutation({
 
 				const results = await Promise.allSettled(
 					batch.map(async (user) => {
-						// Check if user has any onboarding fields to remove
 						const hasOnboardingFields =
 							"onboardingCompletedAt" in user ||
 							"displayName" in user ||
@@ -431,15 +428,24 @@ export const removeOnboardingFields = internalMutation({
 									`[Migration] [DRY RUN] Would remove onboarding fields from user ${user._id}`
 								);
 							} else {
-								// Remove onboarding fields by setting them to undefined
-								// Type assertion needed because these fields are deprecated and no longer in schema
-								await ctx.db.patch(user._id, {
-									onboardingCompletedAt: undefined,
-									displayName: undefined,
-									preferredTone: undefined,
-									customInstructions: undefined,
+								await ctx.db.replace(user._id, {
+									externalId: user.externalId,
+									email: user.email,
+									name: user.name,
+									avatarUrl: user.avatarUrl,
+									encryptedOpenRouterKey: user.encryptedOpenRouterKey,
+									fileUploadCount: user.fileUploadCount,
+									searchUsageCount: user.searchUsageCount,
+									searchUsageDate: user.searchUsageDate,
+									aiUsageCents: user.aiUsageCents,
+									aiUsageDate: user.aiUsageDate,
+									banned: user.banned,
+									bannedAt: user.bannedAt,
+									banReason: user.banReason,
+									banExpiresAt: user.banExpiresAt,
+									createdAt: user.createdAt,
 									updatedAt: Date.now(),
-								} as any);
+								});
 								console.log(
 									`[Migration] Removed onboarding fields from user ${user._id}`
 								);
@@ -725,160 +731,6 @@ export const verifyProfileMigration = internalMutation({
 			};
 		} catch (error) {
 			console.error("[Migration] Verify profile migration - Failed", error);
-			throw error;
-		}
-	},
-});
-
-/**
- * Migrate legacy reasoning/toolInvocations to chainOfThoughtParts
- *
- * Converts messages using the old separate reasoning and toolInvocations fields
- * to the new unified chainOfThoughtParts format that preserves stream order.
- *
- * IMPORTANT: This migration is idempotent - safe to run multiple times.
- * Messages that already have chainOfThoughtParts will be skipped.
- *
- * @example
- * ```bash
- * # Run via Convex CLI:
- * npx convex run migrations:migrateChainOfThoughtParts
- *
- * # Dry run first:
- * npx convex run migrations:migrateChainOfThoughtParts '{"dryRun": true}'
- * ```
- */
-export const migrateChainOfThoughtParts = internalMutation({
-	args: {
-		// Process in batches to avoid overwhelming the database
-		batchSize: v.optional(v.number()),
-		// Dry run mode - log what would be changed without making changes
-		dryRun: v.optional(v.boolean()),
-	},
-	handler: async (ctx, args) => {
-		const batchSize = args.batchSize ?? 100;
-		const dryRun = args.dryRun ?? false;
-
-		console.log("[Migration] Migrate chainOfThoughtParts - Started");
-		console.log(`[Migration] Batch size: ${batchSize}, Dry run: ${dryRun}`);
-
-		try {
-			// Get all assistant messages that have reasoning or toolInvocations but no chainOfThoughtParts
-			const messages = await ctx.db
-				.query("messages")
-				.filter((q) => q.eq(q.field("role"), "assistant"))
-				.collect();
-
-			// Filter to only messages needing migration
-			const messagesToMigrate = messages.filter(
-				(m) =>
-					// Has legacy data
-					(m.reasoning || (m.toolInvocations && m.toolInvocations.length > 0)) &&
-					// But no new format data
-					(!m.chainOfThoughtParts || m.chainOfThoughtParts.length === 0)
-			);
-
-			console.log(`[Migration] Found ${messagesToMigrate.length} messages to migrate...`);
-
-			let migrated = 0;
-			let errors = 0;
-
-			// Process in batches
-			for (let i = 0; i < messagesToMigrate.length; i += batchSize) {
-				const batch = messagesToMigrate.slice(i, i + batchSize);
-
-				for (const message of batch) {
-					try {
-						// Build chainOfThoughtParts from legacy fields
-						// Order: reasoning first (index 0), then tools (index 1+)
-						const parts: Array<{
-							type: "reasoning" | "tool";
-							index: number;
-							text?: string;
-							toolName?: string;
-							toolCallId?: string;
-							state?: string;
-							input?: unknown;
-							output?: unknown;
-							errorText?: string;
-						}> = [];
-
-						let currentIndex = 0;
-
-						// Add reasoning as first part (if present)
-						if (message.reasoning) {
-							parts.push({
-								type: "reasoning",
-								index: currentIndex++,
-								text: message.reasoning,
-							});
-						}
-
-						// Add tool invocations (if present)
-						if (message.toolInvocations) {
-							for (const tool of message.toolInvocations) {
-								parts.push({
-									type: "tool",
-									index: currentIndex++,
-									toolName: tool.toolName,
-									toolCallId: tool.toolCallId,
-									state: tool.state,
-									input: tool.input,
-									output: tool.output,
-									errorText: tool.errorText,
-								});
-							}
-						}
-
-						if (parts.length > 0) {
-							if (dryRun) {
-								console.log(
-									`[Migration] [DRY RUN] Would migrate message ${message._id} with ${parts.length} parts`
-								);
-							} else {
-								await ctx.db.patch(message._id, {
-									chainOfThoughtParts: parts,
-								});
-								console.log(
-									`[Migration] Migrated message ${message._id} with ${parts.length} parts`
-								);
-							}
-							migrated++;
-						}
-					} catch (error) {
-						console.error(
-							`[Migration] Error migrating message ${message._id}:`,
-							error
-						);
-						errors++;
-					}
-				}
-
-				console.log(
-					`[Migration] Processed ${Math.min(i + batchSize, messagesToMigrate.length)}/${messagesToMigrate.length} messages...`
-				);
-			}
-
-			const message = dryRun
-				? `[Migration] Migrate chainOfThoughtParts - Dry run completed (${migrated} messages would be migrated)`
-				: `[Migration] Migrate chainOfThoughtParts - Completed (${migrated} messages migrated)`;
-
-			console.log(message);
-
-			if (errors > 0) {
-				console.error(`[Migration] Encountered ${errors} errors`);
-			}
-
-			return {
-				success: true,
-				dryRun,
-				totalMessages: messages.length,
-				needingMigration: messagesToMigrate.length,
-				migrated,
-				errors,
-			};
-		} catch (error) {
-			console.error("[Migration] Migrate chainOfThoughtParts - Failed", error);
 			throw error;
 		}
 	},

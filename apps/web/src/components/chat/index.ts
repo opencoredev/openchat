@@ -1,11 +1,15 @@
 export { ChatMessageList } from "./chat-message-list";
 export type { ChatMessageListProps } from "./chat-message-list";
+export { ChatInterface } from "./chat-interface";
 export { ChainOfThought, buildChainOfThoughtSteps } from "./chat-chain-of-thought";
 export type { ChainOfThoughtStep, ChainOfThoughtProps } from "./chat-chain-of-thought";
 export { InlineErrorMessage } from "./inline-error-message";
 export type { InlineErrorMessageProps } from "./inline-error-message";
+export { SearchResultsDisplay } from "./search-results-display";
 export { PillButton, ReasoningToggleButton, WebSearchToggleButton, SendButton } from "./prompt-toolbar";
 export type { PillButtonProps, SendButtonProps, ToolbarToggleProps } from "./prompt-toolbar";
 export { PremiumPromptInputInner } from "./premium-prompt-input";
 export type { PremiumPromptInputProps } from "./premium-prompt-input";
+export { StartScreen } from "./start-screen";
+export { UserMessageActions, AssistantMessageActions } from "./message-actions";
 export { getSafeUrl, replaceUtmSource, ALLOWED_URL_SCHEMES } from "./url-utils";

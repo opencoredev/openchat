@@ -39,7 +39,7 @@ export function getAllowedOrigins(): string[] {
 	}
 
 	// Add any additional explicitly configured origins
-	// Format: comma-separated URLs (e.g., "https://preview-1.up.railway.app,https://preview-2.up.railway.app")
+	// Format: comma-separated URLs (e.g., "https://preview-1.example.com,https://preview-2.example.com")
 	const additionalOrigins = process.env.ALLOWED_ORIGINS;
 	if (additionalOrigins) {
 		const parsed = additionalOrigins

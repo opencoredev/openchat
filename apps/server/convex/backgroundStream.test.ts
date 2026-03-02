@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { convexTest } from 'convex-test';
 import schema from './schema';
-import { api } from './_generated/api';
+import { api, internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { modules, rateLimiter } from './testSetup.test';
 
@@ -53,6 +53,23 @@ describe('backgroundStream.startStream', () => {
 
 	afterEach(() => {
 		vi.useRealTimers();
+	});
+
+	it('creates a streamJob and returns its ID', async () => {
+		const jobId = await t.withIdentity({ subject: externalId }).mutation(api.backgroundStream.startStream, {
+			chatId,
+			userId,
+			messageId: 'msg_123',
+			model: 'openai/gpt-4o',
+			provider: 'openrouter',
+			messages: [{ role: 'user', content: 'Hello' }],
+		});
+
+		expect(jobId).toBeDefined();
+
+		const job = await t.run(async (ctx) => ctx.db.get(jobId));
+		expect(job).not.toBeNull();
+		expect(job?.status).toBe('pending');
 	});
 
 	it('inserts the streamJob with correct fields', async () => {
@@ -328,5 +345,259 @@ describe('backgroundStream.startStream', () => {
 		const job = await t.run(async (ctx) => ctx.db.get(jobId));
 		expect(job?.options?.enableReasoning).toBe(true);
 		expect(job?.options?.reasoningEffort).toBe('high');
+	});
+});
+
+describe('backgroundStream.getStreamJob', () => {
+	let t: ReturnType<typeof makeConvexTest>;
+	let userId: Id<'users'>;
+	let chatId: Id<'chats'>;
+	const externalId = 'stream-job-user';
+
+	beforeEach(async () => {
+		t = makeConvexTest();
+		userId = await seedUser(t, externalId);
+		chatId = await seedChat(t, userId, 'New Chat');
+	});
+
+	it('returns selected job fields for the owning user', async () => {
+		const jobId = await t.run(async (ctx) =>
+			ctx.db.insert('streamJobs', {
+				chatId,
+				userId,
+				messageId: 'msg_get_job',
+				status: 'running',
+				model: 'openai/gpt-4o',
+				provider: 'openrouter',
+				messages: [{ role: 'user', content: 'hello' }],
+				options: { enableReasoning: true, reasoningEffort: 'medium' },
+				content: 'partial output',
+				reasoning: 'thinking',
+				webSearchUsed: true,
+				webSearchCallCount: 1,
+				toolCallCount: 2,
+				createdAt: Date.now(),
+			})
+		);
+
+		const result = await t.withIdentity({ subject: externalId }).query(api.backgroundStream.getStreamJob, {
+			jobId,
+			userId,
+		});
+
+		expect(result?._id).toBe(jobId);
+		expect(result?.status).toBe('running');
+		expect(result?.messageId).toBe('msg_get_job');
+		expect(result?.content).toBe('partial output');
+		expect(result).not.toHaveProperty('chatId');
+		expect(result).not.toHaveProperty('userId');
+	});
+
+	it('returns null when the job belongs to another user', async () => {
+		const otherExternalId = 'stream-job-other';
+		const otherUserId = await seedUser(t, otherExternalId);
+
+		const jobId = await t.run(async (ctx) =>
+			ctx.db.insert('streamJobs', {
+				chatId,
+				userId,
+				messageId: 'msg_hidden',
+				status: 'pending',
+				model: 'openai/gpt-4o',
+				provider: 'openrouter',
+				messages: [{ role: 'user', content: 'hello' }],
+				content: '',
+				createdAt: Date.now(),
+			})
+		);
+
+		const result = await t.withIdentity({ subject: otherExternalId }).query(api.backgroundStream.getStreamJob, {
+			jobId,
+			userId: otherUserId,
+		});
+
+		expect(result).toBeNull();
+	});
+});
+
+describe('backgroundStream.completeStream', () => {
+	let t: ReturnType<typeof makeConvexTest>;
+	let userId: Id<'users'>;
+	let chatId: Id<'chats'>;
+
+	beforeEach(async () => {
+		t = makeConvexTest();
+		userId = await seedUser(t, 'complete-stream-user');
+		chatId = await seedChat(t, userId, 'New Chat');
+	});
+
+	it('completes the job, clears chat active stream, and inserts assistant message', async () => {
+		const jobId = await t.run(async (ctx) => {
+			await ctx.db.patch(chatId, { activeStreamId: 'job-pending', status: 'streaming' });
+			return ctx.db.insert('streamJobs', {
+				chatId,
+				userId,
+				messageId: 'assistant_msg_1',
+				status: 'running',
+				model: 'openai/gpt-4o',
+				provider: 'openrouter',
+				messages: [{ role: 'user', content: 'question' }],
+				options: {
+					enableReasoning: true,
+					reasoningEffort: 'high',
+					enableWebSearch: true,
+					maxSteps: 4,
+				},
+				content: '',
+				createdAt: Date.now(),
+			});
+		});
+
+		await t.mutation(internal.backgroundStream.completeStream, {
+			jobId,
+			content: 'final answer',
+			reasoning: 'reasoning trail',
+			chainOfThoughtParts: [
+				{ type: 'reasoning', index: 0, text: 'thinking' },
+				{ type: 'tool', index: 1, toolName: 'web_search', state: 'output-available' },
+			],
+			reasoningRequested: true,
+			tokenUsage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+		});
+
+		const job = await t.run(async (ctx) => ctx.db.get(jobId));
+		expect(job?.status).toBe('completed');
+		expect(job?.webSearchCallCount).toBe(1);
+		expect(job?.webSearchUsed).toBe(true);
+		expect(job?.toolCallCount).toBe(1);
+
+		const chat = await t.run(async (ctx) => ctx.db.get(chatId));
+		expect(chat?.status).toBe('idle');
+		expect(chat?.activeStreamId).toBeUndefined();
+
+		const message = await t.run(async (ctx) =>
+			ctx.db
+				.query('messages')
+				.withIndex('by_client_id', (q) => q.eq('chatId', chatId).eq('clientMessageId', 'assistant_msg_1'))
+				.unique()
+		);
+		expect(message?.content).toBe('final answer');
+		expect(message?.status).toBe('completed');
+		expect(message?.reasoningEffort).toBe('high');
+		expect(message?.webSearchEnabled).toBe(true);
+		expect(message?.maxSteps).toBe(4);
+	});
+
+	it('updates an existing assistant message instead of creating a duplicate', async () => {
+		const jobId = await t.run(async (ctx) => {
+			const insertedJobId = await ctx.db.insert('streamJobs', {
+				chatId,
+				userId,
+				messageId: 'assistant_msg_existing',
+				status: 'running',
+				model: 'openai/gpt-4o',
+				provider: 'openrouter',
+				messages: [{ role: 'user', content: 'question' }],
+				content: '',
+				createdAt: Date.now(),
+			});
+
+			await ctx.db.insert('messages', {
+				chatId,
+				clientMessageId: 'assistant_msg_existing',
+				role: 'assistant',
+				content: 'old content',
+				status: 'streaming',
+				createdAt: Date.now(),
+				userId,
+			});
+
+			return insertedJobId;
+		});
+
+		await t.mutation(internal.backgroundStream.completeStream, {
+			jobId,
+			content: 'new content',
+		});
+
+		const matchingMessages = await t.run(async (ctx) =>
+			ctx.db
+				.query('messages')
+				.withIndex('by_client_id', (q) => q.eq('chatId', chatId).eq('clientMessageId', 'assistant_msg_existing'))
+				.collect()
+		);
+
+		expect(matchingMessages.length).toBe(1);
+		expect(matchingMessages[0]?.content).toBe('new content');
+		expect(matchingMessages[0]?.status).toBe('completed');
+	});
+});
+
+describe('backgroundStream.failStream', () => {
+	let t: ReturnType<typeof makeConvexTest>;
+	let userId: Id<'users'>;
+	let chatId: Id<'chats'>;
+
+	beforeEach(async () => {
+		t = makeConvexTest();
+		userId = await seedUser(t, 'fail-stream-user');
+		chatId = await seedChat(t, userId, 'New Chat');
+	});
+
+	it('marks stream as error, stores partial content, and clears chat state', async () => {
+		const jobId = await t.run(async (ctx) => {
+			await ctx.db.patch(chatId, { activeStreamId: 'job-to-fail', status: 'streaming' });
+			return ctx.db.insert('streamJobs', {
+				chatId,
+				userId,
+				messageId: 'failed_msg',
+				status: 'running',
+				model: 'openai/gpt-4o',
+				provider: 'openrouter',
+				messages: [{ role: 'user', content: 'question' }],
+				content: 'existing partial',
+				createdAt: Date.now(),
+			});
+		});
+
+		await t.mutation(internal.backgroundStream.failStream, {
+			jobId,
+			error: 'provider error',
+			partialContent: 'new partial content',
+		});
+
+		const job = await t.run(async (ctx) => ctx.db.get(jobId));
+		expect(job?.status).toBe('error');
+		expect(job?.error).toBe('provider error');
+		expect(job?.content).toBe('new partial content');
+
+		const chat = await t.run(async (ctx) => ctx.db.get(chatId));
+		expect(chat?.status).toBe('idle');
+		expect(chat?.activeStreamId).toBeUndefined();
+	});
+
+	it('keeps existing content when no partialContent is provided', async () => {
+		const jobId = await t.run(async (ctx) =>
+			ctx.db.insert('streamJobs', {
+				chatId,
+				userId,
+				messageId: 'failed_msg_no_partial',
+				status: 'running',
+				model: 'openai/gpt-4o',
+				provider: 'openrouter',
+				messages: [{ role: 'user', content: 'question' }],
+				content: 'original buffered text',
+				createdAt: Date.now(),
+			})
+		);
+
+		await t.mutation(internal.backgroundStream.failStream, {
+			jobId,
+			error: 'timeout',
+		});
+
+		const job = await t.run(async (ctx) => ctx.db.get(jobId));
+		expect(job?.content).toBe('original buffered text');
+		expect(job?.status).toBe('error');
 	});
 });

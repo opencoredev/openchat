@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test, beforeEach, afterEach, vi } from "vitest";
-import { api, internal } from "./_generated/api";
+import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 import { modules, rateLimiter } from "./testSetup.test";
@@ -78,7 +78,7 @@ describe("streamQueries", () => {
 				await ctx.db.delete(fakeJobId);
 			});
 
-		const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamQueries.getStreamJob, {
+		const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamJobs.getStreamJob, {
 				jobId: fakeJobId,
 				userId,
 			});
@@ -90,7 +90,7 @@ describe("streamQueries", () => {
 			const chatId = await seedChat(t, userId);
 			const jobId = await seedStreamJob(t, userId, chatId, "running");
 
-			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamQueries.getStreamJob, {
+			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamJobs.getStreamJob, {
 				jobId,
 				userId,
 			});
@@ -107,7 +107,7 @@ describe("streamQueries", () => {
 			const chatId = await seedChat(t, userId1);
 			const jobId = await seedStreamJob(t, userId1, chatId, "running");
 
-			const result = await t.withIdentity({ subject: "ext_user_2" }).query(api.streamQueries.getStreamJob, {
+			const result = await t.withIdentity({ subject: "ext_user_2" }).query(api.streamJobs.getStreamJob, {
 				jobId,
 				userId: userId2,
 			});
@@ -120,7 +120,7 @@ describe("streamQueries", () => {
 			const jobId = await seedStreamJob(t, userId, chatId);
 
 			await expect(
-					t.query(api.streamQueries.getStreamJob, {
+					t.query(api.streamJobs.getStreamJob, {
 					jobId,
 					userId,
 				})
@@ -142,7 +142,7 @@ describe("streamQueries", () => {
 				});
 			});
 
-			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamQueries.getStreamJob, {
+			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamJobs.getStreamJob, {
 				jobId,
 				userId,
 			});
@@ -160,7 +160,7 @@ describe("streamQueries", () => {
 			const userId = await seedUser(t);
 			const chatId = await seedChat(t, userId);
 
-			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamQueries.getActiveStreamJob, {
+			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamJobs.getActiveStreamJob, {
 				chatId,
 				userId,
 			});
@@ -172,7 +172,11 @@ describe("streamQueries", () => {
 			const chatId = await seedChat(t, userId);
 			const jobId = await seedStreamJob(t, userId, chatId, "running");
 
-			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamQueries.getActiveStreamJob, {
+			await t.run(async (ctx) => {
+				await ctx.db.patch(chatId, { activeStreamId: jobId });
+			});
+
+			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamJobs.getActiveStreamJob, {
 				chatId,
 				userId,
 			});
@@ -186,7 +190,7 @@ describe("streamQueries", () => {
 			const chatId = await seedChat(t, userId);
 			const jobId = await seedStreamJob(t, userId, chatId, "pending");
 
-			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamQueries.getActiveStreamJob, {
+			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamJobs.getActiveStreamJob, {
 				chatId,
 				userId,
 			});
@@ -201,7 +205,7 @@ describe("streamQueries", () => {
 			const chatId = await seedChat(t, userId1);
 			await seedStreamJob(t, userId1, chatId, "running");
 
-			const result = await t.withIdentity({ subject: "ext_user_2" }).query(api.streamQueries.getActiveStreamJob, {
+			const result = await t.withIdentity({ subject: "ext_user_2" }).query(api.streamJobs.getActiveStreamJob, {
 				chatId,
 				userId: userId2,
 			});
@@ -213,7 +217,7 @@ describe("streamQueries", () => {
 			const chatId = await seedChat(t, userId);
 			await seedStreamJob(t, userId, chatId, "completed");
 
-			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamQueries.getActiveStreamJob, {
+			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamJobs.getActiveStreamJob, {
 				chatId,
 				userId,
 			});
@@ -225,7 +229,7 @@ describe("streamQueries", () => {
 			const chatId = await seedChat(t, userId);
 			await seedStreamJob(t, userId, chatId, "error");
 
-			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamQueries.getActiveStreamJob, {
+			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamJobs.getActiveStreamJob, {
 				chatId,
 				userId,
 			});
@@ -237,7 +241,7 @@ describe("streamQueries", () => {
 			const chatId = await seedChat(t, userId);
 
 			await expect(
-					t.query(api.streamQueries.getActiveStreamJob, {
+					t.query(api.streamJobs.getActiveStreamJob, {
 					chatId,
 					userId,
 				})
@@ -250,7 +254,7 @@ describe("streamQueries", () => {
 			await seedStreamJob(t, userId, chatId, "pending");
 			const runningJobId = await seedStreamJob(t, userId, chatId, "running");
 
-			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamQueries.getActiveStreamJob, {
+			const result = await t.withIdentity({ subject: "ext_user_1" }).query(api.streamJobs.getActiveStreamJob, {
 				chatId,
 				userId,
 			});

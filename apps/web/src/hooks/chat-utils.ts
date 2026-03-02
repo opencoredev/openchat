@@ -74,6 +74,16 @@ function getReasoningText(part: unknown): string | undefined {
 export function getUserFriendlyError(message: string): string {
 	const lowerMessage = message.toLowerCase();
 
+	if (lowerMessage.includes("no api key available")) {
+		return "No API key is available. Connect your OpenRouter account in Settings.";
+	}
+	if (
+		lowerMessage.includes("openrouter") &&
+		(lowerMessage.includes("authentication") || lowerMessage.includes("unauthorized"))
+	) {
+		return "OpenRouter authentication failed. Reconnect your OpenRouter account and try again.";
+	}
+
 	if (lowerMessage.includes("rate limit") || lowerMessage.includes("too many")) {
 		return "You're sending messages too quickly. Please wait a moment.";
 	}

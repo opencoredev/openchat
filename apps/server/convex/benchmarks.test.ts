@@ -145,7 +145,6 @@ describe('benchmarks.fetchAndStoreBenchmarks', () => {
 	afterEach(() => {
 		vi.unstubAllEnvs();
 		vi.restoreAllMocks();
-		vi.unstubAllGlobals();
 	});
 
 	it('returns early without fetching when ARTIFICIAL_ANALYSIS_API_KEY is not set (line 40)', async () => {

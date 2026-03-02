@@ -13,16 +13,16 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { XIcon } from "lucide-react";
-import { PromptInputProvider, usePromptInputController } from "./ai-elements/prompt-input";
-import type { PromptInputMessage } from "./ai-elements/prompt-input";
+import { PromptInputProvider, usePromptInputController } from "@/components/ai-elements/prompt-input";
+import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { usePersistentChat } from "@/hooks/use-persistent-chat";
 import { usePromptDraft } from "@/hooks/use-prompt-draft";
 import {
 	SHORTCUT_EVENT_FOCUS_PROMPT_TOGGLE,
 	SHORTCUT_EVENT_STOP_GENERATION,
 } from "@/lib/shortcuts";
-import { ChatMessageList } from "./chat/chat-message-list";
-import { PremiumPromptInputInner } from "./chat/premium-prompt-input";
+import { ChatMessageList } from "./chat-message-list";
+import { PremiumPromptInputInner } from "./premium-prompt-input";
 import type { UIDataTypes, UIMessagePart, UITools } from "ai";
 
 function useIsMac() {
@@ -296,4 +296,3 @@ const ChatInterfaceContent = memo(function ChatInterfaceContent({
 		</div>
 	);
 });
-

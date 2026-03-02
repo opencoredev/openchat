@@ -3,13 +3,15 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import {
+  AccountSection,
+  ChatSection,
+  ModelsSection,
+  ProvidersSection,
+  ShortcutsSection,
+} from "@/components/settings";
 import { cn } from "@/lib/utils";
 import { signOut, useAuth } from "@/lib/auth-client";
-import { AccountSection } from "@/components/settings/settings-account";
-import { ProvidersSection } from "@/components/settings/settings-providers";
-import { ChatSection } from "@/components/settings/settings-chat";
-import { ModelsSection } from "@/components/settings/settings-models";
-import { ShortcutsSection } from "@/components/settings/settings-shortcuts";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({

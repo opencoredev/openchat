@@ -419,7 +419,7 @@ describe("promptTemplates.list", () => {
 		expect(result.templates).toBeDefined();
 	});
 
-	test("should accept large limit values without throwing", async () => {
+	test("should cap limit to max when limit exceeds maximum", async () => {
 		const externalId = "user_list_limit_max";
 		const { authed, userId } = await createUser(t, externalId);
 

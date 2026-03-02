@@ -49,7 +49,9 @@ export async function ensureRedisConnected(): Promise<boolean> {
 }
 
 async function getConnectedClient() {
-	return isRedisConfigured() ? redisStore : null;
+	const connected = await ensureRedisConnected();
+	if (!connected) return null;
+	return redisStore;
 }
 
 function parseStreamMeta(value: unknown): StreamMeta | null {

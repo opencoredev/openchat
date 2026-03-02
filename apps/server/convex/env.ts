@@ -4,6 +4,7 @@
  */
 
 import { createLogger } from "./lib/logger";
+import { LOCAL_APP_URL } from "./lib/constants";
 
 const logger = createLogger("EnvValidation");
 
@@ -32,14 +33,14 @@ export function validateConvexEnv(): ConvexEnv {
 
 	// Apply development defaults only in non-production environments
 	// Handle empty strings explicitly - they should trigger defaults too
-	const appUrl = (process.env.APP_URL?.trim() || (!isProd ? "http://localhost:3000" : undefined));
+	const appUrl = (process.env.APP_URL?.trim() || (!isProd ? LOCAL_APP_URL : undefined));
 
 	// Check required variables
 	if (!appUrl) {
 		if (isProd) {
 			errors.push("APP_URL is required");
 		} else {
-			warnings.push("APP_URL not set, using default: http://localhost:3000");
+			warnings.push(`APP_URL not set, using default: ${LOCAL_APP_URL}`);
 		}
 	} else {
 		try {
@@ -71,7 +72,7 @@ export function validateConvexEnv(): ConvexEnv {
 	}
 
 	return {
-		APP_URL: appUrl || "http://localhost:3000",
+		APP_URL: appUrl || LOCAL_APP_URL,
 		CONVEX_SITE_URL: process.env.CONVEX_SITE_URL,
 		DEPLOYMENT: process.env.DEPLOYMENT,
 		APP_VERSION: process.env.APP_VERSION,

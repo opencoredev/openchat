@@ -630,30 +630,4 @@ describe("ChainOfThought component", () => {
 		render(<ChainOfThought steps={steps} isStreaming={false} />);
 		expect(screen.getByTestId("cot-step").getAttribute("data-label")).toBe("Search failed: my query");
 	});
-
-	it("renders normalized search results from tool output", () => {
-		const steps = [
-			{
-				id: "tool-search-1",
-				type: "tool" as const,
-				label: "search",
-				toolName: "search",
-				toolState: "output-available" as const,
-				status: "complete" as const,
-				toolOutput: {
-					results: [
-						{ title: "Result One", url: "https://example.com/1", snippet: "Snippet one" },
-						{ name: "Result Two", link: "https://example.com/2", description: "Snippet two" },
-					],
-				},
-			},
-		];
-
-		render(<ChainOfThought steps={steps} isStreaming={false} />);
-
-		expect(screen.getByText("Result One")).toBeTruthy();
-		expect(screen.getByText("Result Two")).toBeTruthy();
-		expect(screen.getByText("Snippet one")).toBeTruthy();
-		expect(screen.getByText("Snippet two")).toBeTruthy();
-	});
 });

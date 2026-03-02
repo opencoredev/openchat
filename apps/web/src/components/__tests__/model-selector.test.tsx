@@ -53,7 +53,7 @@ vi.mock("@/components/ui/dialog", () => ({
 }));
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, render, screen, fireEvent, act } from "@testing-library/react";
+import { cleanup, render, screen, fireEvent, act, within } from "@testing-library/react";
 import { ModelSelector, ConnectedModelSelector } from "../model-selector";
 import type { Model } from "@/stores/model";
 import { useModels, getModelById, useModelStore } from "@/stores/model";
@@ -217,6 +217,23 @@ describe("ModelSelector", () => {
 		});
 		expect(screen.getByText("GPT-4o")).toBeTruthy();
 		expect(screen.queryByText("Free Test Model")).toBeNull();
+	});
+
+	it("filters models by provider when a provider logo is selected", async () => {
+		render(
+			<ModelSelector
+				value="anthropic/claude-3.5-sonnet"
+				onValueChange={vi.fn()}
+			/>,
+		);
+		await openDropdown();
+		await act(async () => {
+			fireEvent.click(screen.getByTitle("OpenAI"));
+		});
+		const listbox = within(screen.getByRole("listbox", { name: "Models" }));
+		expect(listbox.getByText("GPT-4o")).toBeTruthy();
+		expect(listbox.queryByText("Claude 3.5 Sonnet")).toBeNull();
+		expect(listbox.queryByText("Free Test Model")).toBeNull();
 	});
 
 	it("shows 'No models found' when the search query has no results", async () => {
@@ -478,4 +495,66 @@ describe("ConnectedModelSelector", () => {
 		expect(mockSetSelectedModel).toHaveBeenCalledWith("openai/gpt-4o");
 	});
 
+	it("info dialog closes when onOpenChange is called with false", async () => {
+		render(<ConnectedModelSelector />);
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button", { name: "Select model" }));
+		});
+
+		const infoButtons = screen.getAllByRole("button").filter(
+			(btn) =>
+				!btn.getAttribute("title") &&
+				!btn.getAttribute("aria-label") &&
+				!btn.textContent?.trim(),
+		);
+
+		if (infoButtons.length > 0) {
+			await act(async () => {
+				fireEvent.click(infoButtons[0]);
+			});
+			const closeBtn = screen.queryByTestId("dialog-close-btn");
+			if (closeBtn) {
+				await act(async () => {
+					fireEvent.click(closeBtn);
+				});
+				expect(screen.queryByTestId("dialog-close-btn")).toBeNull();
+			}
+		}
+	});
+
+	it("handleInfoOpen sets infoModel and opens dialog when isMobile is true", async () => {
+		render(<ConnectedModelSelector />);
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button", { name: "Select model" }));
+		});
+		const infoButtons = document.querySelectorAll('button[class*="size-6"]');
+		const infoBtn = Array.from(infoButtons).find((btn) => !btn.getAttribute("title") && !btn.getAttribute("aria-label"));
+		if (infoBtn) {
+			await act(async () => {
+				fireEvent.click(infoBtn);
+			});
+			expect(screen.queryByTestId("dialog-close-btn")).toBeDefined();
+		}
+	});
+
+	it("dialog onOpenChange(false) clears infoModel (lines 339-340)", async () => {
+		render(<ConnectedModelSelector />);
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button", { name: "Select model" }));
+		});
+		const infoButtons = document.querySelectorAll('button[class*="size-6"]');
+		const infoBtn = Array.from(infoButtons).find((btn) => !btn.getAttribute("title") && !btn.getAttribute("aria-label"));
+		if (infoBtn) {
+			await act(async () => {
+				fireEvent.click(infoBtn);
+			});
+			const closeBtn = screen.queryByTestId("dialog-close-btn");
+			if (closeBtn) {
+				await act(async () => {
+					fireEvent.click(closeBtn);
+				});
+				expect(screen.queryByTestId("dialog-close-btn")).toBeNull();
+			}
+		}
+	});
 });

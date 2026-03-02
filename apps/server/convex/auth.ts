@@ -8,6 +8,7 @@ import type { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 
 import { getAllowedOrigins } from "./lib/origins";
+import { LOCAL_APP_URL } from "./lib/constants";
 import { createLogger } from "./lib/logger";
 
 const logger = createLogger("auth");
@@ -17,6 +18,16 @@ const logger = createLogger("auth");
  * All OAuth flows (including from preview environments) route through production.
  */
 const PRODUCTION_CONVEX_SITE_URL = process.env.PRODUCTION_CONVEX_SITE_URL;
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const AUTH_EMAIL_FROM = process.env.AUTH_EMAIL_FROM;
+
+const escapeHtml = (value: string): string =>
+	value
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
 
 /**
  * Better Auth component client for Convex integration.
@@ -40,7 +51,7 @@ export const createAuth = (
 	if (!convexSiteUrl) {
 		throw new Error("CONVEX_SITE_URL environment variable is not set");
 	}
-	const siteUrl = process.env.SITE_URL || "http://localhost:3000";
+	const siteUrl = process.env.SITE_URL || LOCAL_APP_URL;
 
 	// Detect if this is a preview environment (explicit opt-in only).
 	// Preview deployments intentionally support email/password auth only.
@@ -93,7 +104,41 @@ export const createAuth = (
 			maxPasswordLength: 128,
 			requireEmailVerification: !isPreview,
 			sendResetPassword: async ({ user, url }: { user: { email: string }; url: string }) => {
-				void logger.info("Password reset requested", { email: user.email, url });
+				const safeUrl = escapeHtml(url);
+				if (!RESEND_API_KEY || !AUTH_EMAIL_FROM) {
+					void logger.warn("Password reset email provider is not configured", {
+						email: user.email,
+						hasResendApiKey: Boolean(RESEND_API_KEY),
+						hasAuthEmailFrom: Boolean(AUTH_EMAIL_FROM),
+					});
+					return;
+				}
+
+				const response = await fetch("https://api.resend.com/emails", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						authorization: `Bearer ${RESEND_API_KEY}`,
+					},
+					body: JSON.stringify({
+						from: AUTH_EMAIL_FROM,
+						to: user.email,
+						subject: "Reset your osschat password",
+						html: `<p>Reset your password by clicking the link below:</p><p><a href="${safeUrl}">${safeUrl}</a></p><p>If you did not request this, you can ignore this email.</p>`,
+					}),
+				});
+
+				if (!response.ok) {
+					const body = await response.text();
+					void logger.error("Failed to send password reset email", {
+						email: user.email,
+						status: response.status,
+						body,
+					});
+					return;
+				}
+
+				void logger.info("Password reset email sent", { email: user.email });
 			},
 		},
 		emailVerification: {

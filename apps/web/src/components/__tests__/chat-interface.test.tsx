@@ -129,7 +129,7 @@ vi.mock('../model-selector', () => ({
 	ConnectedModelSelector: () => <div data-testid="model-selector" />,
 }))
 
-vi.mock('../start-screen', () => ({
+vi.mock('../chat/start-screen', () => ({
 	StartScreen: ({ onPromptSelect }: any) => (
 		<div
 			data-testid="start-screen"
@@ -140,7 +140,7 @@ vi.mock('../start-screen', () => ({
 	),
 }))
 
-vi.mock('@/components/message-actions', () => ({
+vi.mock('@/components/chat/message-actions', () => ({
 	UserMessageActions: () => <div data-testid="user-message-actions" />,
 	AssistantMessageActions: () => <div data-testid="assistant-message-actions" />,
 }))
@@ -212,7 +212,7 @@ vi.mock('lucide-react', () => ({
 	XIcon: () => <svg />,
 }))
 
-import { ChatInterface } from '../chat-interface'
+import { ChatInterface } from '../chat/chat-interface'
 import { usePersistentChat } from '@/hooks/use-persistent-chat'
 
 function makeDefaultState() {
@@ -343,6 +343,11 @@ describe('ChatInterface', () => {
 	it('renders ChatMessageList component', () => {
 		render(<ChatInterface />)
 		expect(screen.getByTestId('chat-message-list')).toBeTruthy()
+	})
+
+	it('renders PremiumPromptInputInner component', () => {
+		render(<ChatInterface />)
+		expect(screen.getByTestId('premium-prompt-input')).toBeTruthy()
 	})
 
 	describe('edit message flow', () => {

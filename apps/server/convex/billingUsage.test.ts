@@ -356,7 +356,7 @@ describe("users.incrementAiUsage", () => {
 		expect(user?.aiUsageDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 	});
 
-	test("treats missing aiUsageCents as 0 when date matches today (line 95 ?? branch)", async () => {
+	test("treats null aiUsageCents as 0 when date matches today (line 95 ?? branch)", async () => {
 		const today = new Date().toISOString().split("T")[0];
 		await t.run(async (ctx) => {
 			await ctx.db.patch(userId, {

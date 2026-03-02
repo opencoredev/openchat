@@ -2,7 +2,7 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/auth-client";
 import { Button } from "../components/ui/button";
-import { ChatInterface } from "../components/chat-interface";
+import { ChatInterface } from "../components/chat";
 import { convexClient } from "../lib/convex";
 
 export const Route = createFileRoute('/')({

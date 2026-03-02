@@ -7,8 +7,6 @@ node_modules
 .env.local
 envs.txt
 deploy/.env
-docker/.env.*
-docker/secrets/
 coverage/
 test-results/
 tmp/
@@ -17,7 +15,6 @@ packages/auth/dist/
 apps/server/node_modules.bak/
 .auth.db
 .vercel
-.railway/
 ISSUES_COMPREHENSIVE.txt
 .env.vercel.*
 .env.preview.check
@@ -25,5 +22,8 @@ ISSUES_COMPREHENSIVE.txt
 *.bak
 preflight.yml
 !.github/workflows/preflight.yml
-.sisyphus/
 session-ses_*.md
+plan.txt
+migration-report.json
+bts.jsonc
+test-pages.sh

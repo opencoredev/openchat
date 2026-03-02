@@ -18,7 +18,6 @@ import { convexClient } from "../lib/convex";
 import { useGlobalShortcuts } from "@/hooks/use-global-shortcuts";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import type { InitialAuthUser } from "../lib/auth-client";
-import { SpeedInsights } from "@vercel/speed-insights/react";
 
 import appCss from "../styles.css?url";
 
@@ -231,7 +230,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <NavigationProgress />
         {children}
         <Scripts />
-        <SpeedInsights />
       </body>
     </html>
   );

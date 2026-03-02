@@ -70,7 +70,7 @@ describe("message_helpers", () => {
 	describe("getVerifiedStorageIds", () => {
 		test("returns empty set when no storageIds provided", async () => {
 			const userId = await seedUser(t);
-			const chatId = await seedChat(t, userId);
+			await seedChat(t, userId);
 			const resultArr = await t.run(async (ctx) => {
 				const set = await getVerifiedStorageIds(ctx, [], userId);
 				return Array.from(set);
@@ -79,7 +79,7 @@ describe("message_helpers", () => {
 		});
 
 		test("returns empty set for multiple storage IDs when none found", async () => {
-			const userId = await seedUser(t);
+			await seedUser(t);
 			const userId2 = await seedUser(t, "ext_2");
 			const resultArr = await t.run(async (ctx) => {
 				const set = await getVerifiedStorageIds(ctx, [], userId2);

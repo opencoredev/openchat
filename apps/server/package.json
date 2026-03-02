@@ -14,6 +14,7 @@
   "dependencies": {
     "@convex-dev/better-auth": "^0.10.10",
     "@convex-dev/rate-limiter": "^0.3.2",
+    "ai": "6.0.75",
     "better-auth": "1.4.18",
     "@openrouter/ai-sdk-provider": "2.1.1",
     "@valyu/ai-sdk": "^1.0.3",

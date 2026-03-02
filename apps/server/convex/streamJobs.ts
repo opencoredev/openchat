@@ -1,19 +1,19 @@
+import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
-import { internalMutation, internalQuery, mutation } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { requireAuthUserId } from "./lib/auth";
-import { isWebSearchToolName } from "./streamUtils";
+import { rateLimiter } from "./lib/rateLimiter";
+import { throwRateLimitError } from "./lib/rateLimitUtils";
+import type { ChainOfThoughtPart } from "./streamUtils";
+import { chainOfThoughtPartValidator } from "./streamContent";
 
-export const chainOfThoughtPartValidator = v.object({
-	type: v.union(v.literal("reasoning"), v.literal("tool")),
-	index: v.number(),
-	text: v.optional(v.string()),
-	toolName: v.optional(v.string()),
-	toolCallId: v.optional(v.string()),
-	state: v.optional(v.string()),
-	input: v.optional(v.any()),
-	output: v.optional(v.any()),
-	errorText: v.optional(v.string()),
-});
+export {
+	chainOfThoughtPartValidator,
+	updateStreamContent,
+	completeStream,
+	failStream,
+} from "./streamContent";
 
 export const streamOptionsValidator = v.object({
 	enableReasoning: v.optional(v.boolean()),
@@ -23,66 +23,49 @@ export const streamOptionsValidator = v.object({
 	maxSteps: v.optional(v.number()),
 });
 
-export const updateStreamContent = internalMutation({
-	args: {
-		jobId: v.id("streamJobs"),
-		content: v.string(),
-		reasoning: v.optional(v.string()),
-		chainOfThoughtParts: v.optional(v.array(chainOfThoughtPartValidator)),
-		thinkingTimeMs: v.optional(v.number()),
-		thinkingTimeSec: v.optional(v.number()),
-		reasoningCharCount: v.optional(v.number()),
-		reasoningChunkCount: v.optional(v.number()),
-		reasoningTokenCount: v.optional(v.number()),
-		reasoningRequested: v.optional(v.boolean()),
-		webSearchUsed: v.optional(v.boolean()),
-		webSearchCallCount: v.optional(v.number()),
-		toolCallCount: v.optional(v.number()),
-		status: v.optional(v.union(
-			v.literal("pending"),
-			v.literal("running"),
-			v.literal("completed"),
-			v.literal("error")
-		)),
-		error: v.optional(v.string()),
-	},
-	handler: async (ctx, args) => {
-		const job = await ctx.db.get(args.jobId);
-		if (!job) return;
+const streamJobOptionsReturnValidator = v.record(v.string(), v.any());
 
-		const updates: Record<string, unknown> = {
-			content: args.content,
-		};
+const executeStreamRef = "streamExecution:executeStream" as unknown as FunctionReference<
+	"action",
+	"internal",
+	{ jobId: Id<"streamJobs"> },
+	unknown
+>;
 
-		if (args.reasoning !== undefined) updates.reasoning = args.reasoning;
-		if (args.chainOfThoughtParts !== undefined) updates.chainOfThoughtParts = args.chainOfThoughtParts;
-		if (args.thinkingTimeMs !== undefined) updates.thinkingTimeMs = args.thinkingTimeMs;
-		if (args.thinkingTimeSec !== undefined) updates.thinkingTimeSec = args.thinkingTimeSec;
-		if (args.reasoningCharCount !== undefined) updates.reasoningCharCount = args.reasoningCharCount;
-		if (args.reasoningChunkCount !== undefined) updates.reasoningChunkCount = args.reasoningChunkCount;
-		if (args.reasoningTokenCount !== undefined) updates.reasoningTokenCount = args.reasoningTokenCount;
-		if (args.reasoningRequested !== undefined) updates.reasoningRequested = args.reasoningRequested;
-		if (args.webSearchUsed !== undefined) updates.webSearchUsed = args.webSearchUsed;
-		if (args.webSearchCallCount !== undefined) updates.webSearchCallCount = args.webSearchCallCount;
-		if (args.toolCallCount !== undefined) updates.toolCallCount = args.toolCallCount;
-		if (args.status !== undefined) {
-			updates.status = args.status;
-			if (args.status === "running" && !job.startedAt) {
-				updates.startedAt = Date.now();
-			}
-			if (args.status === "completed" || args.status === "error") {
-				updates.completedAt = Date.now();
-			}
+const generateAndSetTitleRef =
+	"chatTitle:generateAndSetTitleInternal" as unknown as FunctionReference<
+		"action",
+		"internal",
+		{
+			chatId: Id<"chats">;
+			userId: Id<"users">;
+			seedText: string;
+			length: "short" | "standard" | "long";
+			provider: "openrouter" | "osschat";
+			force?: boolean;
+		},
+		unknown
+	>;
+
+function getLatestUserSeedText(messages: Array<{ role: string; content: string }>): string | null {
+	for (let index = messages.length - 1; index >= 0; index--) {
+		const message = messages[index];
+		if (message?.role !== "user") continue;
+		const normalized = message.content.trim().slice(0, 300);
+		if (normalized.length > 0) {
+			return normalized;
 		}
-		if (args.error !== undefined) updates.error = args.error;
+	}
+	return null;
+}
 
-		await ctx.db.patch(args.jobId, updates);
-	},
-});
-
-export const completeStream = internalMutation({
-	args: {
-		jobId: v.id("streamJobs"),
+const streamJobReturnShape = v.union(
+	v.object({
+		_id: v.id("streamJobs"),
+		status: v.string(),
+		model: v.string(),
+		provider: v.string(),
+		options: v.optional(streamJobOptionsReturnValidator),
 		content: v.string(),
 		reasoning: v.optional(v.string()),
 		chainOfThoughtParts: v.optional(v.array(chainOfThoughtPartValidator)),
@@ -95,157 +78,183 @@ export const completeStream = internalMutation({
 		webSearchUsed: v.optional(v.boolean()),
 		webSearchCallCount: v.optional(v.number()),
 		toolCallCount: v.optional(v.number()),
-		tokensPerSecond: v.optional(v.number()),
-		timeToFirstTokenMs: v.optional(v.number()),
-		totalDurationMs: v.optional(v.number()),
-		tokenUsage: v.optional(v.object({
-			promptTokens: v.number(),
-			completionTokens: v.number(),
-			totalTokens: v.number(),
+		error: v.optional(v.string()),
+		messageId: v.string(),
+	}),
+	v.null()
+);
+
+function pickJobFields(job: {
+	_id: Id<"streamJobs">;
+	status: string;
+	model: string;
+	provider: string;
+	options?: Record<string, unknown>;
+	content: string;
+	reasoning?: string;
+	chainOfThoughtParts?: ChainOfThoughtPart[];
+	thinkingTimeMs?: number;
+	thinkingTimeSec?: number;
+	reasoningCharCount?: number;
+	reasoningChunkCount?: number;
+	reasoningTokenCount?: number;
+	reasoningRequested?: boolean;
+	webSearchUsed?: boolean;
+	webSearchCallCount?: number;
+	toolCallCount?: number;
+	error?: string;
+	messageId: string;
+}) {
+	return {
+		_id: job._id,
+		status: job.status,
+		model: job.model,
+		provider: job.provider,
+		options: job.options,
+		content: job.content,
+		reasoning: job.reasoning,
+		chainOfThoughtParts: job.chainOfThoughtParts,
+		thinkingTimeMs: job.thinkingTimeMs,
+		thinkingTimeSec: job.thinkingTimeSec,
+		reasoningCharCount: job.reasoningCharCount,
+		reasoningChunkCount: job.reasoningChunkCount,
+		reasoningTokenCount: job.reasoningTokenCount,
+		reasoningRequested: job.reasoningRequested,
+		webSearchUsed: job.webSearchUsed,
+		webSearchCallCount: job.webSearchCallCount,
+		toolCallCount: job.toolCallCount,
+		error: job.error,
+		messageId: job.messageId,
+	};
+}
+
+export const startStream = mutation({
+	args: {
+		chatId: v.id("chats"),
+		userId: v.id("users"),
+		messageId: v.string(),
+		model: v.string(),
+		provider: v.string(),
+		messages: v.array(v.object({
+			role: v.string(),
+			content: v.string(),
 		})),
+		options: v.optional(streamOptionsValidator),
 	},
+	returns: v.id("streamJobs"),
 	handler: async (ctx, args) => {
-		const job = await ctx.db.get(args.jobId);
-		if (!job) return;
-
-		const derivedToolParts = (args.chainOfThoughtParts ?? []).filter(
-			(part) => part.type === "tool",
-		);
-		const derivedWebSearchCallCount = derivedToolParts.filter((part) =>
-			isWebSearchToolName(part.toolName),
-		).length;
-		const toolCallCount = args.toolCallCount ?? derivedToolParts.length;
-		const webSearchCallCount = args.webSearchCallCount ?? derivedWebSearchCallCount;
-		const webSearchUsed = args.webSearchUsed ?? webSearchCallCount > 0;
-		const reasoningEffort = job.options?.reasoningEffort;
-		const webSearchEnabled = Boolean(job.options?.enableWebSearch);
-		const maxSteps = job.options?.maxSteps;
-
-		await ctx.db.patch(args.jobId, {
-			status: "completed",
-			content: args.content,
-			reasoning: args.reasoning,
-			chainOfThoughtParts: args.chainOfThoughtParts,
-			thinkingTimeMs: args.thinkingTimeMs,
-			thinkingTimeSec: args.thinkingTimeSec,
-			reasoningCharCount: args.reasoningCharCount,
-			reasoningChunkCount: args.reasoningChunkCount,
-			reasoningTokenCount: args.reasoningTokenCount,
-			reasoningRequested: args.reasoningRequested,
-			webSearchUsed,
-			webSearchCallCount,
-			toolCallCount,
-			completedAt: Date.now(),
+		const userId = await requireAuthUserId(ctx, args.userId);
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "messageSend", {
+			key: userId,
 		});
+		if (!ok) {
+			throwRateLimitError("streams started", retryAfter);
+		}
 
-		await ctx.db.patch(job.chatId, {
-			activeStreamId: undefined,
-			status: "idle",
-			updatedAt: Date.now(),
-		});
+		const chat = await ctx.db.get(args.chatId);
+		if (!chat || chat.userId !== userId) {
+			throw new Error("Chat not found or unauthorized");
+		}
 
-		const existingMessage = await ctx.db
-			.query("messages")
-			.withIndex("by_client_id", (q) =>
-				q.eq("chatId", job.chatId).eq("clientMessageId", job.messageId)
-			)
+		const existingActiveStream = await ctx.db
+			.query("streamJobs")
+			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId).eq("status", "running"))
 			.first();
 
-		if (!existingMessage) {
-			await ctx.db.insert("messages", {
-				chatId: job.chatId,
-				clientMessageId: job.messageId,
-				role: "assistant",
-				content: args.content,
-				modelId: job.model,
-				provider: job.provider,
-				reasoningEffort,
-				webSearchEnabled,
-				webSearchUsed,
-				webSearchCallCount,
-				toolCallCount,
-				maxSteps,
-				reasoning: args.reasoning,
-				thinkingTimeMs: args.thinkingTimeMs,
-				thinkingTimeSec: args.thinkingTimeSec,
-				reasoningCharCount: args.reasoningCharCount,
-				reasoningChunkCount: args.reasoningChunkCount,
-				reasoningTokenCount: args.reasoningTokenCount,
-				reasoningRequested: args.reasoningRequested,
-				chainOfThoughtParts: args.chainOfThoughtParts,
-				tokensPerSecond: args.tokensPerSecond,
-				timeToFirstTokenMs: args.timeToFirstTokenMs,
-				totalDurationMs: args.totalDurationMs,
-				tokenUsage: args.tokenUsage,
-				messageMetadata: {
-					modelId: job.model,
-					provider: job.provider,
-					reasoningEffort,
-					maxSteps,
-					webSearchEnabled,
-				},
-				status: "completed",
-				userId: job.userId,
-				createdAt: Date.now(),
+		if (existingActiveStream) {
+			const STREAM_STALE_MS = 2 * 60 * 1000;
+			const isStale = Date.now() - existingActiveStream.createdAt > STREAM_STALE_MS;
+			if (!isStale) {
+				throw new Error("Stream already in progress for this chat");
+			}
+			await ctx.db.patch(existingActiveStream._id, {
+				status: "error",
+				error: "Auto-cleaned stale running stream",
+				completedAt: Date.now(),
 			});
-		} else {
-			await ctx.db.patch(existingMessage._id, {
-				content: args.content,
-				modelId: job.model,
-				provider: job.provider,
-				reasoningEffort,
-				webSearchEnabled,
-				webSearchUsed,
-				webSearchCallCount,
-				toolCallCount,
-				maxSteps,
-				reasoning: args.reasoning,
-				thinkingTimeMs: args.thinkingTimeMs,
-				thinkingTimeSec: args.thinkingTimeSec,
-				reasoningCharCount: args.reasoningCharCount,
-				reasoningChunkCount: args.reasoningChunkCount,
-				reasoningTokenCount: args.reasoningTokenCount,
-				reasoningRequested: args.reasoningRequested,
-				chainOfThoughtParts: args.chainOfThoughtParts,
-				tokensPerSecond: args.tokensPerSecond,
-				timeToFirstTokenMs: args.timeToFirstTokenMs,
-				totalDurationMs: args.totalDurationMs,
-				tokenUsage: args.tokenUsage,
-				messageMetadata: {
-					modelId: job.model,
-					provider: job.provider,
-					reasoningEffort,
-					maxSteps,
-					webSearchEnabled,
-				},
-				status: "completed",
+			await ctx.db.patch(args.chatId, {
+				activeStreamId: undefined,
+				status: "idle",
+				updatedAt: Date.now(),
 			});
 		}
+
+		const jobId = await ctx.db.insert("streamJobs", {
+			chatId: args.chatId,
+			userId,
+			messageId: args.messageId,
+			status: "pending",
+			model: args.model,
+			provider: args.provider,
+			messages: args.messages,
+			options: args.options,
+			content: "",
+			createdAt: Date.now(),
+		});
+
+		await ctx.db.patch(args.chatId, {
+			activeStreamId: `job-${jobId}`,
+			status: "streaming",
+			updatedAt: Date.now(),
+		});
+
+		await ctx.scheduler.runAfter(0, executeStreamRef, { jobId });
+
+		const shouldGenerateAutoTitle = (chat.title === "New Chat" || !chat.title) && (chat.messageCount ?? 0) <= 1;
+		const seedText = shouldGenerateAutoTitle ? getLatestUserSeedText(args.messages) : null;
+		if (seedText) {
+			await ctx.scheduler.runAfter(0, generateAndSetTitleRef, {
+				chatId: args.chatId,
+				userId,
+				seedText,
+				length: "standard",
+				provider: args.provider === "openrouter" ? "openrouter" : "osschat",
+				force: false,
+			});
+		}
+
+		return jobId;
 	},
 });
 
-export const failStream = internalMutation({
+export const getStreamJob = query({
 	args: {
 		jobId: v.id("streamJobs"),
-		error: v.string(),
-		partialContent: v.optional(v.string()),
+		userId: v.id("users"),
 	},
+	returns: streamJobReturnShape,
 	handler: async (ctx, args) => {
+		const userId = await requireAuthUserId(ctx, args.userId);
 		const job = await ctx.db.get(args.jobId);
-		if (!job) return;
+		if (!job || job.userId !== userId) return null;
+		return pickJobFields(job);
+	},
+});
 
-		await ctx.db.patch(args.jobId, {
-			status: "error",
-			error: args.error,
-			content: args.partialContent || job.content,
-			completedAt: Date.now(),
-		});
+export const getActiveStreamJob = query({
+	args: {
+		chatId: v.id("chats"),
+		userId: v.id("users"),
+	},
+	returns: streamJobReturnShape,
+	handler: async (ctx, args) => {
+		const userId = await requireAuthUserId(ctx, args.userId);
+		const running = await ctx.db
+			.query("streamJobs")
+			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId).eq("status", "running"))
+			.first();
 
-		await ctx.db.patch(job.chatId, {
-			activeStreamId: undefined,
-			status: "idle",
-			updatedAt: Date.now(),
-		});
+		if (!running || running.userId !== userId) {
+			const pending = await ctx.db
+				.query("streamJobs")
+				.withIndex("by_chat", (q) => q.eq("chatId", args.chatId).eq("status", "pending"))
+				.first();
+
+			if (!pending || pending.userId !== userId) return null;
+			return pickJobFields(pending);
+		}
+
+		return pickJobFields(running);
 	},
 });
 

@@ -187,36 +187,6 @@ const clientEnvSchema = z.object({
 });
 ```
 
-## Docker / Container Deployment
-
-When deploying with Docker, pass environment variables via:
-
-### docker-compose.yml
-
-```yaml
-services:
-  web:
-    environment:
-      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
-      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
-```
-
-### .env file
-
-```bash
-# .env (in project root, loaded by docker-compose)
-GITHUB_CLIENT_ID=...
-GITHUB_CLIENT_SECRET=...
-BETTER_AUTH_SECRET=...
-```
-
-### Docker run
-
-```bash
-docker run -e GITHUB_CLIENT_ID=... -e GITHUB_CLIENT_SECRET=... ...
-```
-
 ## Secret Management
 
 <Warning>
@@ -270,11 +240,11 @@ doppler run -- bun dev
   </Accordion>
   
   <Accordion title="Convex URL mismatch">
-    Common issue with Docker: internal vs external URLs.
+    Common issue in self-hosted setups: internal vs external URLs.
     
     ```bash
-    # Internal (container-to-container)
-    CONVEX_URL=http://convex:3210
+    # Internal (service-to-service)
+    CONVEX_URL=http://internal-convex:3210
     
     # External (browser access)
     VITE_CONVEX_SITE_URL=http://localhost:3211
@@ -285,9 +255,6 @@ doppler run -- bun dev
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card title="Docker Deployment" icon="docker" href="/self-hosting/docker">
-    Deploy with Docker Compose
-  </Card>
   <Card title="Authentication" icon="lock" href="/guides/authentication">
     Configure GitHub OAuth
   </Card>
