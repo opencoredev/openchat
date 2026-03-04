@@ -6,6 +6,12 @@ declare const Bun: {
 		env: NodeJS.ProcessEnv;
 		stdio: ["inherit", "inherit", "inherit"];
 	}): { exited: Promise<ExitCode> };
+	spawnSync(options: {
+		cmd: string[];
+		cwd?: string;
+		stdin?: "ignore";
+		stderr?: "ignore";
+	}): { success: boolean; stdout: Uint8Array };
 };
 
 function sanitizeNodeOptions(nodeOptions: string | undefined): string | undefined {
@@ -29,6 +35,61 @@ function sanitizeNodeOptions(nodeOptions: string | undefined): string | undefine
 	return sanitized.join(" ").trim();
 }
 
+function normalizePortlessSegment(value: string | undefined): string | undefined {
+	if (!value) return undefined;
+
+	const normalized = value
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9-]+/g, "-")
+		.replace(/-+/g, "-")
+		.replace(/^-|-$/g, "");
+
+	return normalized || undefined;
+}
+
+function runGit(args: string[]): string | undefined {
+	const result = Bun.spawnSync({
+		cmd: ["git", ...args],
+		cwd: process.cwd(),
+		stdin: "ignore",
+		stderr: "ignore",
+	});
+	if (!result.success) {
+		return undefined;
+	}
+
+	const output = new TextDecoder().decode(result.stdout).trim();
+	return output || undefined;
+}
+
+function getPortlessName(): string {
+	const explicit =
+		normalizePortlessSegment(process.env.PORTLESS_NAME)
+		?? normalizePortlessSegment(process.env.PORTLESS_PROJECT_NAME)
+		?? normalizePortlessSegment(process.env.PORTLESS_APP_NAME);
+	if (explicit) return explicit;
+
+	const baseName = normalizePortlessSegment(process.env.PORTLESS_BASE_NAME) ?? "openchat";
+	const repoRoot = runGit(["rev-parse", "--show-toplevel"]);
+	const gitDir = runGit(["rev-parse", "--git-dir"]);
+	const branch = runGit(["rev-parse", "--abbrev-ref", "HEAD"]);
+
+	const codexMatch = repoRoot?.match(/\.codex\/worktrees\/([^/]+)/);
+	const codexToken = normalizePortlessSegment(codexMatch?.[1]);
+	if (codexToken) return `${baseName}-${codexToken}`;
+
+	const worktreeToken = normalizePortlessSegment(gitDir?.split("/worktrees/")[1]?.split("/")[0]);
+	if (worktreeToken) return `${baseName}-${worktreeToken}`;
+
+	const branchSegment = normalizePortlessSegment(branch?.split("/").pop());
+	if (branchSegment && !["head", "main", "master"].includes(branchSegment)) {
+		return `${baseName}-${branchSegment}`;
+	}
+
+	return baseName;
+}
+
 async function run(command: string[], env: NodeJS.ProcessEnv): Promise<ExitCode> {
 	const process = Bun.spawn({
 		cmd: command,
@@ -45,6 +106,10 @@ const env: NodeJS.ProcessEnv = {
 	BROWSERSLIST_IGNORE_OLD_DATA: process.env.BROWSERSLIST_IGNORE_OLD_DATA ?? "true",
 	NODE_NO_WARNINGS: process.env.NODE_NO_WARNINGS ?? "1",
 };
+
+const portlessName = getPortlessName();
+env.PORTLESS_NAME = process.env.PORTLESS_NAME ?? portlessName;
+env.PORTLESS_ORIGIN = process.env.PORTLESS_ORIGIN ?? `http://${portlessName}.localhost:1355`;
 
 const sanitizedNodeOptions = sanitizeNodeOptions(process.env.NODE_OPTIONS);
 env.NODE_OPTIONS = [sanitizedNodeOptions, "--disable-warning=localstorage-file"]

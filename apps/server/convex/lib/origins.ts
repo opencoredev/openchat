@@ -10,9 +10,34 @@ const PRODUCTION_ORIGINS = [
 	"https://www.osschat.dev",
 ];
 
+function normalizePortlessName(name: string | undefined): string | undefined {
+	if (!name) return undefined;
+
+	const normalized = name
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9-]+/g, "-")
+		.replace(/-+/g, "-")
+		.replace(/^-|-$/g, "");
+
+	return normalized || undefined;
+}
+
+function getPortlessOrigin(): string | undefined {
+	const explicit = process.env.PORTLESS_ORIGIN?.trim();
+	if (explicit) return explicit;
+
+	const appName = normalizePortlessName(process.env.PORTLESS_NAME);
+	if (!appName) return undefined;
+
+	return `http://${appName}.localhost:1355`;
+}
+
+const portlessOrigin = getPortlessOrigin();
+
 const DEV_ORIGINS = [
 	"http://localhost:3000",
-	"http://openchat.localhost:1355",
+	...(portlessOrigin ? [portlessOrigin] : ["http://openchat.localhost:1355"]),
 ];
 
 function getBaseOrigins(): string[] {
