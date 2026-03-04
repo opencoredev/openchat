@@ -76,7 +76,7 @@ if [ -f "apps/web/package.json" ]; then
         const fs = require('fs');
         const pkg = JSON.parse(fs.readFileSync('apps/web/package.json', 'utf8'));
         pkg.scripts = pkg.scripts || {};
-        pkg.scripts.dev = 'BROWSERSLIST_IGNORE_OLD_DATA=true BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true portless run vite dev';
+        pkg.scripts.dev = 'BROWSERSLIST_IGNORE_OLD_DATA=true BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true portless run --name ${PORTLESS_NAME:-openchat} vite dev';
         if (!pkg.devDependencies) pkg.devDependencies = {};
         pkg.devDependencies.portless = pkg.devDependencies.portless || '^0.5.2';
         fs.writeFileSync('apps/web/package.json', JSON.stringify(pkg, null, 2) + '\n');
@@ -89,8 +89,8 @@ echo "Setup complete!"
 echo "======================================"
 echo ""
 echo "Run 'bun dev' to start dev servers."
-echo "Web URL: http://<project>.localhost:1355"
-echo "Git worktrees: http://<branch>.<project>.localhost:1355"
+echo "Web URL: http://<portless-name>.localhost:1355"
+echo "Worktrees get an auto-derived PORTLESS_NAME from scripts/dev.ts"
 echo ""
 echo "This workspace uses the shared Convex dev deployment."
 echo "When you switch worktrees, run 'bun dev' to sync schemas."
