@@ -7,5 +7,4 @@ fi
 echo "Starting OpenChat..."
 echo ""
 
-# Just run bun dev - uses cloud dev deployment from .env.local
-FORCE_COLOR=1 bun run dev
+FORCE_COLOR=1 bun ./scripts/dev.ts

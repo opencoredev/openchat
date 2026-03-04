@@ -1,4 +1,7 @@
 type ExitCode = number | null;
+const WEB_PACKAGE_JSON_PATH = "./apps/web/package.json";
+const EXPECTED_WEB_DEV_SCRIPT =
+	"BROWSERSLIST_IGNORE_OLD_DATA=true BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true sh -c 'portless \"${PORTLESS_NAME:-openchat}\" vite dev'";
 
 declare const Bun: {
 	spawn(options: {
@@ -99,6 +102,38 @@ async function run(command: string[], env: NodeJS.ProcessEnv): Promise<ExitCode>
 	return process.exited;
 }
 
+async function ensureWebDevScript(): Promise<void> {
+	let rawPackage = "";
+	try {
+		rawPackage = await Bun.file(WEB_PACKAGE_JSON_PATH).text();
+	} catch {
+		return;
+	}
+
+	if (!rawPackage.trim()) return;
+
+	let parsed: { scripts?: Record<string, string> };
+	try {
+		parsed = JSON.parse(rawPackage) as { scripts?: Record<string, string> };
+	} catch {
+		return;
+	}
+
+	if (parsed.scripts?.dev === EXPECTED_WEB_DEV_SCRIPT) {
+		return;
+	}
+
+	const updated = {
+		...parsed,
+		scripts: {
+			...parsed.scripts,
+			dev: EXPECTED_WEB_DEV_SCRIPT,
+		},
+	};
+
+	await Bun.write(WEB_PACKAGE_JSON_PATH, `${JSON.stringify(updated, null, 2)}\n`);
+}
+
 const env: NodeJS.ProcessEnv = {
 	...process.env,
 	BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA:
@@ -115,6 +150,8 @@ const sanitizedNodeOptions = sanitizeNodeOptions(process.env.NODE_OPTIONS);
 env.NODE_OPTIONS = [sanitizedNodeOptions, "--disable-warning=localstorage-file"]
 	.filter((value) => value && value.length > 0)
 	.join(" ");
+
+await ensureWebDevScript();
 
 const checkRedisExit = await run(["bun", "./scripts/check-redis.ts"], env);
 if (checkRedisExit !== 0 && process.env.NODE_ENV === "production") {

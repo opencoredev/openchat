@@ -34,7 +34,8 @@
 		"dev": {
 			"cache": false,
 			"persistent": true,
-			"interactive": false
+			"interactive": false,
+			"passThroughEnv": ["PORTLESS_NAME", "PORTLESS_ORIGIN"]
 		},
 		"db:push": {
 			"cache": false,
