@@ -76,7 +76,7 @@ if [ -f "apps/web/package.json" ]; then
         const fs = require('fs');
         const pkg = JSON.parse(fs.readFileSync('apps/web/package.json', 'utf8'));
         pkg.scripts = pkg.scripts || {};
-        pkg.scripts.dev = 'BROWSERSLIST_IGNORE_OLD_DATA=true BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true portless run --name ${PORTLESS_NAME:-openchat} vite dev';
+        pkg.scripts.dev = 'BROWSERSLIST_IGNORE_OLD_DATA=true BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true portless ${PORTLESS_NAME:-openchat} vite dev';
         if (!pkg.devDependencies) pkg.devDependencies = {};
         pkg.devDependencies.portless = pkg.devDependencies.portless || '^0.5.2';
         fs.writeFileSync('apps/web/package.json', JSON.stringify(pkg, null, 2) + '\n');
