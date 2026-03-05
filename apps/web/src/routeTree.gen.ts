@@ -22,6 +22,7 @@ import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-pas
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiTypingRouteImport } from './routes/api/typing'
 import { Route as ApiOpenrouterKeyRouteImport } from './routes/api/openrouter-key'
+import { Route as ApiMonitoringRouteImport } from './routes/api/monitoring'
 import { Route as ApiModelsRouteImport } from './routes/api/models'
 import { Route as ApiWorkflowGenerateTitleRouteImport } from './routes/api/workflow/generate-title'
 import { Route as ApiWorkflowExportChatRouteImport } from './routes/api/workflow/export-chat'
@@ -93,6 +94,11 @@ const ApiOpenrouterKeyRoute = ApiOpenrouterKeyRouteImport.update({
   path: '/api/openrouter-key',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMonitoringRoute = ApiMonitoringRouteImport.update({
+  id: '/api/monitoring',
+  path: '/api/monitoring',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiModelsRoute = ApiModelsRouteImport.update({
   id: '/api/models',
   path: '/api/models',
@@ -128,6 +134,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/terms': typeof TermsRoute
   '/api/models': typeof ApiModelsRoute
+  '/api/monitoring': typeof ApiMonitoringRoute
   '/api/openrouter-key': typeof ApiOpenrouterKeyRoute
   '/api/typing': typeof ApiTypingRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -148,6 +155,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/terms': typeof TermsRoute
   '/api/models': typeof ApiModelsRoute
+  '/api/monitoring': typeof ApiMonitoringRoute
   '/api/openrouter-key': typeof ApiOpenrouterKeyRoute
   '/api/typing': typeof ApiTypingRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -169,6 +177,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/terms': typeof TermsRoute
   '/api/models': typeof ApiModelsRoute
+  '/api/monitoring': typeof ApiMonitoringRoute
   '/api/openrouter-key': typeof ApiOpenrouterKeyRoute
   '/api/typing': typeof ApiTypingRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -191,6 +200,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/terms'
     | '/api/models'
+    | '/api/monitoring'
     | '/api/openrouter-key'
     | '/api/typing'
     | '/auth/callback'
@@ -211,6 +221,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/terms'
     | '/api/models'
+    | '/api/monitoring'
     | '/api/openrouter-key'
     | '/api/typing'
     | '/auth/callback'
@@ -231,6 +242,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/terms'
     | '/api/models'
+    | '/api/monitoring'
     | '/api/openrouter-key'
     | '/api/typing'
     | '/auth/callback'
@@ -252,6 +264,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   TermsRoute: typeof TermsRoute
   ApiModelsRoute: typeof ApiModelsRoute
+  ApiMonitoringRoute: typeof ApiMonitoringRoute
   ApiOpenrouterKeyRoute: typeof ApiOpenrouterKeyRoute
   ApiTypingRoute: typeof ApiTypingRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
@@ -359,6 +372,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiOpenrouterKeyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/monitoring': {
+      id: '/api/monitoring'
+      path: '/api/monitoring'
+      fullPath: '/api/monitoring'
+      preLoaderRoute: typeof ApiMonitoringRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/models': {
       id: '/api/models'
       path: '/api/models'
@@ -404,6 +424,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   TermsRoute: TermsRoute,
   ApiModelsRoute: ApiModelsRoute,
+  ApiMonitoringRoute: ApiMonitoringRoute,
   ApiOpenrouterKeyRoute: ApiOpenrouterKeyRoute,
   ApiTypingRoute: ApiTypingRoute,
   AuthCallbackRoute: AuthCallbackRoute,
@@ -422,10 +443,11 @@ export const routeTree = rootRouteImport
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
+import type { startInstance } from './start.ts'
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
     router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }

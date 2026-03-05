@@ -7,10 +7,10 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "BROWSERSLIST_IGNORE_OLD_DATA=true BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true sh -c 'portless \"${PORTLESS_NAME:-openchat}\" vite dev'",
-    "build": "vite build",
+    "dev": "BROWSERSLIST_IGNORE_OLD_DATA=true BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true sh -c 'portless openchat vite dev'",
+    "build": "sh -c 'vite build && mkdir -p .output/server && cp instrument.server.mjs sentry.server.shared.mjs .output/server/'",
     "build:vercel": "bun ./scripts/vercel-build.ts",
-    "start": "node .output/server/index.mjs",
+    "start": "node --import ./.output/server/instrument.server.mjs .output/server/index.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "oxlint",
@@ -25,6 +25,7 @@
     "@openrouter/ai-sdk-provider": "2.1.1",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
+    "@sentry/tanstackstart-react": "^10.42.0",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-query": "^5.90.20",
     "@tanstack/react-router": "^1.158.1",

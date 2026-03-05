@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import { sentryTanstackStart } from '@sentry/tanstackstart-react/vite'
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import { nitro } from 'nitro/vite'
 import viteReact from '@vitejs/plugin-react'
@@ -16,6 +17,12 @@ const config = defineConfig({
     }),
     tailwindcss(),
     tanstackStart(),
+    sentryTanstackStart({
+      org: 'osschat',
+      project: 'tanstack-web',
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      telemetry: false,
+    }),
     nitro({ preset: process.env.VERCEL ? 'vercel' : 'bun' }),
     viteReact(),
   ],
