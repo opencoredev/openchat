@@ -7,6 +7,13 @@ const MAX_ENVELOPE_BYTES = 512 * 1024
 const MAX_ENVELOPE_HEADER_BYTES = 2048
 const IPV4_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/
 const IPV6_REGEX = /^[0-9a-fA-F:]+$/
+const FINGERPRINT_HEADERS = [
+  'user-agent',
+  'accept-language',
+  'sec-ch-ua',
+  'sec-ch-ua-mobile',
+  'sec-ch-ua-platform',
+]
 
 function readSentryDsn(): string | null {
   const dsn =
@@ -24,10 +31,27 @@ function isValidIpFormat(ip: string): boolean {
   return IPV4_REGEX.test(ip) || IPV6_REGEX.test(ip)
 }
 
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(value),
+  )
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('')
+}
+
+function getFingerprintSource(request: Request): string {
+  return FINGERPRINT_HEADERS.map((header) => {
+    const value = request.headers.get(header)?.trim() ?? ''
+    return `${header}:${value}`
+  }).join('|')
+}
+
 function getRateLimitIdentifier(
   request: Request,
   userId: string | null,
-): string {
+): Promise<string> | string {
   if (userId) {
     return `user:${userId}`
   }
@@ -45,7 +69,9 @@ function getRateLimitIdentifier(
     }
   }
 
-  return 'anonymous'
+  return sha256Hex(getFingerprintSource(request)).then(
+    (fingerprint) => `fingerprint:${fingerprint}`,
+  )
 }
 
 function validateEnvelopeDsn(body: Uint8Array, expectedDsn: string): boolean {
@@ -100,6 +126,47 @@ function createResponseHeaders(upstreamHeaders: Headers): Headers {
   return headers
 }
 
+async function readRequestBodyWithinLimit(
+  request: Request,
+  maxBytes: number,
+): Promise<Uint8Array | null> {
+  if (!request.body) {
+    return new Uint8Array()
+  }
+
+  const reader = request.body.getReader()
+  const chunks: Uint8Array[] = []
+  let totalBytes = 0
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (!value) continue
+
+      totalBytes += value.byteLength
+      if (totalBytes > maxBytes) {
+        await reader.cancel('Payload too large')
+        return null
+      }
+
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  const body = new Uint8Array(totalBytes)
+  let offset = 0
+
+  for (const chunk of chunks) {
+    body.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+
+  return body
+}
+
 export const Route = createFileRoute('/api/monitoring')({
   server: {
     handlers: {
@@ -121,7 +188,7 @@ export const Route = createFileRoute('/api/monitoring')({
 
         const authUser = await getAuthUser(request)
         if (authRatelimit) {
-          const identifier = getRateLimitIdentifier(
+          const identifier = await getRateLimitIdentifier(
             request,
             authUser?.id ?? null,
           )
@@ -149,8 +216,11 @@ export const Route = createFileRoute('/api/monitoring')({
           return json({ error: 'Sentry tunnel misconfigured' }, { status: 503 })
         }
 
-        const body = new Uint8Array(await request.arrayBuffer())
-        if (body.byteLength > MAX_ENVELOPE_BYTES) {
+        const body = await readRequestBodyWithinLimit(
+          request,
+          MAX_ENVELOPE_BYTES,
+        )
+        if (!body) {
           return json({ error: 'Payload too large' }, { status: 413 })
         }
 

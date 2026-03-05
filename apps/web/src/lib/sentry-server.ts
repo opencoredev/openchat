@@ -2,6 +2,7 @@ import * as Sentry from '@sentry/tanstackstart-react'
 
 const DEFAULT_SENTRY_TUNNEL = '/api/monitoring'
 const DEFAULT_TRACES_SAMPLE_RATE = 0.1
+const NUMERIC_RATE_REGEX = /^(?:0(?:\.\d+)?|1(?:\.0+)?)$/
 
 function readRaw(key: string): string | undefined {
   const value = process.env[key]
@@ -16,6 +17,10 @@ function readTracesSampleRate(): number {
     readRaw('SENTRY_TRACES_SAMPLE_RATE') ??
     readRaw('VITE_SENTRY_TRACES_SAMPLE_RATE')
   if (!raw) return DEFAULT_TRACES_SAMPLE_RATE
+
+  if (!NUMERIC_RATE_REGEX.test(raw)) {
+    return DEFAULT_TRACES_SAMPLE_RATE
+  }
 
   const parsed = Number.parseFloat(raw)
   if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 1) {
