@@ -4,6 +4,7 @@ import { getAuthUser, isSameOrigin } from '@/lib/server-auth'
 import { authRatelimit } from '@/lib/upstash'
 
 const MAX_ENVELOPE_BYTES = 512 * 1024
+const MAX_ENVELOPE_HEADER_BYTES = 2048
 const IPV4_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/
 const IPV6_REGEX = /^[0-9a-fA-F:]+$/
 
@@ -49,7 +50,7 @@ function getRateLimitIdentifier(
 
 function validateEnvelopeDsn(body: Uint8Array, expectedDsn: string): boolean {
   const [headerLine] = new TextDecoder()
-    .decode(body.subarray(0, MAX_ENVELOPE_BYTES))
+    .decode(body.subarray(0, MAX_ENVELOPE_HEADER_BYTES))
     .split('\n')
   if (!headerLine) return false
 
