@@ -4,10 +4,17 @@ import { createRouter } from '@tanstack/react-router'
 // Import the generated route tree
 import { routeTree } from './routeTree.gen'
 
-const DEFAULT_SENTRY_DSN =
-  'https://55642b0aa02b402d9bd330b8831dfbf7@o4510196637499392.ingest.us.sentry.io/4510993969709056'
 const DEFAULT_SENTRY_TUNNEL = '/api/monitoring'
 const DEFAULT_TRACES_SAMPLE_RATE = 0.1
+
+function readClientDsn(): string | undefined {
+  const dsn = import.meta.env.VITE_SENTRY_DSN?.trim()
+  return dsn && dsn.length > 0 ? dsn : undefined
+}
+
+function readClientSendDefaultPii(): boolean {
+  return import.meta.env.VITE_SENTRY_SEND_DEFAULT_PII === 'true'
+}
 
 function readClientTracesSampleRate(): number {
   const raw = import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE
@@ -32,11 +39,13 @@ export const getRouter = () => {
     defaultPendingMinMs: 200,
   })
 
-  if (!router.isServer && !Sentry.getClient()) {
+  const dsn = readClientDsn()
+
+  if (!router.isServer && dsn && !Sentry.getClient()) {
     Sentry.init({
-      dsn: import.meta.env.VITE_SENTRY_DSN || DEFAULT_SENTRY_DSN,
+      dsn,
       tunnel: import.meta.env.VITE_SENTRY_TUNNEL || DEFAULT_SENTRY_TUNNEL,
-      sendDefaultPii: true,
+      sendDefaultPii: readClientSendDefaultPii(),
       enabled: import.meta.env.MODE !== 'test',
       environment:
         import.meta.env.VITE_SENTRY_ENVIRONMENT ||

@@ -1,7 +1,5 @@
 import * as Sentry from '@sentry/tanstackstart-react'
 
-export const DEFAULT_SENTRY_DSN =
-  'https://55642b0aa02b402d9bd330b8831dfbf7@o4510196637499392.ingest.us.sentry.io/4510993969709056'
 export const DEFAULT_SENTRY_TUNNEL = '/api/monitoring'
 const DEFAULT_TRACES_SAMPLE_RATE = 0.1
 
@@ -26,15 +24,27 @@ function readTracesSampleRate() {
   return DEFAULT_TRACES_SAMPLE_RATE
 }
 
+function readBoolean(key) {
+  return readRaw(key)?.toLowerCase() === 'true'
+}
+
+function readServerDsn() {
+  return readRaw('SENTRY_DSN') ?? readRaw('VITE_SENTRY_DSN')
+}
+
 export function getServerSentryOptions() {
+  const dsn = readServerDsn()
+  if (!dsn) {
+    return undefined
+  }
+
   return {
-    dsn:
-      readRaw('SENTRY_DSN') ?? readRaw('VITE_SENTRY_DSN') ?? DEFAULT_SENTRY_DSN,
+    dsn,
     tunnel:
       readRaw('SENTRY_TUNNEL') ??
       readRaw('VITE_SENTRY_TUNNEL') ??
       DEFAULT_SENTRY_TUNNEL,
-    sendDefaultPii: true,
+    sendDefaultPii: readBoolean('SENTRY_SEND_DEFAULT_PII'),
     enabled: (readRaw('NODE_ENV') ?? 'development') !== 'test',
     environment:
       readRaw('SENTRY_ENVIRONMENT') ??
@@ -50,5 +60,10 @@ export function initServerSentry() {
     return Sentry.getClient()
   }
 
-  return Sentry.init(getServerSentryOptions())
+  const options = getServerSentryOptions()
+  if (!options) {
+    return undefined
+  }
+
+  return Sentry.init(options)
 }

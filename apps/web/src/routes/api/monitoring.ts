@@ -1,13 +1,65 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
+import { getAuthUser, isSameOrigin } from '@/lib/server-auth'
+import { authRatelimit } from '@/lib/upstash'
 
-const DEFAULT_SENTRY_DSN =
-  'https://55642b0aa02b402d9bd330b8831dfbf7@o4510196637499392.ingest.us.sentry.io/4510993969709056'
+const MAX_ENVELOPE_BYTES = 512 * 1024
+const IPV4_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/
+const IPV6_REGEX = /^[0-9a-fA-F:]+$/
 
-function readSentryDsn(): string {
+function readSentryDsn(): string | null {
   const dsn =
     process.env.SENTRY_DSN?.trim() || process.env.VITE_SENTRY_DSN?.trim()
-  return dsn || DEFAULT_SENTRY_DSN
+  return dsn || null
+}
+
+function normalizeDsn(dsn: string): string {
+  const parsed = new URL(dsn)
+  const path = parsed.pathname.replace(/\/+$/, '')
+  return `${parsed.protocol}//${parsed.username}@${parsed.host}${path}`
+}
+
+function isValidIpFormat(ip: string): boolean {
+  return IPV4_REGEX.test(ip) || IPV6_REGEX.test(ip)
+}
+
+function getRateLimitIdentifier(
+  request: Request,
+  userId: string | null,
+): string {
+  if (userId) {
+    return `user:${userId}`
+  }
+
+  const candidates = [
+    request.headers.get('cf-connecting-ip')?.trim(),
+    request.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim(),
+    request.headers.get('x-real-ip')?.trim(),
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim(),
+  ]
+
+  for (const candidate of candidates) {
+    if (candidate && isValidIpFormat(candidate)) {
+      return `ip:${candidate}`
+    }
+  }
+
+  return 'anonymous'
+}
+
+function validateEnvelopeDsn(body: Uint8Array, expectedDsn: string): boolean {
+  const [headerLine] = new TextDecoder()
+    .decode(body.subarray(0, MAX_ENVELOPE_BYTES))
+    .split('\n')
+  if (!headerLine) return false
+
+  try {
+    const envelopeHeader = JSON.parse(headerLine) as { dsn?: string }
+    if (!envelopeHeader.dsn) return false
+    return normalizeDsn(envelopeHeader.dsn) === normalizeDsn(expectedDsn)
+  } catch {
+    return false
+  }
 }
 
 function getSentryEnvelopeEndpoint(dsn: string): string {
@@ -51,9 +103,63 @@ export const Route = createFileRoute('/api/monitoring')({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        if (!isSameOrigin(request)) {
+          return json({ error: 'Invalid origin' }, { status: 403 })
+        }
+
+        const contentLengthHeader = request.headers.get('content-length')
+        if (contentLengthHeader) {
+          const contentLength = Number.parseInt(contentLengthHeader, 10)
+          if (
+            Number.isFinite(contentLength) &&
+            contentLength > MAX_ENVELOPE_BYTES
+          ) {
+            return json({ error: 'Payload too large' }, { status: 413 })
+          }
+        }
+
+        const authUser = await getAuthUser(request)
+        if (authRatelimit) {
+          const identifier = getRateLimitIdentifier(
+            request,
+            authUser?.id ?? null,
+          )
+          const rate = await authRatelimit.limit(`sentry-tunnel:${identifier}`)
+          if (!rate.success) {
+            const retryAfterSeconds = Math.max(
+              1,
+              Math.ceil((rate.reset - Date.now()) / 1000),
+            )
+            return json(
+              {
+                error:
+                  'Too many monitoring requests. Please try again shortly.',
+              },
+              {
+                status: 429,
+                headers: { 'Retry-After': String(retryAfterSeconds) },
+              },
+            )
+          }
+        }
+
+        const expectedDsn = readSentryDsn()
+        if (!expectedDsn) {
+          return json({ error: 'Sentry tunnel misconfigured' }, { status: 503 })
+        }
+
+        const body = new Uint8Array(await request.arrayBuffer())
+        if (body.byteLength > MAX_ENVELOPE_BYTES) {
+          return json({ error: 'Payload too large' }, { status: 413 })
+        }
+
+        if (!validateEnvelopeDsn(body, expectedDsn)) {
+          return json({ error: 'Invalid Sentry envelope' }, { status: 403 })
+        }
+
         let endpoint: string
         try {
-          endpoint = getSentryEnvelopeEndpoint(readSentryDsn())
+          endpoint = getSentryEnvelopeEndpoint(expectedDsn)
         } catch (error) {
           console.error('[Sentry Tunnel] Invalid DSN configuration', error)
           return json({ error: 'Sentry tunnel misconfigured' }, { status: 500 })
@@ -63,7 +169,7 @@ export const Route = createFileRoute('/api/monitoring')({
           const upstreamResponse = await fetch(endpoint, {
             method: 'POST',
             headers: createProxyHeaders(request),
-            body: await request.arrayBuffer(),
+            body,
           })
 
           return new Response(upstreamResponse.body, {
