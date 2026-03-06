@@ -198,7 +198,7 @@
   }
   .content-visibility-auto {
     content-visibility: auto;
-    contain-intrinsic-size: 1px 240px;
+    contain-intrinsic-size: auto 240px;
   }
 }
 

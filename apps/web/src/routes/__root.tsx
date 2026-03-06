@@ -217,7 +217,7 @@ function AppShell() {
 
   return (
     <SidebarProvider>
-      <Suspense fallback={null}>
+      <Suspense fallback={<div className="w-64 shrink-0 bg-sidebar" />}>
         <AppSidebar variant="inset" />
       </Suspense>
       <SidebarInset

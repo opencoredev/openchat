@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConvexProviderWithAuth, useMutation } from "convex/react";
 import { Toaster } from "sonner";
@@ -196,6 +196,12 @@ function ConvexAuthWrapper({ children }: { children: React.ReactNode }) {
 }
 
 export function Providers({ children, initialUser }: ProvidersProps) {
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
   const content = (
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
@@ -208,7 +214,7 @@ export function Providers({ children, initialUser }: ProvidersProps) {
   return (
     <PostHogProvider>
       <StableAuthProvider initialUser={initialUser}>
-        {convexClient ? <ConvexAuthWrapper>{content}</ConvexAuthWrapper> : content}
+        {isHydrated && convexClient ? <ConvexAuthWrapper>{content}</ConvexAuthWrapper> : content}
       </StableAuthProvider>
     </PostHogProvider>
   );

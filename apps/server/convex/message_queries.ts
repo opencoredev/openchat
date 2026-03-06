@@ -145,6 +145,7 @@ export const getActiveStream = query({
 			.withIndex("by_chat_status", (q) =>
 				q.eq("chatId", args.chatId).eq("status", "streaming").eq("deletedAt", undefined)
 			)
+			.order("desc")
 			.first();
 
 		return streamingMessage?.streamId ?? null;

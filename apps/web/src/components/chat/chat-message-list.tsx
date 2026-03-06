@@ -116,7 +116,8 @@ export const ChatMessageList = memo(function ChatMessageList({
 					p.type === "file",
 			);
 
-			const textContent = textParts.map((p) => p.text).join("").trim();
+			const rawTextContent = textParts.map((p) => p.text).join("");
+			const textContent = rawTextContent.trim();
 			const hasReasoning = allParts.some((p) => p.type === "reasoning");
 			const hasToolParts = allParts.some(
 				(p) => typeof p.type === "string" && p.type.startsWith("tool-"),
@@ -179,6 +180,7 @@ export const ChatMessageList = memo(function ChatMessageList({
 				msg,
 				textParts,
 				fileParts,
+				rawTextContent,
 				textContent,
 				thinkingSteps,
 				isAnyStepStreaming,
@@ -317,7 +319,7 @@ export const ChatMessageList = memo(function ChatMessageList({
 										{item.message.role === "user" ? (
 											<UserMessageActions
 												messageId={item.message.id}
-												content={item.textContent}
+												content={item.rawTextContent}
 												isStreaming={
 													item.isCurrentlyStreaming ||
 													editingMessageId === item.message.id
@@ -325,7 +327,7 @@ export const ChatMessageList = memo(function ChatMessageList({
 												onEdit={() =>
 													onStartEdit(
 														item.message.id,
-														item.textContent,
+														item.rawTextContent,
 													)
 												}
 												onRetry={(modelId) => {
@@ -338,7 +340,7 @@ export const ChatMessageList = memo(function ChatMessageList({
 										) : (
 											<AssistantMessageActions
 												messageId={item.message.id}
-												content={item.textContent}
+												content={item.rawTextContent}
 												isStreaming={item.isCurrentlyStreaming}
 												analytics={{
 													modelId: (

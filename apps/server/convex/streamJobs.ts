@@ -293,17 +293,19 @@ export const cleanupStaleJobs = mutation({
 			ctx.db
 				.query("streamJobs")
 				.withIndex("by_user_status_created", (q) =>
-					q.eq("userId", userId).eq("status", "running").lt("createdAt", fiveMinutesAgo)
+					q.eq("userId", userId).eq("status", "running")
 				)
 				.collect(),
 			ctx.db
 				.query("streamJobs")
 				.withIndex("by_user_status_created", (q) =>
-					q.eq("userId", userId).eq("status", "pending").lt("createdAt", fiveMinutesAgo)
+					q.eq("userId", userId).eq("status", "pending")
 				)
 				.collect(),
 		]);
-		const staleJobs = [...runningJobs, ...pendingJobs];
+		const staleJobs = [...runningJobs, ...pendingJobs].filter(
+			(job) => job.createdAt < fiveMinutesAgo,
+		);
 		let cleaned = 0;
 
 		for (const job of staleJobs) {
@@ -315,6 +317,6 @@ export const cleanupStaleJobs = mutation({
 			cleaned++;
 		}
 
-		return { cleaned, total: staleJobs.length };
+		return { cleaned, total: runningJobs.length + pendingJobs.length };
 	},
 });

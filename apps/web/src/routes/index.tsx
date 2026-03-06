@@ -230,24 +230,37 @@ function HomePage() {
 
     const scriptId = 'autochangelog-in-app';
     if (document.getElementById(scriptId)) return;
+    let appended = false;
 
     const appendScript = () => {
+      if (document.getElementById(scriptId)) return;
       const script = document.createElement('script');
       script.id = scriptId;
       script.src = 'https://autochangelog.com/embed/tryosschat/osschat/in-app.js';
       script.integrity = 'sha384-pGN+jOtBiEl4BrWgwUVn1ffGM55mkhVcR4LZOshOVlknriOioc/SalkP6dpwpXJ7';
       script.crossOrigin = 'anonymous';
       document.body.appendChild(script);
+      appended = true;
     };
 
     const requestIdle = window.requestIdleCallback;
     if (typeof requestIdle === "function") {
       const idleId = requestIdle(appendScript, { timeout: 2500 });
-      return () => window.cancelIdleCallback?.(idleId);
+      return () => {
+        window.cancelIdleCallback?.(idleId);
+        if (appended) {
+          document.getElementById(scriptId)?.remove();
+        }
+      };
     }
 
     const timeoutId = window.setTimeout(appendScript, 1200);
-    return () => window.clearTimeout(timeoutId);
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (appended) {
+        document.getElementById(scriptId)?.remove();
+      }
+    };
   }, [isAuthenticated]);
 
   if (!convexClient || loading) {

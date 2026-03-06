@@ -16,11 +16,11 @@ import {
 
 function getPartFingerprint(part: UIMessage["parts"][number]) {
 	if (part.type === "text" || part.type === "reasoning") {
-		return `${part.type}:${part.text}:${"state" in part ? part.state ?? "" : ""}`;
+		return JSON.stringify([part.type, part.text, "state" in part ? part.state ?? "" : ""]);
 	}
 
 	if (part.type === "file") {
-		return `${part.type}:${part.filename}:${part.mediaType ?? ""}:${part.url ?? ""}`;
+		return JSON.stringify([part.type, part.filename, part.mediaType ?? "", part.url ?? ""]);
 	}
 
 	if (typeof part.type === "string" && part.type.startsWith("tool-")) {
