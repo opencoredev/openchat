@@ -291,13 +291,7 @@ export const cleanupStaleJobs = mutation({
 		const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
 		const countQueryResults = async (
 			query: ReturnType<typeof ctx.db.query<"streamJobs">>,
-		) => {
-			const countMethod = (query as { count?: () => Promise<number> }).count;
-			if (typeof countMethod === "function") {
-				return await countMethod.call(query);
-			}
-			return (await query.collect()).length;
-		};
+		) => (await query.collect()).length;
 
 		const recentRunningQuery = ctx.db
 			.query("streamJobs")

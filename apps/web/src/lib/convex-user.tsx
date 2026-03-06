@@ -40,7 +40,11 @@ export function ConvexUserProvider({ children }: { children: React.ReactNode }) 
     () => ({
       convexUser,
       convexUserId: convexUser?._id,
-      isLoading: !!(user?.id && isAuthenticated && convexUser === undefined),
+      isLoading: !!(
+        user?.id &&
+        isAuthenticated &&
+        (convexUser === undefined || convexUser === null)
+      ),
     }),
     [convexUser, isAuthenticated, user?.id],
   );
