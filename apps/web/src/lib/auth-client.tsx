@@ -80,13 +80,14 @@ export function StableAuthProvider({
   children: ReactNode;
   initialUser?: InitialAuthUser;
 }) {
+  const hasServerSnapshot = initialUser !== undefined;
   const [sessionData, setSessionData] = useState<SessionData>(() => {
-    if (initialUser) {
-      return { user: initialUser, session: null };
+    if (hasServerSnapshot) {
+      return { user: initialUser ?? null, session: null };
     }
     return { user: null, session: null };
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!hasServerSnapshot);
   const fetchedRef = useRef(false);
   const fetchingRef = useRef(false);
 
@@ -123,7 +124,7 @@ export function StableAuthProvider({
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, []);
+  }, [hasServerSnapshot]);
 
   useEffect(() => {
     if (fetchedRef.current) return;

@@ -169,6 +169,7 @@ export default defineSchema({
 		.index("by_user", ["userId"])
 		.index("by_user_status", ["userId", "status", "createdAt"])
 		.index("by_chat_not_deleted", ["chatId", "deletedAt", "createdAt"])
+		.index("by_chat_role_not_deleted", ["chatId", "role", "deletedAt", "createdAt"])
 		.index("by_user_created", ["userId", "createdAt"])
 		.index("by_stream_id", ["streamId"])
 		.index("by_chat_status", ["chatId", "status", "deletedAt"]),
@@ -300,6 +301,7 @@ export default defineSchema({
 	})
 		.index("by_chat", ["chatId", "status"])
 		.index("by_user", ["userId", "status"])
+		.index("by_user_status_created", ["userId", "status", "createdAt"])
 		.index("by_status", ["status", "createdAt"]),
 	benchmarks: defineTable({
 		openRouterModelId: v.string(),

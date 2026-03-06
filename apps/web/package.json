@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "BROWSERSLIST_IGNORE_OLD_DATA=true BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true sh -c 'portless \"${PORTLESS_NAME:-openchat}\" vite dev'",
+    "dev": "BROWSERSLIST_IGNORE_OLD_DATA=true BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true sh -c 'portless openchat vite dev'",
     "build": "vite build",
     "build:vercel": "bun ./scripts/vercel-build.ts",
     "start": "node .output/server/index.mjs",

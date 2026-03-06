@@ -179,6 +179,7 @@ export const ChatMessageList = memo(function ChatMessageList({
 				msg,
 				textParts,
 				fileParts,
+				textContent,
 				thinkingSteps,
 				isAnyStepStreaming,
 				hasTextContent,
@@ -264,7 +265,7 @@ export const ChatMessageList = memo(function ChatMessageList({
 								<div
 									key={item.message.id}
 									className={cn(
-										"group",
+										"group content-visibility-auto",
 										editingMessageId === item.message.id &&
 											"ring-2 ring-primary/30 rounded-2xl",
 									)}
@@ -316,7 +317,7 @@ export const ChatMessageList = memo(function ChatMessageList({
 										{item.message.role === "user" ? (
 											<UserMessageActions
 												messageId={item.message.id}
-												content={item.textParts.map((p) => p.text).join("")}
+												content={item.textContent}
 												isStreaming={
 													item.isCurrentlyStreaming ||
 													editingMessageId === item.message.id
@@ -324,7 +325,7 @@ export const ChatMessageList = memo(function ChatMessageList({
 												onEdit={() =>
 													onStartEdit(
 														item.message.id,
-														item.textParts.map((p) => p.text).join(""),
+														item.textContent,
 													)
 												}
 												onRetry={(modelId) => {
@@ -337,7 +338,7 @@ export const ChatMessageList = memo(function ChatMessageList({
 										) : (
 											<AssistantMessageActions
 												messageId={item.message.id}
-												content={item.textParts.map((p) => p.text).join("")}
+												content={item.textContent}
 												isStreaming={item.isCurrentlyStreaming}
 												analytics={{
 													modelId: (

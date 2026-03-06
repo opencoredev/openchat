@@ -182,14 +182,16 @@ export const editAndRegenerate = mutation({
 
 		const now = Date.now();
 
-		const activeStreams = await ctx.db
-			.query("streamJobs")
-			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId).eq("status", "running"))
-			.collect();
-		const pendingStreams = await ctx.db
-			.query("streamJobs")
-			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId).eq("status", "pending"))
-			.collect();
+		const [activeStreams, pendingStreams] = await Promise.all([
+			ctx.db
+				.query("streamJobs")
+				.withIndex("by_chat", (q) => q.eq("chatId", args.chatId).eq("status", "running"))
+				.collect(),
+			ctx.db
+				.query("streamJobs")
+				.withIndex("by_chat", (q) => q.eq("chatId", args.chatId).eq("status", "pending"))
+				.collect(),
+		]);
 
 		for (const stream of [...activeStreams, ...pendingStreams]) {
 			await ctx.db.patch(stream._id, {
@@ -264,14 +266,16 @@ export const retryMessage = mutation({
 
 		const now = Date.now();
 
-		const activeStreams = await ctx.db
-			.query("streamJobs")
-			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId).eq("status", "running"))
-			.collect();
-		const pendingStreams = await ctx.db
-			.query("streamJobs")
-			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId).eq("status", "pending"))
-			.collect();
+		const [activeStreams, pendingStreams] = await Promise.all([
+			ctx.db
+				.query("streamJobs")
+				.withIndex("by_chat", (q) => q.eq("chatId", args.chatId).eq("status", "running"))
+				.collect(),
+			ctx.db
+				.query("streamJobs")
+				.withIndex("by_chat", (q) => q.eq("chatId", args.chatId).eq("status", "pending"))
+				.collect(),
+		]);
 		for (const stream of [...activeStreams, ...pendingStreams]) {
 			await ctx.db.patch(stream._id, {
 				status: "completed",

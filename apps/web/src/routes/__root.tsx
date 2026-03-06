@@ -6,17 +6,16 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
+import { Suspense, lazy } from "react";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { Providers } from "../providers";
 import { SidebarInset, SidebarProvider } from "../components/ui/sidebar";
 import { NavigationProgress } from "../components/navigation-progress";
-import { AppSidebar } from "../components/app-sidebar";
 import { useAuth } from "../lib/auth-client";
 import { usePostHogPageView } from "../providers/posthog";
 import { convexClient } from "../lib/convex";
 import { useGlobalShortcuts } from "@/hooks/use-global-shortcuts";
-import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import type { InitialAuthUser } from "../lib/auth-client";
 
 import appCss from "../styles.css?url";
@@ -58,6 +57,12 @@ const SITE_URL = "https://osschat.dev";
 const SITE_NAME = "osschat";
 const SITE_DESCRIPTION = "Open source AI chat with 350+ models. Access GPT-4, Claude, Gemini, and more through one beautiful interface. Free tier available, no API key required.";
 const SITE_TAGLINE = "One interface. Every AI model.";
+const AppSidebar = lazy(() =>
+  import("../components/app-sidebar").then((module) => ({ default: module.AppSidebar })),
+);
+const ShortcutsDialog = lazy(() =>
+  import("@/components/shortcuts-dialog").then((module) => ({ default: module.ShortcutsDialog })),
+);
 
 export const Route = createRootRoute({
   beforeLoad: async () => {
@@ -104,11 +109,12 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "canonical", href: SITE_URL },
       { rel: "manifest", href: "/manifest.json" },
       { rel: "icon", href: "/logo.svg?v=2", type: "image/svg+xml" },
       { rel: "icon", href: "/favicon.ico?v=2", sizes: "32x32" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png?v=2" },
+      { rel: "preconnect", href: "https://assets.onedollarstats.com" },
+      { rel: "dns-prefetch", href: "https://assets.onedollarstats.com" },
     ],
     scripts: [
       // Theme initialization
@@ -194,28 +200,36 @@ function AppShell() {
 
   if (!convexClient || loading) {
     return (
-      <div className="flex h-screen w-full bg-sidebar">
+      <main id="main-content" className="flex h-screen w-full bg-sidebar" aria-busy="true">
         <div className="w-64 shrink-0 bg-sidebar" />
         <div className="flex-1 bg-background" />
-      </div>
+      </main>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <>
+      <main id="main-content" className="h-full">
         <Outlet />
-      </>
+      </main>
     );
   }
 
   return (
     <SidebarProvider>
-      <AppSidebar variant="inset" />
-      <SidebarInset className="relative overflow-hidden">
+      <Suspense fallback={null}>
+        <AppSidebar variant="inset" />
+      </Suspense>
+      <SidebarInset
+        id="main-content"
+        role="main"
+        className="relative overflow-hidden"
+      >
         <Outlet />
       </SidebarInset>
-      <ShortcutsDialog showHelpButton={showHelpButton} />
+      <Suspense fallback={null}>
+        <ShortcutsDialog showHelpButton={showHelpButton} />
+      </Suspense>
     </SidebarProvider>
   );
 }
@@ -227,6 +241,12 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body className="h-full overflow-hidden bg-background antialiased" suppressHydrationWarning>
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:text-foreground focus:shadow-lg"
+        >
+          Skip to content
+        </a>
         <NavigationProgress />
         {children}
         <Scripts />
