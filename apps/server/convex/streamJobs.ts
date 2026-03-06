@@ -289,23 +289,46 @@ export const cleanupStaleJobs = mutation({
 	handler: async (ctx, args) => {
 		const userId = await requireAuthUserId(ctx, args.userId);
 		const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-		const [runningJobs, pendingJobs] = await Promise.all([
+		const [staleRunningJobs, stalePendingJobs, recentRunningJobs, recentPendingJobs] =
+			await Promise.all([
 			ctx.db
 				.query("streamJobs")
 				.withIndex("by_user_status_created", (q) =>
-					q.eq("userId", userId).eq("status", "running")
+					q
+						.eq("userId", userId)
+						.eq("status", "running")
+						.lt("createdAt", fiveMinutesAgo)
 				)
 				.collect(),
 			ctx.db
 				.query("streamJobs")
 				.withIndex("by_user_status_created", (q) =>
-					q.eq("userId", userId).eq("status", "pending")
+					q
+						.eq("userId", userId)
+						.eq("status", "pending")
+						.lt("createdAt", fiveMinutesAgo)
+				)
+				.collect(),
+			ctx.db
+				.query("streamJobs")
+				.withIndex("by_user_status_created", (q) =>
+					q
+						.eq("userId", userId)
+						.eq("status", "running")
+						.gte("createdAt", fiveMinutesAgo)
+				)
+				.collect(),
+			ctx.db
+				.query("streamJobs")
+				.withIndex("by_user_status_created", (q) =>
+					q
+						.eq("userId", userId)
+						.eq("status", "pending")
+						.gte("createdAt", fiveMinutesAgo)
 				)
 				.collect(),
 		]);
-		const staleJobs = [...runningJobs, ...pendingJobs].filter(
-			(job) => job.createdAt < fiveMinutesAgo,
-		);
+		const staleJobs = [...staleRunningJobs, ...stalePendingJobs];
 		let cleaned = 0;
 
 		for (const job of staleJobs) {
@@ -317,6 +340,13 @@ export const cleanupStaleJobs = mutation({
 			cleaned++;
 		}
 
-		return { cleaned, total: runningJobs.length + pendingJobs.length };
+		return {
+			cleaned,
+			total:
+				staleRunningJobs.length +
+				stalePendingJobs.length +
+				recentRunningJobs.length +
+				recentPendingJobs.length,
+		};
 	},
 });
