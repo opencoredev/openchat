@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import { CheckIcon, Loader2Icon, PencilIcon, XIcon } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { useConvexUser } from "@/lib/convex-user";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
@@ -19,7 +20,7 @@ export function AccountSection({ user, refetchSession }: AccountSectionProps) {
 	const [nameValue, setNameValue] = useState(user.name || "");
 	const [isSaving, setIsSaving] = useState(false);
 
-	const convexUser = useQuery(api.users.getByExternalId, { externalId: user.id });
+	const { convexUser } = useConvexUser();
 	const updateName = useMutation(api.users.updateName);
 
 	const handleSaveName = async () => {

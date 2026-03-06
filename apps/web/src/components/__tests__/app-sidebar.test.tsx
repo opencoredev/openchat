@@ -36,6 +36,16 @@ vi.mock('@/lib/auth-client', () => ({
 	useAuth: vi.fn(() => ({ user: null })),
 }))
 
+let mockConvexUserState = {
+	convexUser: null as { _id: string } | null,
+	convexUserId: undefined as string | undefined,
+	isLoading: false,
+}
+
+vi.mock('@/lib/convex-user', () => ({
+	useConvexUser: vi.fn(() => mockConvexUserState),
+}))
+
 vi.mock('@/stores/provider', () => ({
 	useProviderStore: vi.fn((selector: (s: any) => any) =>
 		selector({ activeProvider: 'osschat' }),
@@ -192,6 +202,11 @@ describe('AppSidebar', () => {
 	beforeEach(() => {
 		vi.mocked(useAuth).mockReturnValue({ user: null } as any)
 		vi.mocked(useQuery).mockReturnValue(undefined as any)
+		mockConvexUserState = {
+			convexUser: null,
+			convexUserId: undefined,
+			isLoading: false,
+		}
 		vi.mocked(useNavigate).mockReturnValue(vi.fn())
 		vi.mocked(useParams).mockReturnValue({} as any)
 		vi.mocked(useSidebar).mockReturnValue({
@@ -238,18 +253,24 @@ describe('AppSidebar', () => {
 
 	it('shows "No chats yet" empty state when authenticated but chat list is empty', () => {
 		vi.mocked(useAuth).mockReturnValue({ user: mockUser } as any)
-		vi.mocked(useQuery)
-			.mockReturnValueOnce(mockConvexUser as any)
-			.mockReturnValueOnce({ chats: [] } as any)
+		mockConvexUserState = {
+			convexUser: mockConvexUser,
+			convexUserId: mockConvexUser._id,
+			isLoading: false,
+		}
+		vi.mocked(useQuery).mockReturnValue({ chats: [] } as any)
 		render(<AppSidebar />)
 		expect(screen.getByText('No chats yet')).toBeTruthy()
 	})
 
 	it('renders chat titles when chats are available', () => {
 		vi.mocked(useAuth).mockReturnValue({ user: mockUser } as any)
-		vi.mocked(useQuery)
-			.mockReturnValueOnce(mockConvexUser as any)
-			.mockReturnValueOnce({ chats: [todayChat, anotherTodayChat] } as any)
+		mockConvexUserState = {
+			convexUser: mockConvexUser,
+			convexUserId: mockConvexUser._id,
+			isLoading: false,
+		}
+		vi.mocked(useQuery).mockReturnValue({ chats: [todayChat, anotherTodayChat] } as any)
 		render(<AppSidebar />)
 		expect(screen.getByText('Chat about AI')).toBeTruthy()
 		expect(screen.getByText('React hooks discussion')).toBeTruthy()
@@ -257,18 +278,24 @@ describe('AppSidebar', () => {
 
 	it('shows "Today" group label for chats updated today', () => {
 		vi.mocked(useAuth).mockReturnValue({ user: mockUser } as any)
-		vi.mocked(useQuery)
-			.mockReturnValueOnce(mockConvexUser as any)
-			.mockReturnValueOnce({ chats: [todayChat] } as any)
+		mockConvexUserState = {
+			convexUser: mockConvexUser,
+			convexUserId: mockConvexUser._id,
+			isLoading: false,
+		}
+		vi.mocked(useQuery).mockReturnValue({ chats: [todayChat] } as any)
 		render(<AppSidebar />)
 		expect(screen.getByText('Today')).toBeTruthy()
 	})
 
 	it('shows "Last 7 days" group label for chats from the past week', () => {
 		vi.mocked(useAuth).mockReturnValue({ user: mockUser } as any)
-		vi.mocked(useQuery)
-			.mockReturnValueOnce(mockConvexUser as any)
-			.mockReturnValueOnce({ chats: [lastWeekChat] } as any)
+		mockConvexUserState = {
+			convexUser: mockConvexUser,
+			convexUserId: mockConvexUser._id,
+			isLoading: false,
+		}
+		vi.mocked(useQuery).mockReturnValue({ chats: [lastWeekChat] } as any)
 		render(<AppSidebar />)
 		expect(screen.getByText('Last 7 days')).toBeTruthy()
 	})
@@ -292,9 +319,7 @@ describe('AppSidebar', () => {
 
 	it('shows user name and Settings link when user is authenticated', () => {
 		vi.mocked(useAuth).mockReturnValue({ user: mockUser } as any)
-		vi.mocked(useQuery)
-			.mockReturnValueOnce(null as any)
-			.mockReturnValueOnce(undefined as any)
+		vi.mocked(useQuery).mockReturnValue(undefined as any)
 		render(<AppSidebar />)
 		expect(screen.getByText('Test User')).toBeTruthy()
 		expect(screen.getByText('Settings')).toBeTruthy()
@@ -314,9 +339,12 @@ describe('AppSidebar', () => {
 
 	it('renders a delete button for each chat item', () => {
 		vi.mocked(useAuth).mockReturnValue({ user: mockUser } as any)
-		vi.mocked(useQuery)
-			.mockReturnValueOnce(mockConvexUser as any)
-			.mockReturnValueOnce({ chats: [todayChat, anotherTodayChat] } as any)
+		mockConvexUserState = {
+			convexUser: mockConvexUser,
+			convexUserId: mockConvexUser._id,
+			isLoading: false,
+		}
+		vi.mocked(useQuery).mockReturnValue({ chats: [todayChat, anotherTodayChat] } as any)
 		render(<AppSidebar />)
 		const deleteButtons = screen.getAllByRole('button', { name: /delete chat/i })
 		expect(deleteButtons.length).toBe(2)
@@ -338,9 +366,12 @@ describe('AppSidebar', () => {
 
 	it('clicking a chat item navigates to /c/$chatId', () => {
 		vi.mocked(useAuth).mockReturnValue({ user: mockUser } as any)
-		vi.mocked(useQuery)
-			.mockReturnValueOnce(mockConvexUser as any)
-			.mockReturnValueOnce({ chats: [todayChat] } as any)
+		mockConvexUserState = {
+			convexUser: mockConvexUser,
+			convexUserId: mockConvexUser._id,
+			isLoading: false,
+		}
+		vi.mocked(useQuery).mockReturnValue({ chats: [todayChat] } as any)
 		const mockNavigate = vi.fn()
 		vi.mocked(useNavigate).mockReturnValue(mockNavigate)
 		render(<AppSidebar />)
@@ -363,9 +394,12 @@ describe('AppSidebar', () => {
 		} as any)
 		vi.mocked(useNavigate).mockReturnValue(mockNavigate)
 		vi.mocked(useAuth).mockReturnValue({ user: mockUser } as any)
-		vi.mocked(useQuery)
-			.mockReturnValueOnce(mockConvexUser as any)
-			.mockReturnValueOnce({ chats: [todayChat] } as any)
+		mockConvexUserState = {
+			convexUser: mockConvexUser,
+			convexUserId: mockConvexUser._id,
+			isLoading: false,
+		}
+		vi.mocked(useQuery).mockReturnValue({ chats: [todayChat] } as any)
 		render(<AppSidebar />)
 		const chatBtns = screen.getAllByTestId('sidebar-menu-button')
 		fireEvent.click(chatBtns[0])
@@ -457,9 +491,12 @@ describe('AppSidebar', () => {
 
 	it('dismissing the delete chat dialog clears the delete state', () => {
 		vi.mocked(useAuth).mockReturnValue({ user: mockUser } as any)
-		vi.mocked(useQuery)
-			.mockReturnValueOnce(mockConvexUser as any)
-			.mockReturnValueOnce({ chats: [todayChat] } as any)
+		mockConvexUserState = {
+			convexUser: mockConvexUser,
+			convexUserId: mockConvexUser._id,
+			isLoading: false,
+		}
+		vi.mocked(useQuery).mockReturnValue({ chats: [todayChat] } as any)
 		render(<AppSidebar />)
 
 		const deleteBtn = screen.getAllByRole('button', { name: /delete chat/i })[0]

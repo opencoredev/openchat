@@ -120,10 +120,9 @@ export const getFirstUserMessage = query({
 
 		const message = await ctx.db
 			.query("messages")
-			.withIndex("by_chat_not_deleted", (q) =>
-				q.eq("chatId", args.chatId).eq("deletedAt", undefined)
+			.withIndex("by_chat_role_not_deleted", (q) =>
+				q.eq("chatId", args.chatId).eq("role", "user").eq("deletedAt", undefined)
 			)
-			.filter((q) => q.eq(q.field("role"), "user"))
 			.order("asc")
 			.first();
 
@@ -144,11 +143,10 @@ export const getActiveStream = query({
 
 		const streamingMessage = await ctx.db
 			.query("messages")
-			.withIndex("by_chat_not_deleted", (q) =>
-				q.eq("chatId", args.chatId).eq("deletedAt", undefined)
+			.withIndex("by_chat_status", (q) =>
+				q.eq("chatId", args.chatId).eq("status", "streaming").eq("deletedAt", undefined)
 			)
 			.order("desc")
-			.filter((q) => q.eq(q.field("status"), "streaming"))
 			.first();
 
 		return streamingMessage?.streamId ?? null;

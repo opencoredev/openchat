@@ -77,6 +77,16 @@ vi.mock("@/lib/auth-client", () => ({
 	useAuth: () => ({ user: mockAuthUser }),
 }));
 
+let mockConvexUserState = {
+	convexUser: { _id: "convex-user-id" },
+	convexUserId: "convex-user-id",
+	isLoading: false,
+};
+
+vi.mock("@/lib/convex-user", () => ({
+	useConvexUser: () => mockConvexUserState,
+}));
+
 // ---------------------------------------------------------------------------
 // Mock: sonner
 // ---------------------------------------------------------------------------
@@ -192,6 +202,11 @@ async function tick() {
 beforeEach(() => {
 	mockAuthUser = { id: "user-id-1" };
 	mockConvexUser = { _id: "convex-user-id" };
+	mockConvexUserState = {
+		convexUser: { _id: "convex-user-id" },
+		convexUserId: "convex-user-id",
+		isLoading: false,
+	};
 	mockMessagesResult = undefined;
 	mockActiveStreamJob = null;
 	mockProviderState = {
@@ -273,7 +288,12 @@ describe("initial state shape", () => {
 describe("user loading state", () => {
 	it("isUserLoading is true when user exists but convex user is undefined", () => {
 		mockAuthUser = { id: "user-id-1" };
-		mockConvexUser = undefined; // still loading
+		mockConvexUser = undefined;
+		mockConvexUserState = {
+			convexUser: undefined,
+			convexUserId: undefined,
+			isLoading: true,
+		};
 
 		const { result } = renderChat();
 		expect(result.current.isUserLoading).toBe(true);
@@ -282,6 +302,11 @@ describe("user loading state", () => {
 	it("isUserLoading is false when user is null (not logged in)", () => {
 		mockAuthUser = null;
 		mockConvexUser = undefined;
+		mockConvexUserState = {
+			convexUser: undefined,
+			convexUserId: undefined,
+			isLoading: false,
+		};
 
 		const { result } = renderChat();
 		expect(result.current.isUserLoading).toBe(false);
@@ -290,6 +315,11 @@ describe("user loading state", () => {
 	it("isUserLoading is false when convex user is loaded", () => {
 		mockAuthUser = { id: "user-id-1" };
 		mockConvexUser = { _id: "convex-user-id" };
+		mockConvexUserState = {
+			convexUser: { _id: "convex-user-id" },
+			convexUserId: "convex-user-id",
+			isLoading: false,
+		};
 
 		const { result } = renderChat();
 		expect(result.current.isUserLoading).toBe(false);
@@ -320,6 +350,11 @@ describe("sendMessage validation", () => {
 	it("shows toast when no convexUserId (user null)", async () => {
 		mockAuthUser = null;
 		mockConvexUser = null;
+		mockConvexUserState = {
+			convexUser: null,
+			convexUserId: undefined,
+			isLoading: false,
+		};
 		const { toast } = await import("sonner");
 
 		const { result } = renderChat();

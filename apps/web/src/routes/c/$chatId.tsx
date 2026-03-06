@@ -7,8 +7,8 @@
  */
 
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { Suspense, lazy } from "react";
 import { useAuth } from "@/lib/auth-client";
-import { ChatInterface } from "@/components/chat";
 import { Button } from "@/components/ui/button";
 import { convexClient } from "@/lib/convex";
 
@@ -21,6 +21,10 @@ export const Route = createFileRoute("/c/$chatId")({
   }),
   component: ChatPage,
 });
+
+const ChatInterface = lazy(() =>
+  import("@/components/chat").then((module) => ({ default: module.ChatInterface })),
+);
 
 function ChatPage() {
   const { chatId } = Route.useParams();
@@ -42,5 +46,9 @@ function ChatPage() {
     );
   }
 
-  return <ChatInterface chatId={chatId} />;
+  return (
+    <Suspense fallback={<div className="flex h-full bg-background" />}>
+      <ChatInterface chatId={chatId} />
+    </Suspense>
+  );
 }

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getModelById, getModelCapabilities, useModelStore, useModels } from "@/stores/model";
 import { useWebSearch } from "@/stores/provider";
-import { useAuth } from "@/lib/auth-client";
+import { useConvexUser } from "@/lib/convex-user";
 
 export interface ToolbarToggleProps {
 	disabled?: boolean;
@@ -90,14 +90,10 @@ export function WebSearchToggleButton({ disabled }: ToolbarToggleProps) {
 		remainingSearches: localRemainingSearches,
 		isLimitReached: localIsLimitReached,
 	} = useWebSearch();
-	const { user } = useAuth();
-	const convexUser = useQuery(
-		api.users.getByExternalId,
-		user?.id ? { externalId: user.id } : "skip",
-	);
+	const { convexUserId } = useConvexUser();
 	const backendSearchAvailability = useQuery(
 		api.search.getSearchAvailability,
-		convexUser?._id ? { userId: convexUser._id } : "skip",
+		convexUserId ? { userId: convexUserId } : "skip",
 	);
 	const isConfigured = backendSearchAvailability?.configured ?? true;
 	const remainingSearches = backendSearchAvailability?.remaining ?? localRemainingSearches;

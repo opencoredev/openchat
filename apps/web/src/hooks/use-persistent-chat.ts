@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@server/convex/_generated/api";
 import type { UIMessage } from "ai";
 import { useAuth } from "@/lib/auth-client";
+import { useConvexUser } from "@/lib/convex-user";
 import { useModels } from "@/stores/model";
 import { useProviderStore } from "@/stores/provider";
 import { useChatMessages } from "./use-chat-messages";
@@ -37,6 +36,7 @@ export function usePersistentChat({
 	onChatCreated,
 }: UsePersistentChatOptions): UsePersistentChatReturn {
 	const { user } = useAuth();
+	const { convexUserId, isLoading: isConvexUserLoading } = useConvexUser();
 	const { models } = useModels();
 	const activeProvider = useProviderStore((s) => s.activeProvider);
 	const webSearchEnabled = useProviderStore((s) => s.webSearchEnabled);
@@ -61,12 +61,7 @@ export function usePersistentChat({
 		}
 	}, [chatId]);
 
-	const convexUser = useQuery(
-		api.users.getByExternalId,
-		user?.id ? { externalId: user.id } : "skip",
-	);
-	const convexUserId = convexUser?._id;
-	const isUserLoading = !!(user?.id && convexUser === undefined);
+	const isUserLoading = !!(user?.id && isConvexUserLoading);
 
 	const { messagesResult, isLoadingMessages } = useChatMessages({
 		chatId,

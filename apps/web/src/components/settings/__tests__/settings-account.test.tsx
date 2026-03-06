@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useQuery } from "convex/react";
 
 vi.mock("convex/react", () => ({
-	useQuery: vi.fn(() => null),
 	useMutation: vi.fn(() => vi.fn()),
 }));
 
@@ -29,6 +27,12 @@ vi.mock("@/lib/auth-client", () => ({
 		updateUser: vi.fn().mockResolvedValue({}),
 		signOut: vi.fn().mockResolvedValue({}),
 	},
+}));
+
+let mockConvexUser: { _id: string; name?: string } | null = null;
+
+vi.mock("@/lib/convex-user", () => ({
+	useConvexUser: () => ({ convexUser: mockConvexUser }),
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -65,8 +69,6 @@ vi.mock("@/components/delete-account-modal", () => ({
 import { AccountSection } from "../settings-account";
 import { authClient } from "@/lib/auth-client";
 
-const mockUseQuery = vi.mocked(useQuery);
-
 const defaultUser = {
 	id: "user-123",
 	name: "Test User",
@@ -81,7 +83,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-	mockUseQuery.mockReturnValue(null);
+	mockConvexUser = null;
 });
 
 describe("AccountSection", () => {
@@ -156,7 +158,7 @@ describe("AccountSection", () => {
 	});
 
 	it("shows convex user name when convexUser is loaded", () => {
-		mockUseQuery.mockReturnValue({ _id: "conv-user-1", name: "Convex User Name" });
+		mockConvexUser = { _id: "conv-user-1", name: "Convex User Name" };
 		render(<AccountSection user={defaultUser} refetchSession={mockRefetchSession} />);
 		expect(screen.getByText("Convex User Name")).toBeDefined();
 	});
@@ -167,14 +169,14 @@ describe("AccountSection", () => {
 	});
 
 	it("clicking Edit when convexUser exists shows input", () => {
-		mockUseQuery.mockReturnValue({ _id: "conv-user-1", name: "My Name" });
+		mockConvexUser = { _id: "conv-user-1", name: "My Name" };
 		render(<AccountSection user={defaultUser} refetchSession={mockRefetchSession} />);
 		fireEvent.click(screen.getByText("Edit"));
 		expect(screen.getByTestId("name-input")).toBeDefined();
 	});
 
 	it("clicking cancel button during editing reverts to view mode", () => {
-		mockUseQuery.mockReturnValue({ _id: "conv-user-1", name: "My Name" });
+		mockConvexUser = { _id: "conv-user-1", name: "My Name" };
 		render(<AccountSection user={defaultUser} refetchSession={mockRefetchSession} />);
 		fireEvent.click(screen.getByText("Edit"));
 		expect(screen.getByTestId("name-input")).toBeDefined();
@@ -183,7 +185,7 @@ describe("AccountSection", () => {
 	});
 
 	it("pressing Escape in input cancels editing", () => {
-		mockUseQuery.mockReturnValue({ _id: "conv-user-1", name: "My Name" });
+		mockConvexUser = { _id: "conv-user-1", name: "My Name" };
 		render(<AccountSection user={defaultUser} refetchSession={mockRefetchSession} />);
 		fireEvent.click(screen.getByText("Edit"));
 		const input = screen.getByTestId("name-input");
@@ -192,7 +194,7 @@ describe("AccountSection", () => {
 	});
 
 	it("opens delete modal when Delete button is clicked and convexUser exists", () => {
-		mockUseQuery.mockReturnValue({ _id: "conv-user-1", name: "My Name" });
+		mockConvexUser = { _id: "conv-user-1", name: "My Name" };
 		render(<AccountSection user={defaultUser} refetchSession={mockRefetchSession} />);
 		expect(screen.queryByTestId("delete-modal")).toBeNull();
 		fireEvent.click(screen.getByText("Delete"));
@@ -210,7 +212,7 @@ describe("AccountSection", () => {
 	});
 
 	it("clicking Save after editing calls handleSaveName and exits edit mode", async () => {
-		mockUseQuery.mockReturnValue({ _id: "conv-user-1", name: "My Name" });
+		mockConvexUser = { _id: "conv-user-1", name: "My Name" };
 		render(<AccountSection user={defaultUser} refetchSession={mockRefetchSession} />);
 
 		fireEvent.click(screen.getByText("Edit"));
@@ -227,7 +229,7 @@ describe("AccountSection", () => {
 	});
 
 	it("pressing Enter in name input triggers handleSaveName", async () => {
-		mockUseQuery.mockReturnValue({ _id: "conv-user-1", name: "My Name" });
+		mockConvexUser = { _id: "conv-user-1", name: "My Name" };
 		render(<AccountSection user={defaultUser} refetchSession={mockRefetchSession} />);
 
 		fireEvent.click(screen.getByText("Edit"));
@@ -243,7 +245,7 @@ describe("AccountSection", () => {
 	});
 
 	it("clicking Cancel resets name value and exits edit mode", () => {
-		mockUseQuery.mockReturnValue({ _id: "conv-user-1", name: "Original Name" });
+		mockConvexUser = { _id: "conv-user-1", name: "Original Name" };
 		render(<AccountSection user={defaultUser} refetchSession={mockRefetchSession} />);
 
 		fireEvent.click(screen.getByText("Edit"));
@@ -260,7 +262,7 @@ describe("AccountSection", () => {
 	});
 
 	it("handleSaveName with whitespace-only name does nothing (early return)", () => {
-		mockUseQuery.mockReturnValue({ _id: "conv-user-1", name: "My Name" });
+		mockConvexUser = { _id: "conv-user-1", name: "My Name" };
 		render(<AccountSection user={defaultUser} refetchSession={mockRefetchSession} />);
 
 		fireEvent.click(screen.getByText("Edit"));

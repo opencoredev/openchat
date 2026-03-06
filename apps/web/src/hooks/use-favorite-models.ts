@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAuth } from "@/lib/auth-client";
+import { useConvexUser } from "@/lib/convex-user";
 
 const DEFAULT_FAVORITES = [
   "anthropic/claude-opus-4.5",
@@ -16,16 +16,9 @@ const DEFAULT_FAVORITES = [
 ];
 
 export function useFavoriteModels() {
-  const { user } = useAuth();
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const isInitialized = useRef(false);
-
-  const convexUser = useQuery(
-    api.users.getByExternalId,
-    user?.id ? { externalId: user.id } : "skip",
-  );
-
-  const convexUserId = convexUser?._id;
+  const { convexUserId } = useConvexUser();
 
   const serverFavorites = useQuery(
     api.users.getFavoriteModels,

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ConvexProviderWithAuth, useMutation, useQuery } from "convex/react";
+import { ConvexProviderWithAuth, useMutation } from "convex/react";
 import { Toaster } from "sonner";
 import { api } from "@server/convex/_generated/api";
 import { convexClient } from "../lib/convex";
 import { StableAuthProvider, authClient, useAuth, type InitialAuthUser } from "../lib/auth-client";
+import { ConvexUserProvider, useConvexUser } from "../lib/convex-user";
 import { prefetchModels } from "../stores/model";
 import { useProviderStore } from "../stores/provider";
 import { useOpenRouterStore } from "../stores/openrouter";
@@ -116,10 +117,7 @@ function UsageSyncProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, loading } = useAuth();
   const syncUsage = useProviderStore((s) => s.syncUsage);
   const resetDailyUsage = useProviderStore((s) => s.resetDailyUsage);
-  const convexUser = useQuery(
-    api.users.getByExternalId,
-    !loading && isAuthenticated && user?.id ? { externalId: user.id } : "skip",
-  );
+  const { convexUser } = useConvexUser();
 
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {
@@ -187,19 +185,21 @@ function ConvexAuthWrapper({ children }: { children: React.ReactNode }) {
   return (
     <ConvexProviderWithAuth client={convexClient!} useAuth={useStableConvexAuth}>
       <UserSyncProvider>
-        <UsageSyncProvider>
-          <OpenRouterKeyStatusProvider>{children}</OpenRouterKeyStatusProvider>
-        </UsageSyncProvider>
+        <ConvexUserProvider>
+          <UsageSyncProvider>
+            <OpenRouterKeyStatusProvider>{children}</OpenRouterKeyStatusProvider>
+          </UsageSyncProvider>
+        </ConvexUserProvider>
       </UserSyncProvider>
     </ConvexProviderWithAuth>
   );
 }
 
 export function Providers({ children, initialUser }: ProvidersProps) {
-  const [isClient, setIsClient] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    setIsClient(true);
+    setIsHydrated(true);
   }, []);
 
   const content = (
@@ -211,14 +211,10 @@ export function Providers({ children, initialUser }: ProvidersProps) {
     </ThemeProvider>
   );
 
-  if (!isClient || !convexClient) {
-    return <PostHogProvider>{content}</PostHogProvider>;
-  }
-
   return (
     <PostHogProvider>
       <StableAuthProvider initialUser={initialUser}>
-        <ConvexAuthWrapper>{content}</ConvexAuthWrapper>
+        {isHydrated && convexClient ? <ConvexAuthWrapper>{content}</ConvexAuthWrapper> : content}
       </StableAuthProvider>
     </PostHogProvider>
   );

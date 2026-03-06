@@ -288,31 +288,70 @@ export const cleanupStaleJobs = mutation({
 	},
 	handler: async (ctx, args) => {
 		const userId = await requireAuthUserId(ctx, args.userId);
-		const staleJobs = await ctx.db
-			.query("streamJobs")
-			.withIndex("by_user", (q) => q.eq("userId", userId))
-			.filter((q) =>
-				q.or(
-					q.eq(q.field("status"), "running"),
-					q.eq(q.field("status"), "pending")
-				)
-			)
-			.collect();
-
 		const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+		const countQueryResults = async (
+			query: ReturnType<typeof ctx.db.query<"streamJobs">>,
+		) => (await query.collect()).length;
+
+		const recentRunningQuery = ctx.db
+			.query("streamJobs")
+			.withIndex("by_user_status_created", (q) =>
+				q
+					.eq("userId", userId)
+					.eq("status", "running")
+					.gte("createdAt", fiveMinutesAgo)
+			);
+		const recentPendingQuery = ctx.db
+			.query("streamJobs")
+			.withIndex("by_user_status_created", (q) =>
+				q
+					.eq("userId", userId)
+					.eq("status", "pending")
+					.gte("createdAt", fiveMinutesAgo)
+			);
+
+		const [staleRunningJobs, stalePendingJobs, recentRunningCount, recentPendingCount] =
+			await Promise.all([
+				ctx.db
+					.query("streamJobs")
+					.withIndex("by_user_status_created", (q) =>
+						q
+							.eq("userId", userId)
+							.eq("status", "running")
+							.lt("createdAt", fiveMinutesAgo)
+					)
+					.collect(),
+				ctx.db
+					.query("streamJobs")
+					.withIndex("by_user_status_created", (q) =>
+						q
+							.eq("userId", userId)
+							.eq("status", "pending")
+							.lt("createdAt", fiveMinutesAgo)
+					)
+					.collect(),
+				countQueryResults(recentRunningQuery),
+				countQueryResults(recentPendingQuery),
+			]);
+		const staleJobs = [...staleRunningJobs, ...stalePendingJobs];
 		let cleaned = 0;
 
 		for (const job of staleJobs) {
-			if (job.createdAt < fiveMinutesAgo) {
-				await ctx.db.patch(job._id, {
-					status: "error",
-					error: "Cleaned up stale job",
-					completedAt: Date.now(),
-				});
-				cleaned++;
-			}
+			await ctx.db.patch(job._id, {
+				status: "error",
+				error: "Cleaned up stale job",
+				completedAt: Date.now(),
+			});
+			cleaned++;
 		}
 
-		return { cleaned, total: staleJobs.length };
+		return {
+			cleaned,
+			total:
+				staleRunningJobs.length +
+				stalePendingJobs.length +
+				recentRunningCount +
+				recentPendingCount,
+		};
 	},
 });

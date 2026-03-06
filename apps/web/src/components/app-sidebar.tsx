@@ -10,6 +10,7 @@ import {
 	useSidebar,
 } from "./ui/sidebar";
 import { useAuth } from "@/lib/auth-client";
+import { useConvexUser } from "@/lib/convex-user";
 import { convexClient } from "@/lib/convex";
 import { useProviderStore } from "@/stores/provider";
 import { useChatTitleStore } from "@/stores/chat-title";
@@ -34,6 +35,7 @@ export function AppSidebar({
 	...props
 }: React.ComponentProps<typeof Sidebar>) {
 	const { user } = useAuth();
+	const { convexUser, convexUserId, isLoading: isConvexUserLoading } = useConvexUser();
 	const { open, isMobile, setOpen, setOpenMobile } = useSidebar();
 	const navigate = useNavigate();
 	const activeProvider = useProviderStore((s) => s.activeProvider);
@@ -50,14 +52,9 @@ export function AppSidebar({
 		// Not on a chat page
 	}
 
-	const convexUser = useQuery(
-		api.users.getByExternalId,
-		convexClient && user?.id ? { externalId: user.id } : "skip",
-	);
-
 	const chatsResult = useQuery(
 		api.chats.list,
-		convexClient && convexUser?._id ? { userId: convexUser._id } : "skip",
+		convexClient && convexUserId ? { userId: convexUserId } : "skip",
 	);
 
 	const cachedChatsRef = useRef<Array<ChatItem> | null>(null);
@@ -94,7 +91,7 @@ export function AppSidebar({
 	const hasCachedChats = chats.length > 0;
 	const isLoadingChats =
 		user?.id && !hasCachedChats
-			? convexUser === undefined || chatsResult === undefined
+			? isConvexUserLoading || chatsResult === undefined
 			: false;
 
 	const dayKey = new Date().toDateString();

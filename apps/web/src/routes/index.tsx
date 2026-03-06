@@ -1,13 +1,19 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/auth-client";
 import { Button } from "../components/ui/button";
-import { ChatInterface } from "../components/chat";
 import { convexClient } from "../lib/convex";
 
 export const Route = createFileRoute('/')({
+  head: () => ({
+    links: [{ rel: "canonical", href: "https://osschat.dev/" }],
+  }),
   component: HomePage,
 })
+
+const ChatInterface = lazy(() =>
+  import("../components/chat").then((module) => ({ default: module.ChatInterface })),
+)
 
 const GAP = 2
 
@@ -225,18 +231,29 @@ function HomePage() {
     const scriptId = 'autochangelog-in-app';
     if (document.getElementById(scriptId)) return;
 
-    const script = document.createElement('script');
-    script.id = scriptId;
-    script.src = 'https://autochangelog.com/embed/tryosschat/osschat/in-app.js';
-    script.integrity = 'sha384-pGN+jOtBiEl4BrWgwUVn1ffGM55mkhVcR4LZOshOVlknriOioc/SalkP6dpwpXJ7';
-    script.crossOrigin = 'anonymous';
-    document.body.appendChild(script);
+    const appendScript = () => {
+      if (document.getElementById(scriptId)) return;
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.src = 'https://autochangelog.com/embed/tryosschat/osschat/in-app.js';
+      script.integrity = 'sha384-pGN+jOtBiEl4BrWgwUVn1ffGM55mkhVcR4LZOshOVlknriOioc/SalkP6dpwpXJ7';
+      script.crossOrigin = 'anonymous';
+      document.body.appendChild(script);
+    };
 
+    const requestIdle = window.requestIdleCallback;
+    if (typeof requestIdle === "function") {
+      const idleId = requestIdle(appendScript, { timeout: 2500 });
+      return () => {
+        window.cancelIdleCallback?.(idleId);
+        document.getElementById(scriptId)?.remove();
+      };
+    }
+
+    const timeoutId = window.setTimeout(appendScript, 1200);
     return () => {
-      const existingScript = document.getElementById(scriptId);
-      if (existingScript) {
-        existingScript.remove();
-      }
+      window.clearTimeout(timeoutId);
+      document.getElementById(scriptId)?.remove();
     };
   }, [isAuthenticated]);
 
@@ -248,5 +265,9 @@ function HomePage() {
     return <LandingPage />
   }
 
-  return <ChatInterface />
+  return (
+    <Suspense fallback={<div className="flex h-full bg-background" />}>
+      <ChatInterface />
+    </Suspense>
+  )
 }

@@ -196,6 +196,10 @@
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background: color-mix(in oklch, var(--muted-foreground) 40%, transparent);
   }
+  .content-visibility-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 240px;
+  }
 }
 
 @keyframes shimmer {

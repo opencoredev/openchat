@@ -14,6 +14,37 @@ import {
 	type StreamingState,
 } from "./chat-utils";
 
+function getPartFingerprint(part: UIMessage["parts"][number]) {
+	if (part.type === "text" || part.type === "reasoning") {
+		return JSON.stringify([part.type, part.text, "state" in part ? part.state ?? "" : ""]);
+	}
+
+	if (part.type === "file") {
+		return JSON.stringify([part.type, part.filename, part.mediaType ?? "", part.url ?? ""]);
+	}
+
+	if (typeof part.type === "string" && part.type.startsWith("tool-")) {
+		return JSON.stringify(part);
+	}
+
+	return JSON.stringify(part);
+}
+
+function areMessagePartsEqual(
+	left: UIMessage["parts"],
+	right: UIMessage["parts"],
+) {
+	if (left.length !== right.length) return false;
+
+	for (let index = 0; index < left.length; index += 1) {
+		if (getPartFingerprint(left[index]) !== getPartFingerprint(right[index])) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 interface UseChatStreamingParams {
 	chatId: string | undefined;
 	convexUserId: Id<"users"> | undefined;
@@ -145,9 +176,7 @@ export function useChatStreaming({
 					chainOfThoughtParts: jobChainParts,
 					isStreaming: isJobRunning,
 				});
-				const previousHash = JSON.stringify(prev[idx].parts);
-				const nextHash = JSON.stringify(parts);
-				if (previousHash === nextHash) return prev;
+				if (areMessagePartsEqual(prev[idx].parts, parts)) return prev;
 
 				const updated = [...prev];
 				updated[idx] = {
