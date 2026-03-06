@@ -289,46 +289,29 @@ export const cleanupStaleJobs = mutation({
 	handler: async (ctx, args) => {
 		const userId = await requireAuthUserId(ctx, args.userId);
 		const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-		const [staleRunningJobs, stalePendingJobs, recentRunningJobs, recentPendingJobs] =
-			await Promise.all([
-			ctx.db
+		const collectActiveJobs = async (status: "running" | "pending") => {
+			const staleJobs = [];
+			let total = 0;
+
+			for await (const job of ctx.db
 				.query("streamJobs")
 				.withIndex("by_user_status_created", (q) =>
-					q
-						.eq("userId", userId)
-						.eq("status", "running")
-						.lt("createdAt", fiveMinutesAgo)
+					q.eq("userId", userId).eq("status", status)
 				)
-				.collect(),
-			ctx.db
-				.query("streamJobs")
-				.withIndex("by_user_status_created", (q) =>
-					q
-						.eq("userId", userId)
-						.eq("status", "pending")
-						.lt("createdAt", fiveMinutesAgo)
-				)
-				.collect(),
-			ctx.db
-				.query("streamJobs")
-				.withIndex("by_user_status_created", (q) =>
-					q
-						.eq("userId", userId)
-						.eq("status", "running")
-						.gte("createdAt", fiveMinutesAgo)
-				)
-				.collect(),
-			ctx.db
-				.query("streamJobs")
-				.withIndex("by_user_status_created", (q) =>
-					q
-						.eq("userId", userId)
-						.eq("status", "pending")
-						.gte("createdAt", fiveMinutesAgo)
-				)
-				.collect(),
+				.order("asc")) {
+				total++;
+				if (job.createdAt < fiveMinutesAgo) {
+					staleJobs.push(job);
+				}
+			}
+
+			return { staleJobs, total };
+		};
+		const [runningJobs, pendingJobs] = await Promise.all([
+			collectActiveJobs("running"),
+			collectActiveJobs("pending"),
 		]);
-		const staleJobs = [...staleRunningJobs, ...stalePendingJobs];
+		const staleJobs = [...runningJobs.staleJobs, ...pendingJobs.staleJobs];
 		let cleaned = 0;
 
 		for (const job of staleJobs) {
@@ -342,11 +325,7 @@ export const cleanupStaleJobs = mutation({
 
 		return {
 			cleaned,
-			total:
-				staleRunningJobs.length +
-				stalePendingJobs.length +
-				recentRunningJobs.length +
-				recentPendingJobs.length,
+			total: runningJobs.total + pendingJobs.total,
 		};
 	},
 });
