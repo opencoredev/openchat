@@ -7,10 +7,15 @@ import { routeTree } from './routeTree.gen'
 const DEFAULT_SENTRY_TUNNEL = '/api/monitoring'
 const DEFAULT_TRACES_SAMPLE_RATE = 0.1
 const NUMERIC_RATE_REGEX = /^(?:0(?:\.\d+)?|1(?:\.0+)?)$/
+const DEFAULT_LOG_LEVELS = ['warn', 'error'] as const
 
 function readClientDsn(): string | undefined {
   const dsn = import.meta.env.VITE_SENTRY_DSN?.trim()
   return dsn && dsn.length > 0 ? dsn : undefined
+}
+
+function readClientEnableLogs(): boolean {
+  return import.meta.env.VITE_SENTRY_ENABLE_LOGS !== 'false'
 }
 
 function readClientSendDefaultPii(): boolean {
@@ -47,15 +52,27 @@ export const getRouter = () => {
   const dsn = readClientDsn()
 
   if (!router.isServer && dsn && !Sentry.getClient()) {
+    const enableLogs = readClientEnableLogs()
+    const integrations = [
+      Sentry.tanstackRouterBrowserTracingIntegration(router),
+    ]
+
+    if (enableLogs) {
+      integrations.push(
+        Sentry.consoleLoggingIntegration({ levels: [...DEFAULT_LOG_LEVELS] }),
+      )
+    }
+
     Sentry.init({
       dsn,
       tunnel: import.meta.env.VITE_SENTRY_TUNNEL || DEFAULT_SENTRY_TUNNEL,
+      enableLogs,
       sendDefaultPii: readClientSendDefaultPii(),
       enabled: import.meta.env.MODE !== 'test',
       environment:
         import.meta.env.VITE_SENTRY_ENVIRONMENT ||
         (import.meta.env.PROD ? 'production' : import.meta.env.MODE),
-      integrations: [Sentry.tanstackRouterBrowserTracingIntegration(router)],
+      integrations,
       tracesSampleRate: readClientTracesSampleRate(),
     })
   }
