@@ -6,7 +6,7 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { Providers } from "../providers";
@@ -193,12 +193,17 @@ function AppShell() {
   usePostHogPageView(pathname);
 
   const { isAuthenticated, loading } = useAuth();
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   useGlobalShortcuts({ navigate, isAuthenticated, pathname });
 
   const showHelpButton = isAuthenticated && (pathname === "/" || pathname.startsWith("/c/"));
 
-  if (!convexClient || loading) {
+  if (loading || (isAuthenticated && (!isHydrated || !convexClient))) {
     return (
       <main id="main-content" className="flex h-screen w-full bg-sidebar" aria-busy="true">
         <div className="w-64 shrink-0 bg-sidebar" />

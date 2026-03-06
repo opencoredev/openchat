@@ -267,7 +267,8 @@ export const ChatMessageList = memo(function ChatMessageList({
 								<div
 									key={item.message.id}
 									className={cn(
-										"group content-visibility-auto",
+										"group",
+										!item.isCurrentlyStreaming && "content-visibility-auto",
 										editingMessageId === item.message.id &&
 											"ring-2 ring-primary/30 rounded-2xl",
 									)}

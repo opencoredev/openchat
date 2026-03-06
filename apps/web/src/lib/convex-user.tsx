@@ -26,7 +26,7 @@ interface ConvexUserContextValue {
 const ConvexUserContext = createContext<ConvexUserContextValue>({
   convexUser: undefined,
   convexUserId: undefined,
-  isLoading: false,
+  isLoading: true,
 });
 
 export function ConvexUserProvider({ children }: { children: React.ReactNode }) {
