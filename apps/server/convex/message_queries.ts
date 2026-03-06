@@ -123,6 +123,7 @@ export const getFirstUserMessage = query({
 			.withIndex("by_chat_role_not_deleted", (q) =>
 				q.eq("chatId", args.chatId).eq("role", "user").eq("deletedAt", undefined)
 			)
+			.order("asc")
 			.first();
 
 		return message?.content ?? null;

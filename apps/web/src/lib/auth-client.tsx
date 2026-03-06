@@ -124,7 +124,7 @@ export function StableAuthProvider({
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [hasServerSnapshot]);
+  }, []);
 
   useEffect(() => {
     if (fetchedRef.current) return;

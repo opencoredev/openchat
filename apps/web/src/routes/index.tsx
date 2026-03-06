@@ -230,7 +230,6 @@ function HomePage() {
 
     const scriptId = 'autochangelog-in-app';
     if (document.getElementById(scriptId)) return;
-    let appended = false;
 
     const appendScript = () => {
       if (document.getElementById(scriptId)) return;
@@ -240,7 +239,6 @@ function HomePage() {
       script.integrity = 'sha384-pGN+jOtBiEl4BrWgwUVn1ffGM55mkhVcR4LZOshOVlknriOioc/SalkP6dpwpXJ7';
       script.crossOrigin = 'anonymous';
       document.body.appendChild(script);
-      appended = true;
     };
 
     const requestIdle = window.requestIdleCallback;
@@ -248,18 +246,14 @@ function HomePage() {
       const idleId = requestIdle(appendScript, { timeout: 2500 });
       return () => {
         window.cancelIdleCallback?.(idleId);
-        if (appended) {
-          document.getElementById(scriptId)?.remove();
-        }
+        document.getElementById(scriptId)?.remove();
       };
     }
 
     const timeoutId = window.setTimeout(appendScript, 1200);
     return () => {
       window.clearTimeout(timeoutId);
-      if (appended) {
-        document.getElementById(scriptId)?.remove();
-      }
+      document.getElementById(scriptId)?.remove();
     };
   }, [isAuthenticated]);
 
