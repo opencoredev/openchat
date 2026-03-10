@@ -58,6 +58,7 @@ const SITE_URL = "https://osschat.dev";
 const SITE_NAME = "osschat";
 const SITE_DESCRIPTION = "Open source AI chat with 350+ models. Access GPT-4, Claude, Gemini, and more through one beautiful interface. Free tier available, no API key required.";
 const SITE_TAGLINE = "One interface. Every AI model.";
+const ONEDOLLARSTATS_SCRIPT_SRC = "https://assets.onedollarstats.com/stonks.js";
 
 export const Route = createRootRoute({
   beforeLoad: async () => {
@@ -158,10 +159,9 @@ export const Route = createRootRoute({
       },
       // Analytics
       {
-        src: "https://assets.onedollarstats.com/stonks.js",
+        src: ONEDOLLARSTATS_SCRIPT_SRC,
         defer: true,
         crossOrigin: "anonymous",
-        integrity: "sha384-JKNAwAZy8iZWcJrexWvQf3rNcosuH0th/rwqZoiM84ea7fMGTt2eq8ddZb//nd9H",
       },
     ],
   }),
