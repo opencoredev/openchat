@@ -59,9 +59,6 @@ const SITE_NAME = "osschat";
 const SITE_DESCRIPTION = "Open source AI chat with 350+ models. Access GPT-4, Claude, Gemini, and more through one beautiful interface. Free tier available, no API key required.";
 const SITE_TAGLINE = "One interface. Every AI model.";
 const ONEDOLLARSTATS_SCRIPT_SRC = "https://assets.onedollarstats.com/stonks.js";
-// Keep this in sync with the live vendor asset or browsers will block analytics entirely.
-const ONEDOLLARSTATS_SCRIPT_INTEGRITY =
-  "sha384-8AkCgndzrFlpPb3Fu+twAznnWYX8ahMtoXcKtdsQnvnnalD9DTQdnU6gM5wJO5Pd";
 
 export const Route = createRootRoute({
   beforeLoad: async () => {
@@ -165,7 +162,6 @@ export const Route = createRootRoute({
         src: ONEDOLLARSTATS_SCRIPT_SRC,
         defer: true,
         crossOrigin: "anonymous",
-        integrity: ONEDOLLARSTATS_SCRIPT_INTEGRITY,
       },
     ],
   }),
