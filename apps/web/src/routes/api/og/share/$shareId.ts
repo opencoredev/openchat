@@ -21,14 +21,16 @@ function splitLines(value: string, maxChars: number, maxLines: number) {
 			current = candidate;
 			continue;
 		}
-		if (current) {
-			if (lines.length === maxLines - 1) {
-				lines.push(candidate);
-				return lines.map((line) => line.trim()).slice(0, maxLines);
-			}
-			lines.push(current);
+		if (lines.length === maxLines - 1) {
+			lines.push(truncatePreview(candidate, maxChars));
+			return lines.map((line) => line.trim()).slice(0, maxLines);
 		}
-		current = word;
+		if (current) {
+			lines.push(current);
+			current = word;
+			continue;
+		}
+		lines.push(truncatePreview(word, maxChars));
 	}
 
 	if (lines.length < maxLines && current) {
@@ -81,7 +83,10 @@ function buildSvg({
 		56,
 		3,
 	);
-	const description = buildShareDescription({ title, firstUserPrompt, firstAssistantResponse });
+	const description = truncatePreview(
+		buildShareDescription({ title, firstUserPrompt, firstAssistantResponse }),
+		96,
+	);
 
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" fill="none" xmlns="http://www.w3.org/2000/svg">

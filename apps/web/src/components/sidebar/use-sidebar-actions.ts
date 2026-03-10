@@ -137,7 +137,7 @@ export function useSidebarActions({
 				setIsGeneratingShare(false);
 			}
 		},
-		[convexUser?._id],
+		[convexClient, convexUser?._id],
 	);
 
 	const handleCopyShareLink = useCallback(async () => {
@@ -190,7 +190,7 @@ export function useSidebarActions({
 		} finally {
 			setIsRevokingShare(false);
 		}
-	}, [convexUser?._id, shareChatId]);
+	}, [convexClient, convexUser?._id, shareChatId]);
 
 	const handleStartEdit = (chatId: string, title: string, event: React.MouseEvent) => {
 		event.preventDefault();

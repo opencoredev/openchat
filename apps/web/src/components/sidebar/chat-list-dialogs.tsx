@@ -109,6 +109,11 @@ export function ShareChatDialog({
 	const canShare = Boolean(shareUrl) && !isGenerating;
 	const encodedUrl = encodeURIComponent(shareUrl);
 	const encodedTitle = encodeURIComponent(chatTitle || "Shared chat");
+	const getTargetIcon = (label: string) => {
+		if (label.includes("WhatsApp")) return <MessageCircleIcon className="size-4" />;
+		if (label.includes("Email")) return <MailIcon className="size-4" />;
+		return <Share2Icon className="size-4" />;
+	};
 
 	const targets = [
 		{
@@ -175,13 +180,7 @@ export function ShareChatDialog({
 									asChild
 								>
 									<a href={target.href} target="_blank" rel="noreferrer">
-										{target.label.includes("WhatsApp") ? (
-											<MessageCircleIcon className="size-4" />
-										) : target.label.includes("Email") ? (
-											<MailIcon className="size-4" />
-										) : (
-											<Share2Icon className="size-4" />
-										)}
+										{getTargetIcon(target.label)}
 										{target.label}
 									</a>
 								</Button>
@@ -193,13 +192,7 @@ export function ShareChatDialog({
 									className="justify-start gap-2"
 									disabled
 								>
-									{target.label.includes("WhatsApp") ? (
-										<MessageCircleIcon className="size-4" />
-									) : target.label.includes("Email") ? (
-										<MailIcon className="size-4" />
-									) : (
-										<Share2Icon className="size-4" />
-									)}
+									{getTargetIcon(target.label)}
 									{target.label}
 								</Button>
 							),
