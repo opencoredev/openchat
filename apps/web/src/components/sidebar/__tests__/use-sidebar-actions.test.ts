@@ -33,7 +33,7 @@ vi.mock("@server/convex/_generated/api", () => ({
 		},
 		messages: { getFirstUserMessage: "messages:getFirstUserMessage" },
 		chats: { remove: "chats:remove", removeBulk: "chats:removeBulk" },
-		chatShares: { createOrGet: "chatShares:createOrGet" },
+		chatShares: { createOrGet: "chatShares:createOrGet", revoke: "chatShares:revoke" },
 		users: { hasOpenRouterKey: "users:hasOpenRouterKey" },
 	},
 }));
@@ -77,6 +77,8 @@ afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
 	mockSelectedChatIds.clear();
+	delete (navigator as any).clipboard;
+	delete (navigator as any).share;
 });
 
 describe("useSidebarActions - initial state", () => {
@@ -219,6 +221,133 @@ describe("handleRenameFromMenu", () => {
 			result.current.handleRenameFromMenu();
 		});
 		expect(result.current.editingChatId).toBeNull();
+	});
+});
+
+describe("share handlers", () => {
+	it("handleShareFromMenu creates a share link", async () => {
+		vi.mocked(convexClient.mutation).mockResolvedValueOnce({ shareId: "share-123" } as any);
+
+		const { result } = renderHook(() => useSidebarActions(defaultParams));
+		await act(async () => {
+			await result.current.handleShareFromMenu("chat-1");
+		});
+
+		expect(vi.mocked(convexClient.mutation)).toHaveBeenCalledWith(
+			"chatShares:createOrGet",
+			expect.objectContaining({ chatId: "chat-1" }),
+		);
+		expect(result.current.shareUrl).toBe(`${window.location.origin}/share/share-123`);
+	});
+
+	it("handleShareFromMenu shows an error toast on failure", async () => {
+		vi.mocked(convexClient.mutation).mockRejectedValueOnce(new Error("boom"));
+		const { result } = renderHook(() => useSidebarActions(defaultParams));
+
+		await act(async () => {
+			await result.current.handleShareFromMenu("chat-1");
+		});
+
+		expect(vi.mocked(toast.error)).toHaveBeenCalledWith("Failed to create share link");
+	});
+
+	it("handleCopyShareLink writes to clipboard", async () => {
+		const writeText = vi.fn().mockResolvedValue(undefined);
+		Object.defineProperty(navigator, "clipboard", {
+			value: { writeText },
+			configurable: true,
+		});
+		vi.mocked(convexClient.mutation).mockResolvedValueOnce({ shareId: "share-123" } as any);
+
+		const { result } = renderHook(() => useSidebarActions(defaultParams));
+		await act(async () => {
+			await result.current.handleShareFromMenu("chat-1");
+		});
+		await act(async () => {
+			await result.current.handleCopyShareLink();
+		});
+
+		expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/share/share-123`);
+		expect(vi.mocked(toast.success)).toHaveBeenCalledWith("Share link copied");
+	});
+
+	it("handleCopyShareLink shows a manual-copy error when clipboard fails", async () => {
+		Object.defineProperty(navigator, "clipboard", {
+			value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
+			configurable: true,
+		});
+		vi.mocked(convexClient.mutation).mockResolvedValueOnce({ shareId: "share-123" } as any);
+
+		const { result } = renderHook(() => useSidebarActions(defaultParams));
+		await act(async () => {
+			await result.current.handleShareFromMenu("chat-1");
+		});
+		await act(async () => {
+			await result.current.handleCopyShareLink();
+		});
+
+		expect(vi.mocked(toast.error)).toHaveBeenCalledWith("Clipboard access failed. Copy the link manually.");
+	});
+
+	it("handleNativeShare calls navigator.share", async () => {
+		const share = vi.fn().mockResolvedValue(undefined);
+		Object.defineProperty(navigator, "share", {
+			value: share,
+			configurable: true,
+		});
+		vi.mocked(convexClient.mutation).mockResolvedValueOnce({ shareId: "share-123" } as any);
+
+		const { result } = renderHook(() => useSidebarActions(defaultParams));
+		await act(async () => {
+			await result.current.handleShareFromMenu("chat-1");
+		});
+		await act(async () => {
+			await result.current.handleNativeShare();
+		});
+
+		expect(share).toHaveBeenCalledWith(
+			expect.objectContaining({ url: `${window.location.origin}/share/share-123` }),
+		);
+	});
+
+	it("handleNativeShare ignores AbortError", async () => {
+		const share = vi.fn().mockRejectedValue(new DOMException("aborted", "AbortError"));
+		Object.defineProperty(navigator, "share", {
+			value: share,
+			configurable: true,
+		});
+		vi.mocked(convexClient.mutation).mockResolvedValueOnce({ shareId: "share-123" } as any);
+
+		const { result } = renderHook(() => useSidebarActions(defaultParams));
+		await act(async () => {
+			await result.current.handleShareFromMenu("chat-1");
+		});
+		await act(async () => {
+			await result.current.handleNativeShare();
+		});
+
+		expect(vi.mocked(toast.error)).not.toHaveBeenCalledWith("Native share failed");
+	});
+
+	it("handleRevokeShare clears the link", async () => {
+		vi.mocked(convexClient.mutation)
+			.mockResolvedValueOnce({ shareId: "share-123" } as any)
+			.mockResolvedValueOnce({ revoked: true } as any);
+
+		const { result } = renderHook(() => useSidebarActions(defaultParams));
+		await act(async () => {
+			await result.current.handleShareFromMenu("chat-1");
+		});
+		await act(async () => {
+			await result.current.handleRevokeShare();
+		});
+
+		expect(vi.mocked(convexClient.mutation)).toHaveBeenLastCalledWith(
+			"chatShares:revoke",
+			expect.objectContaining({ chatId: "chat-1" }),
+		);
+		expect(result.current.shareUrl).toBe("");
+		expect(vi.mocked(toast.success)).toHaveBeenCalledWith("Share link revoked");
 	});
 });
 

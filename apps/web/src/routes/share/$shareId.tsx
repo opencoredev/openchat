@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { api } from "@server/convex/_generated/api";
 import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
@@ -9,7 +8,6 @@ import { getConvexServerClient } from "@/lib/convex-server";
 import { buildShareDescription } from "@/lib/share-preview";
 
 const FALLBACK_ORIGIN = "https://osschat.dev";
-const chatSharesApi = (api as any).chatShares;
 
 type LoaderData = {
 	origin: string;
@@ -32,17 +30,13 @@ type LoaderData = {
 const getSharedChatPageData = createServerFn({ method: "GET" })
 	.validator((input: { shareId: string }) => input)
 	.handler(async ({ data }): Promise<LoaderData> => {
-		const request = getRequest();
-		const host =
-			request.headers.get("x-forwarded-host") ||
-			request.headers.get("host");
-		const proto =
-			request.headers.get("x-forwarded-proto") ||
-			(host?.includes("localhost") ? "http" : "https");
-		const origin = host ? `${proto}://${host}` : FALLBACK_ORIGIN;
+		const origin =
+			process.env.VITE_APP_URL ||
+			(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ||
+			FALLBACK_ORIGIN;
 
 		const client = getConvexServerClient();
-		const shared = await client.query(chatSharesApi.getPublicByShareId, {
+		const shared = await client.query(api.chatShares.getPublicByShareId, {
 			shareId: data.shareId,
 		});
 

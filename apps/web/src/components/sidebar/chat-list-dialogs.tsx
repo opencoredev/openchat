@@ -1,4 +1,12 @@
-import { CopyIcon, MailIcon, MessageCircleIcon, PencilIcon, Share2Icon, SparklesIcon, Trash2Icon } from "lucide-react";
+import {
+	CopyIcon,
+	MailIcon,
+	MessageCircleIcon,
+	PencilIcon,
+	Share2Icon,
+	SparklesIcon,
+	Trash2Icon,
+} from "lucide-react";
 import { Button } from "../ui/button";
 import {
 	AlertDialog,
@@ -79,9 +87,11 @@ export interface ShareChatDialogProps {
 	chatTitle: string;
 	shareUrl: string;
 	isGenerating: boolean;
+	isRevoking: boolean;
 	canNativeShare: boolean;
 	onCopyLink: () => Promise<void>;
 	onNativeShare: () => Promise<void>;
+	onRevokeShare: () => Promise<void>;
 }
 
 export function ShareChatDialog({
@@ -90,10 +100,13 @@ export function ShareChatDialog({
 	chatTitle,
 	shareUrl,
 	isGenerating,
+	isRevoking,
 	canNativeShare,
 	onCopyLink,
 	onNativeShare,
+	onRevokeShare,
 }: ShareChatDialogProps) {
+	const canShare = Boolean(shareUrl) && !isGenerating;
 	const encodedUrl = encodeURIComponent(shareUrl);
 	const encodedTitle = encodeURIComponent(chatTitle || "Shared chat");
 
@@ -132,7 +145,7 @@ export function ShareChatDialog({
 							type="button"
 							variant="default"
 							className="justify-start gap-2"
-							disabled={isGenerating || !shareUrl}
+							disabled={!canShare}
 							onClick={() => {
 								void onCopyLink();
 							}}
@@ -144,7 +157,7 @@ export function ShareChatDialog({
 							type="button"
 							variant="outline"
 							className="justify-start gap-2"
-							disabled={isGenerating || !shareUrl || !canNativeShare}
+							disabled={!canShare || !canNativeShare}
 							onClick={() => {
 								void onNativeShare();
 							}}
@@ -152,16 +165,34 @@ export function ShareChatDialog({
 							<Share2Icon className="size-4" />
 							Native share
 						</Button>
-						{targets.map((target) => (
-							<Button
-								key={target.label}
-								type="button"
-								variant="outline"
-								className="justify-start gap-2"
-								disabled={isGenerating || !shareUrl}
-								asChild
-							>
-								<a href={target.href} target="_blank" rel="noreferrer">
+						{targets.map((target) =>
+							canShare ? (
+								<Button
+									key={target.label}
+									type="button"
+									variant="outline"
+									className="justify-start gap-2"
+									asChild
+								>
+									<a href={target.href} target="_blank" rel="noreferrer">
+										{target.label.includes("WhatsApp") ? (
+											<MessageCircleIcon className="size-4" />
+										) : target.label.includes("Email") ? (
+											<MailIcon className="size-4" />
+										) : (
+											<Share2Icon className="size-4" />
+										)}
+										{target.label}
+									</a>
+								</Button>
+							) : (
+								<Button
+									key={target.label}
+									type="button"
+									variant="outline"
+									className="justify-start gap-2"
+									disabled
+								>
 									{target.label.includes("WhatsApp") ? (
 										<MessageCircleIcon className="size-4" />
 									) : target.label.includes("Email") ? (
@@ -170,13 +201,23 @@ export function ShareChatDialog({
 										<Share2Icon className="size-4" />
 									)}
 									{target.label}
-								</a>
-							</Button>
-						))}
+								</Button>
+							),
+						)}
 					</div>
 				</div>
 
 				<AlertDialogFooter>
+					<Button
+						type="button"
+						variant="destructive"
+						disabled={!shareUrl || isGenerating || isRevoking}
+						onClick={() => {
+							void onRevokeShare();
+						}}
+					>
+						{isRevoking ? "Stopping share..." : "Stop sharing"}
+					</Button>
 					<AlertDialogCancel>Close</AlertDialogCancel>
 				</AlertDialogFooter>
 			</AlertDialogContent>

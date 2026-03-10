@@ -9,7 +9,6 @@ import {
 
 const WIDTH = 1200;
 const HEIGHT = 630;
-const chatSharesApi = (api as any).chatShares;
 
 function splitLines(value: string, maxChars: number, maxLines: number) {
 	const words = value.split(/\s+/);
@@ -23,10 +22,13 @@ function splitLines(value: string, maxChars: number, maxLines: number) {
 			continue;
 		}
 		if (current) {
+			if (lines.length === maxLines - 1) {
+				lines.push(candidate);
+				return lines.map((line) => line.trim()).slice(0, maxLines);
+			}
 			lines.push(current);
 		}
 		current = word;
-		if (lines.length >= maxLines) break;
 	}
 
 	if (lines.length < maxLines && current) {
@@ -110,7 +112,7 @@ export const Route = createFileRoute("/api/og/share/$shareId")({
 		handlers: {
 			GET: async ({ params }) => {
 				const client = getConvexServerClient();
-				const preview = await client.query(chatSharesApi.getPreviewByShareId, {
+				const preview = await client.query(api.chatShares.getPreviewByShareId, {
 					shareId: params.shareId,
 				});
 

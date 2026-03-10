@@ -120,6 +120,7 @@ export function AppSidebar({
 		showShareDialog,
 		setShowShareDialog,
 		isGeneratingShare,
+		isRevokingShare,
 		shareChatId,
 		shareUrl,
 		editingChatId,
@@ -134,6 +135,7 @@ export function AppSidebar({
 		handleShareFromMenu,
 		handleCopyShareLink,
 		handleNativeShare,
+		handleRevokeShare,
 		handleStartEdit,
 		handleCancelEdit,
 		handleSubmitEdit,
@@ -295,9 +297,11 @@ export function AppSidebar({
 				chatTitle={chats.find((chat) => chat._id === shareChatId)?.title ?? "Shared chat"}
 				shareUrl={shareUrl}
 				isGenerating={isGeneratingShare}
+				isRevoking={isRevokingShare}
 				canNativeShare={typeof navigator !== "undefined" && "share" in navigator}
 				onCopyLink={handleCopyShareLink}
 				onNativeShare={handleNativeShare}
+				onRevokeShare={handleRevokeShare}
 			/>
 		</>
 	);

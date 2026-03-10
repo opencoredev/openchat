@@ -14,6 +14,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ShareShareIdRouteImport } from './routes/share/$shareId'
 import { Route as OpenrouterCallbackRouteImport } from './routes/openrouter/callback'
 import { Route as CChatIdRouteImport } from './routes/c/$chatId'
 import { Route as AuthSignInRouteImport } from './routes/auth/sign-in'
@@ -23,7 +24,6 @@ import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiTypingRouteImport } from './routes/api/typing'
 import { Route as ApiOpenrouterKeyRouteImport } from './routes/api/openrouter-key'
 import { Route as ApiModelsRouteImport } from './routes/api/models'
-import { Route as ShareShareIdRouteImport } from './routes/share/$shareId'
 import { Route as ApiWorkflowGenerateTitleRouteImport } from './routes/api/workflow/generate-title'
 import { Route as ApiWorkflowExportChatRouteImport } from './routes/api/workflow/export-chat'
 import { Route as ApiWorkflowDeleteAccountRouteImport } from './routes/api/workflow/delete-account'
@@ -53,6 +53,11 @@ const AboutRoute = AboutRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShareShareIdRoute = ShareShareIdRouteImport.update({
+  id: '/share/$shareId',
+  path: '/share/$shareId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OpenrouterCallbackRoute = OpenrouterCallbackRouteImport.update({
@@ -98,11 +103,6 @@ const ApiOpenrouterKeyRoute = ApiOpenrouterKeyRouteImport.update({
 const ApiModelsRoute = ApiModelsRouteImport.update({
   id: '/api/models',
   path: '/api/models',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ShareShareIdRoute = ShareShareIdRouteImport.update({
-  id: '/share/$shareId',
-  path: '/share/$shareId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiWorkflowGenerateTitleRoute =
@@ -329,6 +329,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/share/$shareId': {
+      id: '/share/$shareId'
+      path: '/share/$shareId'
+      fullPath: '/share/$shareId'
+      preLoaderRoute: typeof ShareShareIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/openrouter/callback': {
       id: '/openrouter/callback'
       path: '/openrouter/callback'
@@ -341,13 +348,6 @@ declare module '@tanstack/react-router' {
       path: '/c/$chatId'
       fullPath: '/c/$chatId'
       preLoaderRoute: typeof CChatIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/share/$shareId': {
-      id: '/share/$shareId'
-      path: '/share/$shareId'
-      fullPath: '/share/$shareId'
-      preLoaderRoute: typeof ShareShareIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/sign-in': {

@@ -14,11 +14,16 @@ vi.mock("lucide-react", () => ({
 }));
 
 vi.mock("@/components/ui/button", () => ({
-	Button: ({ children, onClick, disabled, variant, size, className }: any) => (
-		<button onClick={onClick} disabled={disabled} className={className}>
-			{children}
-		</button>
-	),
+	Button: ({ children, onClick, disabled, className, asChild }: any) => {
+		if (asChild && children) {
+			return children;
+		}
+		return (
+			<button onClick={onClick} disabled={disabled} className={className}>
+				{children}
+			</button>
+		);
+	},
 }));
 
 vi.mock("@/components/ui/alert-dialog", () => ({
@@ -48,6 +53,7 @@ import {
 	DeleteChatDialog,
 	BulkDeleteDialog,
 	BulkSelectionBar,
+	ShareChatDialog,
 } from "../chat-list-dialogs";
 
 afterEach(() => {
@@ -247,6 +253,63 @@ describe("DeleteChatDialog", () => {
 		);
 		fireEvent.keyDown(screen.getByTestId("alert-dialog-content"), { key: "Enter" });
 		expect(onDelete).toHaveBeenCalledWith("chat-1");
+	});
+});
+
+describe("ShareChatDialog", () => {
+	const baseProps = {
+		open: true,
+		onOpenChange: vi.fn(),
+		chatTitle: "Shared Chat",
+		shareUrl: "https://osschat.dev/share/abc123",
+		isGenerating: false,
+		isRevoking: false,
+		canNativeShare: true,
+		onCopyLink: vi.fn().mockResolvedValue(undefined),
+		onNativeShare: vi.fn().mockResolvedValue(undefined),
+		onRevokeShare: vi.fn().mockResolvedValue(undefined),
+	};
+
+	it("renders the share actions", () => {
+		render(<ShareChatDialog {...baseProps} />);
+		expect(screen.getByText("Copy link")).toBeDefined();
+		expect(screen.getByText("Native share")).toBeDefined();
+		expect(screen.getByText("Share to X")).toBeDefined();
+		expect(screen.getByText("Share to WhatsApp")).toBeDefined();
+		expect(screen.getByText("Share via Email")).toBeDefined();
+		expect(screen.getByText("Stop sharing")).toBeDefined();
+	});
+
+	it("shows the generating state", () => {
+		render(<ShareChatDialog {...baseProps} isGenerating />);
+		expect(screen.getByText("Generating share link...")).toBeDefined();
+		expect(screen.getByText("Copy link").hasAttribute("disabled")).toBe(true);
+	});
+
+	it("calls the copy handler", () => {
+		const onCopyLink = vi.fn().mockResolvedValue(undefined);
+		render(<ShareChatDialog {...baseProps} onCopyLink={onCopyLink} />);
+		fireEvent.click(screen.getByText("Copy link"));
+		expect(onCopyLink).toHaveBeenCalled();
+	});
+
+	it("calls the native share handler", () => {
+		const onNativeShare = vi.fn().mockResolvedValue(undefined);
+		render(<ShareChatDialog {...baseProps} onNativeShare={onNativeShare} />);
+		fireEvent.click(screen.getByText("Native share"));
+		expect(onNativeShare).toHaveBeenCalled();
+	});
+
+	it("calls the revoke handler", () => {
+		const onRevokeShare = vi.fn().mockResolvedValue(undefined);
+		render(<ShareChatDialog {...baseProps} onRevokeShare={onRevokeShare} />);
+		fireEvent.click(screen.getByText("Stop sharing"));
+		expect(onRevokeShare).toHaveBeenCalled();
+	});
+
+	it("disables native share when unavailable", () => {
+		render(<ShareChatDialog {...baseProps} canNativeShare={false} />);
+		expect(screen.getByText("Native share").hasAttribute("disabled")).toBe(true);
 	});
 });
 

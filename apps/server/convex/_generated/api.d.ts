@@ -13,6 +13,7 @@ import type * as backgroundStream from "../backgroundStream.js";
 import type * as benchmarks from "../benchmarks.js";
 import type * as chatExport from "../chatExport.js";
 import type * as chatFork from "../chatFork.js";
+import type * as chatShares from "../chatShares.js";
 import type * as chatTitle from "../chatTitle.js";
 import type * as chatTitleGeneration from "../chatTitleGeneration.js";
 import type * as chats from "../chats.js";
@@ -76,6 +77,7 @@ declare const fullApi: ApiFromModules<{
   benchmarks: typeof benchmarks;
   chatExport: typeof chatExport;
   chatFork: typeof chatFork;
+  chatShares: typeof chatShares;
   chatTitle: typeof chatTitle;
   chatTitleGeneration: typeof chatTitleGeneration;
   chats: typeof chats;
