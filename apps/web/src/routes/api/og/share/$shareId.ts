@@ -27,7 +27,7 @@ function splitLines(value: string, maxChars: number, maxLines: number) {
 		}
 		if (current) {
 			lines.push(current);
-			current = word;
+			current = truncatePreview(word, maxChars);
 			continue;
 		}
 		lines.push(truncatePreview(word, maxChars));

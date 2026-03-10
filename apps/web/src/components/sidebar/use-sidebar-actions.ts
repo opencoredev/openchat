@@ -60,6 +60,7 @@ export function useSidebarActions({
 	const deselectAll = useBulkSelectionStore((s) => s.deselectAll);
 	const getSelectedChatIds = useBulkSelectionStore((s) => s.getSelectedChatIds);
 	const selectionAnchorRef = useRef<string | null>(null);
+	const shareRequestIdRef = useRef(0);
 
 	const deleteChat = useMemo(
 		() => (deleteChatId ? chats.find((chat) => chat._id === deleteChatId) : null),
@@ -116,6 +117,8 @@ export function useSidebarActions({
 	const handleShareFromMenu = useCallback(
 		async (chatId: string) => {
 			if (!convexClient || !convexUser?._id) return;
+			const requestId = shareRequestIdRef.current + 1;
+			shareRequestIdRef.current = requestId;
 
 			setContextMenu(null);
 			setShareChatId(chatId);
@@ -125,8 +128,8 @@ export function useSidebarActions({
 			try {
 				const result = await convexClient.mutation(api.chatShares.createOrGet, {
 					chatId: chatId as Id<"chats">,
-					userId: convexUser._id,
 				});
+				if (shareRequestIdRef.current !== requestId) return;
 				if (typeof window !== "undefined") {
 					setShareUrl(`${window.location.origin}/share/${result.shareId}`);
 				}
@@ -134,7 +137,9 @@ export function useSidebarActions({
 				console.warn("[Chat] Failed to create share link:", error);
 				toast.error("Failed to create share link");
 			} finally {
-				setIsGeneratingShare(false);
+				if (shareRequestIdRef.current === requestId) {
+					setIsGeneratingShare(false);
+				}
 			}
 		},
 		[convexClient, convexUser?._id],
@@ -176,7 +181,6 @@ export function useSidebarActions({
 		try {
 			const result = await convexClient.mutation(api.chatShares.revoke, {
 				chatId: shareChatId as Id<"chats">,
-				userId: convexUser._id,
 			});
 			if (!result.revoked) {
 				toast.error("Share link is no longer active");

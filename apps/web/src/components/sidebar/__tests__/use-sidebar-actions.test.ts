@@ -251,6 +251,41 @@ describe("share handlers", () => {
 		expect(vi.mocked(toast.error)).toHaveBeenCalledWith("Failed to create share link");
 	});
 
+	it("handleShareFromMenu ignores stale share responses", async () => {
+		let resolveFirst: ((value: { shareId: string }) => void) | undefined;
+		let resolveSecond: ((value: { shareId: string }) => void) | undefined;
+
+		vi.mocked(convexClient.mutation)
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveFirst = resolve as (value: { shareId: string }) => void;
+					}),
+			)
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveSecond = resolve as (value: { shareId: string }) => void;
+					}),
+			);
+
+		const { result } = renderHook(() => useSidebarActions(defaultParams));
+		await act(async () => {
+			void result.current.handleShareFromMenu("chat-1");
+			void result.current.handleShareFromMenu("chat-2");
+		});
+
+		await act(async () => {
+			resolveFirst?.({ shareId: "share-old" });
+		});
+		expect(result.current.shareUrl).toBe("");
+
+		await act(async () => {
+			resolveSecond?.({ shareId: "share-new" });
+		});
+		expect(result.current.shareUrl).toBe(`${window.location.origin}/share/share-new`);
+	});
+
 	it("handleCopyShareLink writes to clipboard", async () => {
 		const writeText = vi.fn().mockResolvedValue(undefined);
 		Object.defineProperty(navigator, "clipboard", {

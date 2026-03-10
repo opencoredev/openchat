@@ -98,11 +98,10 @@ function buildPreview(messages: Array<{ role: string; content: string }>) {
 export const getByChat = query({
 	args: {
 		chatId: v.id("chats"),
-		userId: v.id("users"),
 	},
 	returns: v.union(shareDoc, v.null()),
 	handler: async (ctx, args) => {
-		const userId = await requireAuthUserId(ctx, args.userId);
+		const userId = await requireAuthUserId(ctx);
 		const chat = await assertOwnsChat(ctx, args.chatId, userId);
 		if (!chat) return null;
 		return getActiveShareForChat(ctx, userId, args.chatId);
@@ -112,14 +111,13 @@ export const getByChat = query({
 export const createOrGet = mutation({
 	args: {
 		chatId: v.id("chats"),
-		userId: v.id("users"),
 	},
 	returns: v.object({
 		shareId: v.string(),
 		createdAt: v.number(),
 	}),
 	handler: async (ctx, args) => {
-		const userId = await requireAuthUserId(ctx, args.userId);
+		const userId = await requireAuthUserId(ctx);
 		const chat = await assertOwnsChat(ctx, args.chatId, userId);
 		if (!chat) {
 			throw new Error("Chat not found");
@@ -154,11 +152,10 @@ export const createOrGet = mutation({
 export const revoke = mutation({
 	args: {
 		chatId: v.id("chats"),
-		userId: v.id("users"),
 	},
 	returns: v.object({ revoked: v.boolean() }),
 	handler: async (ctx, args) => {
-		const userId = await requireAuthUserId(ctx, args.userId);
+		const userId = await requireAuthUserId(ctx);
 		const chat = await assertOwnsChat(ctx, args.chatId, userId);
 		if (!chat) return { revoked: false };
 
