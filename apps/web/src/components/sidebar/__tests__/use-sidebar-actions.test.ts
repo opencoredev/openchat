@@ -33,6 +33,7 @@ vi.mock("@server/convex/_generated/api", () => ({
 		},
 		messages: { getFirstUserMessage: "messages:getFirstUserMessage" },
 		chats: { remove: "chats:remove", removeBulk: "chats:removeBulk" },
+		chatShares: { createOrGet: "chatShares:createOrGet" },
 		users: { hasOpenRouterKey: "users:hasOpenRouterKey" },
 	},
 }));

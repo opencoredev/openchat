@@ -22,6 +22,7 @@ import {
 	BulkSelectionBar,
 	ChatContextMenu,
 	DeleteChatDialog,
+	ShareChatDialog,
 } from "./sidebar/chat-list-dialogs";
 import { SidebarUser } from "./sidebar/sidebar-user";
 import { useSidebarActions } from "./sidebar/use-sidebar-actions";
@@ -116,6 +117,11 @@ export function AppSidebar({
 		showBulkDeleteDialog,
 		setShowBulkDeleteDialog,
 		isBulkDeleting,
+		showShareDialog,
+		setShowShareDialog,
+		isGeneratingShare,
+		shareChatId,
+		shareUrl,
 		editingChatId,
 		editValue,
 		setEditValue,
@@ -125,6 +131,9 @@ export function AppSidebar({
 		handleChatContextMenu,
 		handleQuickDelete,
 		handleRenameFromMenu,
+		handleShareFromMenu,
+		handleCopyShareLink,
+		handleNativeShare,
 		handleStartEdit,
 		handleCancelEdit,
 		handleSubmitEdit,
@@ -255,6 +264,7 @@ export function AppSidebar({
 				contextMenu={contextMenu}
 				contextMenuElementRef={contextMenuElementRef}
 				onRegenerateTitle={handleRegenerateTitle}
+				onShareFromMenu={handleShareFromMenu}
 				onRenameFromMenu={handleRenameFromMenu}
 				onDeleteFromMenu={handleDeleteFromMenu}
 			/>
@@ -275,6 +285,19 @@ export function AppSidebar({
 				}}
 				selectedCount={selectedChatIds.size}
 				onBulkDelete={handleBulkDelete}
+			/>
+
+			<ShareChatDialog
+				open={showShareDialog}
+				onOpenChange={(isOpen) => {
+					setShowShareDialog(isOpen);
+				}}
+				chatTitle={chats.find((chat) => chat._id === shareChatId)?.title ?? "Shared chat"}
+				shareUrl={shareUrl}
+				isGenerating={isGeneratingShare}
+				canNativeShare={typeof navigator !== "undefined" && "share" in navigator}
+				onCopyLink={handleCopyShareLink}
+				onNativeShare={handleNativeShare}
 			/>
 		</>
 	);

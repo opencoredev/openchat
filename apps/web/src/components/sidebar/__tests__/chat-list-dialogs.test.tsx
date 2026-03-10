@@ -4,7 +4,11 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createRef } from "react";
 
 vi.mock("lucide-react", () => ({
+	CopyIcon: () => <span data-testid="copy-icon" />,
+	MailIcon: () => <span data-testid="mail-icon" />,
+	MessageCircleIcon: () => <span data-testid="message-circle-icon" />,
 	PencilIcon: () => <span data-testid="pencil-icon" />,
+	Share2Icon: () => <span data-testid="share-icon" />,
 	SparklesIcon: () => <span data-testid="sparkles-icon" />,
 	Trash2Icon: () => <span data-testid="trash-icon" />,
 }));
@@ -55,6 +59,7 @@ describe("ChatContextMenu", () => {
 	const baseProps = {
 		contextMenuElementRef: createRef<HTMLDivElement>(),
 		onRegenerateTitle: vi.fn(),
+		onShareFromMenu: vi.fn(),
 		onRenameFromMenu: vi.fn(),
 		onDeleteFromMenu: vi.fn(),
 	};
@@ -74,6 +79,7 @@ describe("ChatContextMenu", () => {
 			/>,
 		);
 		expect(screen.getByText("Regenerate name")).toBeDefined();
+		expect(screen.getByText("Share")).toBeDefined();
 		expect(screen.getByText("Rename")).toBeDefined();
 		expect(screen.getByText("Delete chat")).toBeDefined();
 	});
@@ -102,6 +108,19 @@ describe("ChatContextMenu", () => {
 		);
 		fireEvent.click(screen.getByText("Rename"));
 		expect(onRenameFromMenu).toHaveBeenCalled();
+	});
+
+	it("calls onShareFromMenu when share button is clicked", () => {
+		const onShareFromMenu = vi.fn();
+		render(
+			<ChatContextMenu
+				{...baseProps}
+				contextMenu={{ chatId: "chat-1", x: 100, y: 200 }}
+				onShareFromMenu={onShareFromMenu}
+			/>,
+		);
+		fireEvent.click(screen.getByText("Share"));
+		expect(onShareFromMenu).toHaveBeenCalledWith("chat-1");
 	});
 
 	it("calls onDeleteFromMenu when delete button is clicked", () => {

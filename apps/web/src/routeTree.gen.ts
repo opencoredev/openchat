@@ -23,10 +23,12 @@ import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiTypingRouteImport } from './routes/api/typing'
 import { Route as ApiOpenrouterKeyRouteImport } from './routes/api/openrouter-key'
 import { Route as ApiModelsRouteImport } from './routes/api/models'
+import { Route as ShareShareIdRouteImport } from './routes/share/$shareId'
 import { Route as ApiWorkflowGenerateTitleRouteImport } from './routes/api/workflow/generate-title'
 import { Route as ApiWorkflowExportChatRouteImport } from './routes/api/workflow/export-chat'
 import { Route as ApiWorkflowDeleteAccountRouteImport } from './routes/api/workflow/delete-account'
 import { Route as ApiWorkflowCleanupRouteImport } from './routes/api/workflow/cleanup'
+import { Route as ApiOgShareShareIdRouteImport } from './routes/api/og/share/$shareId'
 
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
@@ -98,6 +100,11 @@ const ApiModelsRoute = ApiModelsRouteImport.update({
   path: '/api/models',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ShareShareIdRoute = ShareShareIdRouteImport.update({
+  id: '/share/$shareId',
+  path: '/share/$shareId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiWorkflowGenerateTitleRoute =
   ApiWorkflowGenerateTitleRouteImport.update({
     id: '/api/workflow/generate-title',
@@ -120,6 +127,11 @@ const ApiWorkflowCleanupRoute = ApiWorkflowCleanupRouteImport.update({
   path: '/api/workflow/cleanup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiOgShareShareIdRoute = ApiOgShareShareIdRouteImport.update({
+  id: '/api/og/share/$shareId',
+  path: '/api/og/share/$shareId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -136,10 +148,12 @@ export interface FileRoutesByFullPath {
   '/auth/sign-in': typeof AuthSignInRoute
   '/c/$chatId': typeof CChatIdRoute
   '/openrouter/callback': typeof OpenrouterCallbackRoute
+  '/share/$shareId': typeof ShareShareIdRoute
   '/api/workflow/cleanup': typeof ApiWorkflowCleanupRoute
   '/api/workflow/delete-account': typeof ApiWorkflowDeleteAccountRoute
   '/api/workflow/export-chat': typeof ApiWorkflowExportChatRoute
   '/api/workflow/generate-title': typeof ApiWorkflowGenerateTitleRoute
+  '/api/og/share/$shareId': typeof ApiOgShareShareIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -156,10 +170,12 @@ export interface FileRoutesByTo {
   '/auth/sign-in': typeof AuthSignInRoute
   '/c/$chatId': typeof CChatIdRoute
   '/openrouter/callback': typeof OpenrouterCallbackRoute
+  '/share/$shareId': typeof ShareShareIdRoute
   '/api/workflow/cleanup': typeof ApiWorkflowCleanupRoute
   '/api/workflow/delete-account': typeof ApiWorkflowDeleteAccountRoute
   '/api/workflow/export-chat': typeof ApiWorkflowExportChatRoute
   '/api/workflow/generate-title': typeof ApiWorkflowGenerateTitleRoute
+  '/api/og/share/$shareId': typeof ApiOgShareShareIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -177,10 +193,12 @@ export interface FileRoutesById {
   '/auth/sign-in': typeof AuthSignInRoute
   '/c/$chatId': typeof CChatIdRoute
   '/openrouter/callback': typeof OpenrouterCallbackRoute
+  '/share/$shareId': typeof ShareShareIdRoute
   '/api/workflow/cleanup': typeof ApiWorkflowCleanupRoute
   '/api/workflow/delete-account': typeof ApiWorkflowDeleteAccountRoute
   '/api/workflow/export-chat': typeof ApiWorkflowExportChatRoute
   '/api/workflow/generate-title': typeof ApiWorkflowGenerateTitleRoute
+  '/api/og/share/$shareId': typeof ApiOgShareShareIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -199,10 +217,12 @@ export interface FileRouteTypes {
     | '/auth/sign-in'
     | '/c/$chatId'
     | '/openrouter/callback'
+    | '/share/$shareId'
     | '/api/workflow/cleanup'
     | '/api/workflow/delete-account'
     | '/api/workflow/export-chat'
     | '/api/workflow/generate-title'
+    | '/api/og/share/$shareId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -219,10 +239,12 @@ export interface FileRouteTypes {
     | '/auth/sign-in'
     | '/c/$chatId'
     | '/openrouter/callback'
+    | '/share/$shareId'
     | '/api/workflow/cleanup'
     | '/api/workflow/delete-account'
     | '/api/workflow/export-chat'
     | '/api/workflow/generate-title'
+    | '/api/og/share/$shareId'
   id:
     | '__root__'
     | '/'
@@ -239,10 +261,12 @@ export interface FileRouteTypes {
     | '/auth/sign-in'
     | '/c/$chatId'
     | '/openrouter/callback'
+    | '/share/$shareId'
     | '/api/workflow/cleanup'
     | '/api/workflow/delete-account'
     | '/api/workflow/export-chat'
     | '/api/workflow/generate-title'
+    | '/api/og/share/$shareId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -260,10 +284,12 @@ export interface RootRouteChildren {
   AuthSignInRoute: typeof AuthSignInRoute
   CChatIdRoute: typeof CChatIdRoute
   OpenrouterCallbackRoute: typeof OpenrouterCallbackRoute
+  ShareShareIdRoute: typeof ShareShareIdRoute
   ApiWorkflowCleanupRoute: typeof ApiWorkflowCleanupRoute
   ApiWorkflowDeleteAccountRoute: typeof ApiWorkflowDeleteAccountRoute
   ApiWorkflowExportChatRoute: typeof ApiWorkflowExportChatRoute
   ApiWorkflowGenerateTitleRoute: typeof ApiWorkflowGenerateTitleRoute
+  ApiOgShareShareIdRoute: typeof ApiOgShareShareIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -315,6 +341,13 @@ declare module '@tanstack/react-router' {
       path: '/c/$chatId'
       fullPath: '/c/$chatId'
       preLoaderRoute: typeof CChatIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/share/$shareId': {
+      id: '/share/$shareId'
+      path: '/share/$shareId'
+      fullPath: '/share/$shareId'
+      preLoaderRoute: typeof ShareShareIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/sign-in': {
@@ -394,6 +427,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiWorkflowCleanupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/og/share/$shareId': {
+      id: '/api/og/share/$shareId'
+      path: '/api/og/share/$shareId'
+      fullPath: '/api/og/share/$shareId'
+      preLoaderRoute: typeof ApiOgShareShareIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -412,10 +452,12 @@ const rootRouteChildren: RootRouteChildren = {
   AuthSignInRoute: AuthSignInRoute,
   CChatIdRoute: CChatIdRoute,
   OpenrouterCallbackRoute: OpenrouterCallbackRoute,
+  ShareShareIdRoute: ShareShareIdRoute,
   ApiWorkflowCleanupRoute: ApiWorkflowCleanupRoute,
   ApiWorkflowDeleteAccountRoute: ApiWorkflowDeleteAccountRoute,
   ApiWorkflowExportChatRoute: ApiWorkflowExportChatRoute,
   ApiWorkflowGenerateTitleRoute: ApiWorkflowGenerateTitleRoute,
+  ApiOgShareShareIdRoute: ApiOgShareShareIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
