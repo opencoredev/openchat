@@ -7,9 +7,6 @@ const mockNavigate = vi.fn();
 vi.mock("@tanstack/react-router", () => ({
 	useNavigate: () => mockNavigate,
 }));
-vi.mock("@/components/icons", () => ({
-	ChevronRightIcon: () => <span data-testid="chevron-right" />,
-}));
 
 const testUser = {
 	id: "user-1",
@@ -38,14 +35,9 @@ describe("SidebarUser", () => {
 		expect(container.firstChild).toBeNull();
 	});
 
-	it("renders user name when user is provided", () => {
+	it("renders an accessible settings button when user is provided", () => {
 		render(<SidebarUser user={testUser} isMobile={false} setOpen={vi.fn()} />);
-		expect(screen.getByText("Test User")).toBeTruthy();
-	});
-
-	it("renders 'Settings' text", () => {
-		render(<SidebarUser user={testUser} isMobile={false} setOpen={vi.fn()} />);
-		expect(screen.getByText("Settings")).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Open settings" })).toBeTruthy();
 	});
 
 	it("shows first letter of name when no image", () => {
@@ -65,16 +57,10 @@ describe("SidebarUser", () => {
 		expect(screen.getByText("U")).toBeTruthy();
 	});
 
-	it("shows 'User' fallback when name is null", () => {
-		const userNoName = { ...testUser, name: null };
-		render(<SidebarUser user={userNoName} isMobile={false} setOpen={vi.fn()} />);
-		expect(screen.getByText("User")).toBeTruthy();
-	});
-
 	it("navigates to /settings when button is clicked on desktop (isMobile=false)", () => {
 		const mockSetOpen = vi.fn();
 		render(<SidebarUser user={testUser} isMobile={false} setOpen={mockSetOpen} />);
-		fireEvent.click(screen.getByRole("button"));
+		fireEvent.click(screen.getByRole("button", { name: "Open settings" }));
 		expect(mockNavigate).toHaveBeenCalledWith({ to: "/settings" });
 		expect(mockSetOpen).not.toHaveBeenCalled();
 	});
@@ -82,7 +68,7 @@ describe("SidebarUser", () => {
 	it("calls setOpen(false) and navigates when clicked on mobile (lines 25-26)", () => {
 		const mockSetOpen = vi.fn();
 		render(<SidebarUser user={testUser} isMobile={true} setOpen={mockSetOpen} />);
-		fireEvent.click(screen.getByRole("button"));
+		fireEvent.click(screen.getByRole("button", { name: "Open settings" }));
 		expect(mockSetOpen).toHaveBeenCalledWith(false);
 		expect(mockNavigate).toHaveBeenCalledWith({ to: "/settings" });
 	});

@@ -17,6 +17,9 @@ export { isPreviewDeployment };
 
 type ProviderType = "osschat" | "openrouter";
 
+function normalizeProviderType(value: unknown): ProviderType {
+	return value === "openrouter" ? "openrouter" : "osschat";
+}
 
 interface ProviderState {
   // Active provider
@@ -59,7 +62,7 @@ function getTodayDate(): string {
 export const useProviderStore = create<ProviderState>()(
   devtools(
     persist(
-      (set, get) => ({
+	      (set, get) => ({
         // Default to OSSChat Cloud (free tier)
         activeProvider: "osschat",
 
@@ -74,12 +77,13 @@ export const useProviderStore = create<ProviderState>()(
         // Web search toggle
         webSearchEnabled: false,
 
-        setActiveProvider: (provider) => {
-          if (provider === "osschat" && isPreviewDeployment()) {
-            return;
-          }
-          set({ activeProvider: provider }, false, "provider/setActive");
-        },
+	        setActiveProvider: (provider) => {
+	          const normalizedProvider = normalizeProviderType(provider);
+	          if (normalizedProvider === "osschat" && isPreviewDeployment()) {
+	            return;
+	          }
+	          set({ activeProvider: normalizedProvider }, false, "provider/setActive");
+	        },
 
         addUsage: (cents) => {
           const state = get();
@@ -204,20 +208,23 @@ export const useProviderStore = create<ProviderState>()(
         },
       }),
       {
-        name: "provider-store",
-        partialize: (state) => ({
-          activeProvider: state.activeProvider,
-          dailyUsageCents: state.dailyUsageCents,
-          lastResetDate: state.lastResetDate,
-          dailySearchCount: state.dailySearchCount,
-          lastSearchResetDate: state.lastSearchResetDate,
-          webSearchEnabled: state.webSearchEnabled,
-        }),
-        onRehydrateStorage: () => (state) => {
-          if (state && state.activeProvider === "osschat" && isPreviewDeployment()) {
-            state.activeProvider = "openrouter";
-          }
-        },
+	        name: "provider-store",
+	        partialize: (state) => ({
+	          activeProvider: normalizeProviderType(state.activeProvider),
+	          dailyUsageCents: state.dailyUsageCents,
+	          lastResetDate: state.lastResetDate,
+	          dailySearchCount: state.dailySearchCount,
+	          lastSearchResetDate: state.lastSearchResetDate,
+	          webSearchEnabled: state.webSearchEnabled,
+	        }),
+	        onRehydrateStorage: () => (state) => {
+	          if (state) {
+	            state.activeProvider = normalizeProviderType(state.activeProvider);
+	          }
+	          if (state && state.activeProvider === "osschat" && isPreviewDeployment()) {
+	            state.activeProvider = "openrouter";
+	          }
+	        },
       },
     ),
     { name: "provider-store" },

@@ -87,6 +87,16 @@ vi.mock("@/stores/provider", () => ({
 	),
 }));
 
+const mockOpenRouterStoreState = {
+	hasApiKey: false,
+};
+
+vi.mock("@/stores/openrouter", () => ({
+	useOpenRouterStore: {
+		getState: () => mockOpenRouterStoreState,
+	},
+}));
+
 import { useSendMessage } from "../use-send-message";
 
 function makeParams(overrides: {
@@ -121,6 +131,7 @@ beforeEach(() => {
 	mockSendMessages.mockResolvedValue({});
 	mockStartBackgroundStream.mockResolvedValue({});
 	mockCleanupStaleJobs.mockResolvedValue({});
+	mockOpenRouterStoreState.hasApiKey = true;
 });
 
 describe("useSendMessage – error toast dispatch", () => {
@@ -256,6 +267,21 @@ describe("useSendMessage – input validation", () => {
 		await act(async () => {
 			await result.current.sendMessage({ text: "   " });
 		});
+		expect(mockStartBackgroundStream).not.toHaveBeenCalled();
+	});
+
+	it("blocks send when active provider is openrouter and no key is connected", async () => {
+		mockOpenRouterStoreState.hasApiKey = false;
+		const params = makeParams();
+		const { result } = renderHook(() => useSendMessage(params));
+		await act(async () => {
+			await result.current.sendMessage({ text: "hello" });
+		});
+		const { toast } = await import("sonner");
+		expect(toast.error).toHaveBeenCalledWith(
+			"OpenRouter key required",
+			expect.objectContaining({ description: expect.stringContaining("Connect your OpenRouter account") }),
+		);
 		expect(mockStartBackgroundStream).not.toHaveBeenCalled();
 	});
 

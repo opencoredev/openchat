@@ -391,6 +391,25 @@ describe("convexMessageToUIMessage", () => {
 		const usage = meta.tokenUsage as { promptTokens: number };
 		expect(usage.promptTokens).toBe(100);
 	});
+
+	test("maps error message shape for inline assistant errors", () => {
+		const ui = convexMessageToUIMessage({
+			...baseMsg,
+			messageType: "error",
+			error: {
+				code: "model_error",
+				message: "Your OpenRouter account does not have enough credits for this model.",
+				provider: "openrouter",
+				retryable: false,
+			},
+		}) as typeof baseMsg & {
+			messageType?: string;
+			error?: { code: string; message: string; provider?: string; retryable?: boolean };
+		};
+		expect(ui.messageType).toBe("error");
+		expect(ui.error?.code).toBe("model_error");
+		expect(ui.error?.provider).toBe("openrouter");
+	});
 });
 
 describe("chat-utils private function branches", () => {

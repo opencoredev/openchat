@@ -155,6 +155,11 @@ export const startStream = mutation({
 		if (!chat || chat.userId !== userId) {
 			throw new Error("Chat not found or unauthorized");
 		}
+		if (args.provider === "osschat" && !process.env.OPENROUTER_API_KEY) {
+			throw new Error(
+				"OSSChat Cloud is not configured locally. Set OPENROUTER_API_KEY or switch to OpenRouter with your own key.",
+			);
+		}
 
 		const existingActiveStream = await ctx.db
 			.query("streamJobs")

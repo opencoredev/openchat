@@ -69,14 +69,14 @@ export function usePersistentChat({
 	const isUserLoading = !!(user?.id && convexUser === undefined);
 
 	const { messagesResult, isLoadingMessages } = useChatMessages({
-		chatId,
+		chatId: currentChatId ?? undefined,
 		convexUserId,
 		status,
 		setMessages,
 	});
 
 	const { stop, isResuming, resumedContent } = useChatStreaming({
-		chatId,
+		chatId: currentChatId ?? undefined,
 		convexUserId,
 		status,
 		setStatus,

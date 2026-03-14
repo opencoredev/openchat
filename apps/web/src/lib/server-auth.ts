@@ -14,8 +14,15 @@ type AuthSessionResponse = {
 	session?: { id: string; token: string } | null;
 };
 
+const runtimeEnv = (import.meta as ImportMeta & {
+	env?: Record<string, string | undefined>;
+}).env;
+const runtimeEnvEnabled = process.env.NODE_ENV !== "test";
 const CONVEX_SITE_URL =
-	process.env.VITE_CONVEX_SITE_URL || process.env.CONVEX_SITE_URL;
+	process.env.VITE_CONVEX_SITE_URL ||
+	process.env.CONVEX_SITE_URL ||
+	(runtimeEnvEnabled ? runtimeEnv?.VITE_CONVEX_SITE_URL : undefined) ||
+	(runtimeEnvEnabled ? runtimeEnv?.CONVEX_SITE_URL : undefined);
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const ALLOW_AUTH_COOKIE_FALLBACK = process.env.ALLOW_AUTH_COOKIE_FALLBACK === "true";
 const IS_LOCAL_DEV = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
@@ -58,6 +65,14 @@ function isJwtNotExpired(jwt: string): boolean {
 }
 
 export async function getConvexAuthToken(request: Request): Promise<string | null> {
+	const authorization = request.headers.get("authorization")?.trim();
+	const bearerToken = authorization?.startsWith("Bearer ")
+		? authorization.slice("Bearer ".length).trim()
+		: null;
+	if (bearerToken) {
+		return bearerToken;
+	}
+
 	const cookie = request.headers.get("cookie");
 	if (!cookie) return null;
 
@@ -134,17 +149,43 @@ export function isSameOrigin(request: Request): boolean {
 export async function getAuthUser(
 	request: Request,
 ): Promise<AuthSessionUser | null> {
-	if (!CONVEX_SITE_URL) return null;
 	const cookie = request.headers.get("cookie");
-	if (!cookie) return null;
+	if (cookie && CONVEX_SITE_URL) {
+		try {
+			const response = await fetch(`${CONVEX_SITE_URL}/api/auth/session`, {
+				headers: { cookie },
+			});
+			if (response.ok) {
+				const data = (await response.json()) as AuthSessionResponse | null;
+				return data?.user ?? null;
+			}
+			if (!IS_LOCAL_DEV || response.status < 500) {
+				return null;
+			}
+		} catch {
+			if (!IS_LOCAL_DEV) return null;
+		}
+	} else if (!IS_LOCAL_DEV) {
+		return null;
+	}
 
-	const response = await fetch(`${CONVEX_SITE_URL}/api/auth/session`, {
-		headers: { cookie },
-	});
-	if (!response.ok) return null;
+	if (!IS_LOCAL_DEV) return null;
+	const authToken = await getConvexAuthToken(request);
+	if (!authToken) return null;
 
-	const data = (await response.json()) as AuthSessionResponse | null;
-	return data?.user ?? null;
+	try {
+		const convexClient = createConvexServerClient(authToken);
+		const authUser = await convexClient.query(api.userAuth.getCurrentAuthUser, {});
+		if (!authUser?._id) return null;
+		return {
+			id: authUser._id,
+			email: authUser.email ?? null,
+			name: authUser.name ?? null,
+			image: authUser.image ?? null,
+		};
+	} catch {
+		return null;
+	}
 }
 
 export async function getConvexUserId(

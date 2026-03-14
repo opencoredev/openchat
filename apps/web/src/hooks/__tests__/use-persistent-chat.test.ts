@@ -57,10 +57,12 @@ const mutationMap: Record<string, ReturnType<typeof vi.fn>> = {
 let mockConvexUser: unknown = { _id: "convex-user-id" };
 let mockMessagesResult: unknown = undefined;
 let mockActiveStreamJob: unknown = null;
+const queryCalls: Array<{ fn: string; args: unknown }> = [];
 
 vi.mock("convex/react", () => ({
 	useMutation: vi.fn((fn: string) => mutationMap[fn] ?? vi.fn()),
-	useQuery: vi.fn((fn: string) => {
+	useQuery: vi.fn((fn: string, args: unknown) => {
+		queryCalls.push({ fn, args });
 		if (fn === "users.getByExternalId") return mockConvexUser;
 		if (fn === "messages.list") return mockMessagesResult;
 		if (fn === "backgroundStream.getActiveStreamJob") return mockActiveStreamJob;
@@ -120,6 +122,16 @@ vi.mock("@/stores/stream", () => ({
 			setResuming: mockSetResuming,
 		}),
 	}),
+}));
+
+const mockOpenRouterStoreState = {
+	hasApiKey: true,
+};
+
+vi.mock("@/stores/openrouter", () => ({
+	useOpenRouterStore: {
+		getState: () => mockOpenRouterStoreState,
+	},
 }));
 
 // ---------------------------------------------------------------------------
@@ -199,6 +211,8 @@ beforeEach(() => {
 		webSearchEnabled: false,
 		isOverLimit: () => false,
 	};
+	mockOpenRouterStoreState.hasApiKey = true;
+	queryCalls.length = 0;
 
 	vi.clearAllMocks();
 
@@ -339,6 +353,31 @@ describe("sendMessage validation", () => {
 			userId: "convex-user-id",
 			title: "New Chat",
 		});
+	});
+
+	it("subscribes message and stream queries to the newly created chat id after first send", async () => {
+		const { result } = renderChat();
+
+		await act(async () => {
+			await result.current.sendMessage({ text: "Hello world" });
+		});
+
+		expect(
+			queryCalls.some(
+				(call) =>
+					call.fn === "messages.list" &&
+					JSON.stringify(call.args) ===
+						JSON.stringify({ chatId: "chat-123", userId: "convex-user-id" }),
+			),
+		).toBe(true);
+		expect(
+			queryCalls.some(
+				(call) =>
+					call.fn === "backgroundStream.getActiveStreamJob" &&
+					JSON.stringify(call.args) ===
+						JSON.stringify({ chatId: "chat-123", userId: "convex-user-id" }),
+			),
+		).toBe(true);
 	});
 
 	it("calls onChatCreated callback after chat creation", async () => {

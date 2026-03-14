@@ -33,6 +33,70 @@ import {
 } from "./streamUtils";
 import { executePrefetchedSearches } from "./streamWebSearch";
 
+function getErrorMessage(error: unknown): string {
+	if (error instanceof Error) return error.message;
+	if (typeof error === "string") return error;
+	try {
+		return JSON.stringify(error);
+	} catch {
+		return String(error);
+	}
+}
+
+function getErrorMessageDeep(error: unknown): string {
+	const segments: string[] = [];
+	const seen = new Set<unknown>();
+
+	const walk = (value: unknown) => {
+		if (value == null || seen.has(value)) return;
+		seen.add(value);
+		segments.push(getErrorMessage(value));
+
+		if (value instanceof Error) {
+			walk((value as Error & { cause?: unknown }).cause);
+			return;
+		}
+
+		if (typeof value === "object") {
+			const record = value as Record<string, unknown>;
+			walk(record.cause);
+			walk(record.error);
+			walk(record.data);
+			walk(record.responseBody);
+		}
+	};
+
+	walk(error);
+	return segments.join(" | ");
+}
+
+function getActionableStreamError(error: unknown): string {
+	const message = getErrorMessageDeep(error);
+	const lower = message.toLowerCase();
+
+	if (
+		lower.includes("insufficient credits") ||
+		lower.includes("never purchased credits") ||
+		lower.includes('"code":402')
+	) {
+		return "Your OpenRouter account does not have enough credits for this model. Add credits at openrouter.ai/settings/credits or choose another provider.";
+	}
+
+	if (
+		lower.includes("no endpoints available matching your guardrail restrictions") ||
+		lower.includes("settings/privacy") ||
+		lower.includes("guardrail restrictions and data policy")
+	) {
+		return "Your OpenRouter privacy or provider restrictions are blocking this model. Update your settings at openrouter.ai/settings/privacy or choose another model.";
+	}
+
+	if (lower.includes("no api key available")) {
+		return "No API key available";
+	}
+
+	return "An error occurred while processing your request.";
+}
+
 export const executeStream = internalAction({
 	args: {
 		jobId: v.id("streamJobs"),
@@ -46,6 +110,7 @@ export const executeStream = internalAction({
 
 		let reservedUsageCents = 0;
 		let reservedDateKey: string | null = null;
+		const isLocalDev = process.env.NODE_ENV === "development";
 
 		if (job.provider === "osschat") {
 			const currentDate = getCurrentDateKey();
@@ -61,7 +126,7 @@ export const executeStream = internalAction({
 					});
 					return;
 				}
-			} else {
+			} else if (!isLocalDev) {
 				await ctx.runMutation(internal.backgroundStream.failStream, {
 					jobId: args.jobId,
 					error: "Usage tracking temporarily unavailable. Please retry shortly.",
@@ -93,7 +158,10 @@ export const executeStream = internalAction({
 		if (!apiKey) {
 			await ctx.runMutation(internal.backgroundStream.failStream, {
 				jobId: args.jobId,
-				error: "No API key available",
+				error:
+					job.provider === "osschat"
+						? "OSSChat Cloud is not configured locally. Set OPENROUTER_API_KEY or switch to OpenRouter with your own key."
+						: "No API key available",
 			});
 			return;
 		}
@@ -468,6 +536,7 @@ export const executeStream = internalAction({
 			});
 		} catch (error) {
 			void logger.error("executeStream failed", error, { jobId: args.jobId });
+			const userVisibleError = getActionableStreamError(error);
 			if (reservedDateKey && reservedUsageCents > 0) {
 				try {
 					await adjustDailyUsageInUpstash(job.userId, reservedDateKey, -reservedUsageCents);
@@ -477,7 +546,7 @@ export const executeStream = internalAction({
 			}
 			await ctx.runMutation(internal.backgroundStream.failStream, {
 				jobId: args.jobId,
-				error: "An error occurred while processing your request.",
+				error: userVisibleError,
 				partialContent: state.fullContent,
 			});
 		} finally {

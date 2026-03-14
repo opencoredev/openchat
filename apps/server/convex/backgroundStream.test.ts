@@ -204,6 +204,21 @@ describe('backgroundStream.startStream', () => {
 		).rejects.toThrow('Chat not found or unauthorized');
 	});
 
+	it('throws immediately when osschat is not configured locally', async () => {
+		await expect(
+			t.withIdentity({ subject: externalId }).mutation(api.backgroundStream.startStream, {
+				chatId,
+				userId,
+				messageId: 'msg_no_osschat_key',
+				model: 'openai/gpt-4o',
+				provider: 'osschat',
+				messages: [{ role: 'user', content: 'Hello' }],
+			}),
+		).rejects.toThrow(
+			'OSSChat Cloud is not configured locally. Set OPENROUTER_API_KEY or switch to OpenRouter with your own key.',
+		);
+	});
+
 	it('throws when a fresh (non-stale) stream is already running', async () => {
 		await t.run(async (ctx) =>
 			ctx.db.insert('streamJobs', {
@@ -267,6 +282,8 @@ describe('backgroundStream.startStream', () => {
 	});
 
 	it('succeeds with osschat provider when user exists', async () => {
+		vi.stubEnv('OPENROUTER_API_KEY', 'test-osschat-key');
+
 		const jobId = await t.withIdentity({ subject: externalId }).mutation(api.backgroundStream.startStream, {
 			chatId,
 			userId,

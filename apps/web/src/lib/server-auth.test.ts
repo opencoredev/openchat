@@ -13,6 +13,14 @@ function requestWithCookie(cookie: string): Request {
 	} as unknown as Request;
 }
 
+function requestWithHeaders(headers: Record<string, string>): Request {
+	return {
+		headers: {
+			get: (name: string) => headers[name] ?? headers[name.toLowerCase()] ?? null,
+		},
+	} as unknown as Request;
+}
+
 function createJwt(expSecondsFromNow = 3600): string {
 	const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
 	const payload = Buffer.from(
@@ -44,6 +52,18 @@ describe("server-auth.getConvexAuthToken", () => {
 		const request = requestWithCookie(`better-auth.convex_jwt=${fallbackJwt}; other=value`);
 
 		await expect(getConvexAuthToken(request)).resolves.toBe(fallbackJwt);
+	});
+
+	it("prefers Authorization bearer token when present", async () => {
+		vi.stubEnv("VITE_CONVEX_SITE_URL", "");
+		vi.stubEnv("CONVEX_SITE_URL", "");
+
+		const { getConvexAuthToken } = await loadModule();
+		const request = requestWithHeaders({
+			authorization: "Bearer explicit-token",
+		});
+
+		await expect(getConvexAuthToken(request)).resolves.toBe("explicit-token");
 	});
 
 	it("prefers token endpoint when it returns a valid token", async () => {
@@ -307,6 +327,17 @@ describe("server-auth.isSameOrigin", () => {
 });
 
 describe("server-auth.getAuthUser", () => {
+	async function loadWithConvexMock(mockQuery: ReturnType<typeof vi.fn>) {
+		vi.resetModules();
+		vi.doMock("convex/browser", () => {
+			function ConvexHttpClient() {
+				return { setAuth: vi.fn(), query: mockQuery, mutation: vi.fn() };
+			}
+			return { ConvexHttpClient };
+		});
+		return import("@/lib/server-auth");
+	}
+
 	beforeEach(() => {
 		vi.unstubAllEnvs();
 		vi.stubEnv("ALLOW_AUTH_COOKIE_FALLBACK", "true");
@@ -315,6 +346,7 @@ describe("server-auth.getAuthUser", () => {
 	afterEach(() => {
 		vi.unstubAllEnvs();
 		vi.restoreAllMocks();
+		vi.doUnmock("convex/browser");
 	});
 
 	it("returns null when CONVEX_SITE_URL is not configured", async () => {
@@ -323,6 +355,55 @@ describe("server-auth.getAuthUser", () => {
 		const { getAuthUser } = await loadModule();
 		const request = requestWithCookie("some=cookie");
 		await expect(getAuthUser(request)).resolves.toBeNull();
+	});
+
+	it("falls back to Convex auth in local dev when CONVEX_SITE_URL is not configured", async () => {
+		const fallbackJwt = createJwt();
+		vi.stubEnv("VITE_CONVEX_SITE_URL", "");
+		vi.stubEnv("CONVEX_SITE_URL", "");
+		vi.stubEnv("VITE_CONVEX_URL", "https://example.convex.cloud");
+		vi.stubEnv("CONVEX_URL", "https://example.convex.cloud");
+
+		const mockQuery = vi.fn().mockResolvedValue({
+			_id: "user_123",
+			email: "user@example.com",
+			name: "Test User",
+			image: "https://example.com/avatar.png",
+		});
+		const { getAuthUser } = await loadWithConvexMock(mockQuery);
+		const request = requestWithCookie(`better-auth.convex_jwt=${fallbackJwt}`);
+		const result = await getAuthUser(request);
+		expect(result).toEqual({
+			id: "user_123",
+			email: "user@example.com",
+			name: "Test User",
+			image: "https://example.com/avatar.png",
+		});
+	});
+
+	it("falls back to Convex auth with bearer token even when no cookie is present", async () => {
+		vi.stubEnv("VITE_CONVEX_SITE_URL", "");
+		vi.stubEnv("CONVEX_SITE_URL", "");
+		vi.stubEnv("VITE_CONVEX_URL", "https://example.convex.cloud");
+		vi.stubEnv("CONVEX_URL", "https://example.convex.cloud");
+
+		const mockQuery = vi.fn().mockResolvedValue({
+			_id: "user_456",
+			email: "bearer@example.com",
+			name: "Bearer User",
+			image: null,
+		});
+		const { getAuthUser } = await loadWithConvexMock(mockQuery);
+		const request = requestWithHeaders({
+			authorization: "Bearer explicit-token",
+		});
+		const result = await getAuthUser(request);
+		expect(result).toEqual({
+			id: "user_456",
+			email: "bearer@example.com",
+			name: "Bearer User",
+			image: null,
+		});
 	});
 
 	it("returns null when no cookie header", async () => {

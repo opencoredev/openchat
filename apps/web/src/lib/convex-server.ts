@@ -6,7 +6,15 @@
 
 import { ConvexHttpClient } from "convex/browser";
 
-const CONVEX_URL = process.env.VITE_CONVEX_URL || process.env.CONVEX_URL;
+const runtimeEnv = (import.meta as ImportMeta & {
+	env?: Record<string, string | undefined>;
+}).env;
+const runtimeEnvEnabled = process.env.NODE_ENV !== "test";
+const CONVEX_URL =
+	process.env.VITE_CONVEX_URL ||
+	process.env.CONVEX_URL ||
+	(runtimeEnvEnabled ? runtimeEnv?.VITE_CONVEX_URL : undefined) ||
+	(runtimeEnvEnabled ? runtimeEnv?.CONVEX_URL : undefined);
 
 function createServerClient() {
 	if (!CONVEX_URL) {

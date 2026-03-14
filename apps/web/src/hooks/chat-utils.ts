@@ -208,6 +208,14 @@ export function convexMessageToUIMessage(msg: {
 	clientMessageId?: string;
 	role: string;
 	content: string;
+	error?: {
+		code: string;
+		message: string;
+		details?: string;
+		provider?: string;
+		retryable?: boolean;
+	};
+	messageType?: "text" | "error" | "system";
 	reasoning?: string;
 	chainOfThoughtParts?: Array<ConvexChainOfThoughtPart>;
 	status?: string;
@@ -235,6 +243,8 @@ export function convexMessageToUIMessage(msg: {
 	return {
 		id: msg.clientMessageId || msg._id,
 		role: msg.role as "user" | "assistant",
+		error: msg.error,
+		messageType: msg.messageType,
 		metadata: {
 			serverMessageId: msg._id,
 			clientMessageId: msg.clientMessageId,

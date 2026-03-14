@@ -10,8 +10,13 @@
  * This prevents XSS attacks from exfiltrating API keys via localStorage.
  */
 
+import { ConvexHttpClient } from "convex/browser";
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
+import { api } from "@server/convex/_generated/api";
+import { authClient } from "../lib/auth-client";
+import { env } from "../lib/env";
+import { useProviderStore } from "./provider";
 import {
 	clearOAuthStorage,
 	exchangeCodeForKey,
@@ -46,6 +51,22 @@ interface OpenRouterState {
 // Store
 // ============================================================================
 
+async function getAuthenticatedConvexClient() {
+	if (!env.CONVEX_URL) {
+		throw new Error("Convex URL is not configured");
+	}
+
+	const result = await authClient.convex.token();
+	const token = result.data?.token;
+	if (!token) {
+		throw new Error("Authentication token unavailable");
+	}
+
+	const client = new ConvexHttpClient(env.CONVEX_URL);
+	client.setAuth(token);
+	return client;
+}
+
 export const useOpenRouterStore = create<OpenRouterState>()(
 	devtools(
 		(set, get) => ({
@@ -63,25 +84,13 @@ export const useOpenRouterStore = create<OpenRouterState>()(
 
 				set({ isLoading: true, isInitialized: true }, false, "openrouter/initialize");
 				try {
-					const response = await fetch("/api/openrouter-key", {
-						method: "GET",
-						credentials: "include",
-					});
-					if (response.ok) {
-						const data = await response.json();
-						set(
-							{ hasApiKey: !!data.hasKey, isLoading: false },
-							false,
-							"openrouter/initializeSuccess",
-						);
-					} else {
-						// Not authenticated or error - assume no key
-						set(
-							{ hasApiKey: false, isLoading: false },
-							false,
-							"openrouter/initializeNoAuth",
-						);
-					}
+					const client = await getAuthenticatedConvexClient();
+					const hasKey = await client.query(api.users.hasMyOpenRouterKey, {});
+					set(
+						{ hasApiKey: !!hasKey, isLoading: false },
+						false,
+						"openrouter/initializeSuccess",
+					);
 				} catch {
 					// Network error - assume no key but keep initialized
 					set(
@@ -96,17 +105,11 @@ export const useOpenRouterStore = create<OpenRouterState>()(
 			setApiKey: async (key) => {
 				set({ isLoading: true, error: null }, false, "openrouter/setApiKey");
 				try {
-					const response = await fetch("/api/openrouter-key", {
-						method: "POST",
-						credentials: "include",
-						headers: {
-							"Content-Type": "application/json",
-						},
-						body: JSON.stringify({ apiKey: key }),
+					const client = await getAuthenticatedConvexClient();
+					await client.mutation(api.users.saveMyOpenRouterKeyPlaintext, {
+						apiKey: key,
 					});
-					if (!response.ok) {
-						throw new Error("Failed to store API key");
-					}
+					useProviderStore.getState().setActiveProvider("openrouter");
 					set(
 						{ hasApiKey: true, isLoading: false, error: null },
 						false,
@@ -124,12 +127,10 @@ export const useOpenRouterStore = create<OpenRouterState>()(
 			clearApiKey: async () => {
 				set({ isLoading: true, error: null }, false, "openrouter/clearApiKey");
 				try {
-					const response = await fetch("/api/openrouter-key", {
-						method: "DELETE",
-						credentials: "include",
-					});
-					if (!response.ok) {
-						throw new Error("Failed to remove API key");
+					const client = await getAuthenticatedConvexClient();
+					await client.mutation(api.users.removeMyOpenRouterKey, {});
+					if (useProviderStore.getState().activeProvider === "openrouter") {
+						useProviderStore.getState().setActiveProvider("osschat");
 					}
 					set(
 						{ hasApiKey: false, isLoading: false, error: null },
@@ -180,17 +181,11 @@ export const useOpenRouterStore = create<OpenRouterState>()(
 					clearOAuthStorage();
 
 					// Store the API key server-side only
-					const response = await fetch("/api/openrouter-key", {
-						method: "POST",
-						credentials: "include",
-						headers: {
-							"Content-Type": "application/json",
-						},
-						body: JSON.stringify({ apiKey }),
+					const client = await getAuthenticatedConvexClient();
+					await client.mutation(api.users.saveMyOpenRouterKeyPlaintext, {
+						apiKey,
 					});
-					if (!response.ok) {
-						throw new Error("Failed to store API key");
-					}
+					useProviderStore.getState().setActiveProvider("openrouter");
 					set(
 						{ hasApiKey: true, isLoading: false, error: null },
 						false,

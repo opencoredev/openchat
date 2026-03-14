@@ -25,6 +25,7 @@ import { modules, rateLimiter } from './testSetup.test';
 
 const mockControls = vi.hoisted(() => ({
 	streamTextShouldThrow: false,
+	streamTextError: null as unknown,
 	streamTextCustomTexts: null as string[] | null,
 	streamTextCustomEvents: null as Array<Record<string, unknown>> | null,
 	// Override totalUsage returned by the streamText mock; null = use default (10 input / 5 output)
@@ -48,6 +49,9 @@ vi.mock('ai', async (importOriginal) => {
 	return {
 		...actual,
 		streamText: vi.fn().mockImplementation(() => {
+			if (mockControls.streamTextError) {
+				throw mockControls.streamTextError;
+			}
 			if (mockControls.streamTextShouldThrow) {
 				throw new Error('Simulated stream failure');
 			}
@@ -194,6 +198,7 @@ describe('streamExecution.executeStream', () => {
 		t = makeConvexTest();
 		// Reset mock controls to safe defaults
 		mockControls.streamTextShouldThrow = false;
+		mockControls.streamTextError = null;
 		mockControls.streamTextCustomTexts = null;
 		mockControls.streamTextCustomEvents = null;
 		upstashControls.reserveResult = null; // Upstash unavailable by default
@@ -288,7 +293,7 @@ describe('streamExecution.executeStream', () => {
 			expect(job?.content).toBe('Hello world');
 		});
 
-		it('fails with no API key when OPENROUTER_API_KEY is not set', async () => {
+		it('fails with a local osschat configuration error when OPENROUTER_API_KEY is not set', async () => {
 			upstashControls.reserveResult = 5; // Upstash available
 
 			const userId = await seedUser(t);
@@ -300,7 +305,9 @@ describe('streamExecution.executeStream', () => {
 
 			const job = await t.run(async (ctx) => ctx.db.get(jobId));
 			expect(job?.status).toBe('error');
-			expect(job?.error).toBe('No API key available');
+			expect(job?.error).toBe(
+				'OSSChat Cloud is not configured locally. Set OPENROUTER_API_KEY or switch to OpenRouter with your own key.',
+			);
 		});
 
 		it('fails stream and records error when streamText throws (catch path)', async () => {
@@ -491,6 +498,44 @@ describe('streamExecution.executeStream', () => {
 
 			const job = await t.run(async (ctx) => ctx.db.get(jobId));
 			expect(job?.completedAt).toBeDefined();
+		});
+	});
+
+	describe('actionable provider errors', () => {
+		it('surfaces insufficient OpenRouter credits', async () => {
+			mockControls.streamTextError = new Error(
+				'Insufficient credits. This account never purchased credits. {"code":402}',
+			);
+			const userId = await seedUser(t, {
+				externalId: 'ext-openrouter-credits',
+				encryptedOpenRouterKey: 'key',
+			});
+			const chatId = await seedChat(t, userId);
+			const jobId = await seedStreamJob(t, chatId, userId, { provider: 'openrouter' });
+
+			await t.action(internal.streamExecution.executeStream, { jobId });
+
+			const job = await t.run(async (ctx) => ctx.db.get(jobId));
+			expect(job?.status).toBe('error');
+			expect(job?.error).toContain('does not have enough credits');
+		});
+
+		it('surfaces OpenRouter privacy restriction errors', async () => {
+			mockControls.streamTextError = new Error(
+				'No endpoints available matching your guardrail restrictions and data policy. Configure: https://openrouter.ai/settings/privacy',
+			);
+			const userId = await seedUser(t, {
+				externalId: 'ext-openrouter-privacy',
+				encryptedOpenRouterKey: 'key',
+			});
+			const chatId = await seedChat(t, userId);
+			const jobId = await seedStreamJob(t, chatId, userId, { provider: 'openrouter' });
+
+			await t.action(internal.streamExecution.executeStream, { jobId });
+
+			const job = await t.run(async (ctx) => ctx.db.get(jobId));
+			expect(job?.status).toBe('error');
+			expect(job?.error).toContain('privacy or provider restrictions');
 		});
 	});
 

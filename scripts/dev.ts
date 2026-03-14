@@ -51,21 +51,6 @@ function normalizePortlessSegment(value: string | undefined): string | undefined
 	return normalized || undefined;
 }
 
-function runGit(args: string[]): string | undefined {
-	const result = Bun.spawnSync({
-		cmd: ["git", ...args],
-		cwd: process.cwd(),
-		stdin: "ignore",
-		stderr: "ignore",
-	});
-	if (!result.success) {
-		return undefined;
-	}
-
-	const output = new TextDecoder().decode(result.stdout).trim();
-	return output || undefined;
-}
-
 function getPortlessName(): string {
 	const explicit =
 		normalizePortlessSegment(process.env.PORTLESS_NAME)
@@ -73,24 +58,7 @@ function getPortlessName(): string {
 		?? normalizePortlessSegment(process.env.PORTLESS_APP_NAME);
 	if (explicit) return explicit;
 
-	const baseName = normalizePortlessSegment(process.env.PORTLESS_BASE_NAME) ?? "openchat";
-	const repoRoot = runGit(["rev-parse", "--show-toplevel"]);
-	const gitDir = runGit(["rev-parse", "--git-dir"]);
-	const branch = runGit(["rev-parse", "--abbrev-ref", "HEAD"]);
-
-	const codexMatch = repoRoot?.match(/\.codex\/worktrees\/([^/]+)/);
-	const codexToken = normalizePortlessSegment(codexMatch?.[1]);
-	if (codexToken) return `${baseName}-${codexToken}`;
-
-	const worktreeToken = normalizePortlessSegment(gitDir?.split("/worktrees/")[1]?.split("/")[0]);
-	if (worktreeToken) return `${baseName}-${worktreeToken}`;
-
-	const branchSegment = normalizePortlessSegment(branch?.split("/").pop());
-	if (branchSegment && !["head", "main", "master"].includes(branchSegment)) {
-		return `${baseName}-${branchSegment}`;
-	}
-
-	return baseName;
+	return normalizePortlessSegment(process.env.PORTLESS_BASE_NAME) ?? "openchat";
 }
 
 async function run(command: string[], env: NodeJS.ProcessEnv): Promise<ExitCode> {

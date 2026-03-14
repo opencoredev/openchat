@@ -150,6 +150,10 @@ function UsageSyncProvider({ children }: { children: React.ReactNode }) {
 function OpenRouterKeyStatusProvider({ children }: { children: React.ReactNode }) {
 	const { isAuthenticated, loading } = useAuth();
 	const initialize = useOpenRouterStore((s) => s.initialize);
+	const hasApiKey = useOpenRouterStore((s) => s.hasApiKey);
+	const isInitialized = useOpenRouterStore((s) => s.isInitialized);
+	const activeProvider = useProviderStore((s) => s.activeProvider);
+	const setActiveProvider = useProviderStore((s) => s.setActiveProvider);
 	const checkedRef = useRef(false);
 	const checkingRef = useRef(false);
 
@@ -173,12 +177,19 @@ function OpenRouterKeyStatusProvider({ children }: { children: React.ReactNode }
 	}, [loading, isAuthenticated, initialize]);
 
   // Reset checked state when user logs out
-  useEffect(() => {
-    if (!isAuthenticated && !loading) {
-      checkedRef.current = false;
-      checkingRef.current = false;
-    }
-  }, [isAuthenticated, loading]);
+	useEffect(() => {
+		if (!isAuthenticated && !loading) {
+			checkedRef.current = false;
+			checkingRef.current = false;
+		}
+	}, [isAuthenticated, loading]);
+
+	useEffect(() => {
+		if (!isAuthenticated || loading || !isInitialized) return;
+		if (activeProvider === "openrouter" && !hasApiKey) {
+			setActiveProvider("osschat");
+		}
+	}, [activeProvider, hasApiKey, isAuthenticated, isInitialized, loading, setActiveProvider]);
 
   return <>{children}</>;
 }

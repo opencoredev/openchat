@@ -7,7 +7,9 @@
 
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/lib/auth-client";
 import { useOpenRouterKey } from "../../stores/openrouter";
+import { useProviderStore } from "@/stores/provider";
 import {
   Card,
   CardContent,
@@ -40,6 +42,8 @@ type CallbackStatus = "processing" | "success" | "error";
 function OpenRouterCallbackPage() {
   const navigate = useNavigate();
   const { handleCallback } = useOpenRouterKey();
+  const setActiveProvider = useProviderStore((s) => s.setActiveProvider);
+  const { loading, isAuthenticated } = useAuth();
 
   const [status, setStatus] = useState<CallbackStatus>("processing");
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +57,15 @@ function OpenRouterCallbackPage() {
 
   // Handle the OAuth callback (with guard against double-execution from Strict Mode)
   useEffect(() => {
-    if (!mounted || processedRef.current) return;
+    if (!mounted || loading || processedRef.current) return;
+
+    if (!isAuthenticated) {
+      processedRef.current = true;
+      setError("Sign in required before connecting OpenRouter.");
+      setStatus("error");
+      return;
+    }
+
     processedRef.current = true;
 
     async function processCallback() {
@@ -82,6 +94,7 @@ function OpenRouterCallbackPage() {
         const success = await handleCallback(code, state);
 
         if (success) {
+          setActiveProvider("openrouter");
           setStatus("success");
           // Redirect to home after a brief delay to show success message
           setTimeout(() => {
@@ -98,7 +111,7 @@ function OpenRouterCallbackPage() {
     }
 
     processCallback();
-  }, [mounted, handleCallback, navigate]);
+  }, [mounted, loading, isAuthenticated, handleCallback, navigate, setActiveProvider]);
 
   // Show loading state during SSR and initial mount
   if (!mounted) {

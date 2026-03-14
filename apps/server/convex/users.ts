@@ -16,10 +16,13 @@ export {
 
 export {
 	saveOpenRouterKey,
+	saveMyOpenRouterKeyPlaintext,
 	getOpenRouterKey,
 	hasOpenRouterKey,
+	hasMyOpenRouterKey,
 	getOpenRouterKeyInternal,
 	removeOpenRouterKey,
+	removeMyOpenRouterKey,
 } from "./userApiKeys";
 
 export {

@@ -22,6 +22,12 @@ const PRODUCTION_HOSTS = ["osschat.dev", "www.osschat.dev"];
 export function isPreviewDeployment(): boolean {
 	if (typeof window === "undefined") return false;
 	const hostname = window.location.hostname;
-	if (hostname === "localhost" || hostname === "127.0.0.1") return false;
+	if (
+		hostname === "localhost" ||
+		hostname === "127.0.0.1" ||
+		hostname.endsWith(".localhost")
+	) {
+		return false;
+	}
 	return !PRODUCTION_HOSTS.includes(hostname);
 }

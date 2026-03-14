@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as AboutRouteImport } from './routes/about'
@@ -32,6 +33,11 @@ import { Route as ApiWorkflowCleanupRouteImport } from './routes/api/workflow/cl
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StudioRoute = StudioRouteImport.update({
+  id: '/studio',
+  path: '/studio',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -132,6 +138,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
+  '/studio': typeof StudioRoute
   '/terms': typeof TermsRoute
   '/api/models': typeof ApiModelsRoute
   '/api/monitoring': typeof ApiMonitoringRoute
@@ -153,6 +160,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
+  '/studio': typeof StudioRoute
   '/terms': typeof TermsRoute
   '/api/models': typeof ApiModelsRoute
   '/api/monitoring': typeof ApiMonitoringRoute
@@ -175,6 +183,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
+  '/studio': typeof StudioRoute
   '/terms': typeof TermsRoute
   '/api/models': typeof ApiModelsRoute
   '/api/monitoring': typeof ApiMonitoringRoute
@@ -198,6 +207,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/privacy'
     | '/settings'
+    | '/studio'
     | '/terms'
     | '/api/models'
     | '/api/monitoring'
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/privacy'
     | '/settings'
+    | '/studio'
     | '/terms'
     | '/api/models'
     | '/api/monitoring'
@@ -240,6 +251,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/privacy'
     | '/settings'
+    | '/studio'
     | '/terms'
     | '/api/models'
     | '/api/monitoring'
@@ -262,6 +274,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   PrivacyRoute: typeof PrivacyRoute
   SettingsRoute: typeof SettingsRoute
+  StudioRoute: typeof StudioRoute
   TermsRoute: typeof TermsRoute
   ApiModelsRoute: typeof ApiModelsRoute
   ApiMonitoringRoute: typeof ApiMonitoringRoute
@@ -286,6 +299,13 @@ declare module '@tanstack/react-router' {
       path: '/terms'
       fullPath: '/terms'
       preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/studio': {
+      id: '/studio'
+      path: '/studio'
+      fullPath: '/studio'
+      preLoaderRoute: typeof StudioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -422,6 +442,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   PrivacyRoute: PrivacyRoute,
   SettingsRoute: SettingsRoute,
+  StudioRoute: StudioRoute,
   TermsRoute: TermsRoute,
   ApiModelsRoute: ApiModelsRoute,
   ApiMonitoringRoute: ApiMonitoringRoute,

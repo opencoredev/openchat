@@ -1,9 +1,80 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import { chainOfThoughtPartValidator } from "./message_validators";
+import { insertOrUpdateMessage } from "./message_helpers";
 import { isWebSearchToolName } from "./streamUtils";
 
 export { chainOfThoughtPartValidator } from "./message_validators";
+
+function classifyStreamError(
+	error: string,
+	provider: string,
+): {
+	code: string;
+	message: string;
+	details?: string;
+	provider?: string;
+	retryable?: boolean;
+} {
+	const lower = error.toLowerCase();
+	const normalizedProvider = provider === "osschat" ? "osschat" : "openrouter";
+
+	if (lower.includes("insufficient credits")) {
+		return {
+			code: "model_error",
+			message: error,
+			provider: normalizedProvider,
+			retryable: false,
+		};
+	}
+
+	if (
+		lower.includes("settings/privacy") ||
+		lower.includes("guardrail restrictions") ||
+		lower.includes("data policy")
+	) {
+		return {
+			code: "auth_error",
+			message: error,
+			provider: normalizedProvider,
+			retryable: false,
+		};
+	}
+
+	if (lower.includes("rate limit")) {
+		return {
+			code: "rate_limit",
+			message: error,
+			provider: normalizedProvider,
+			retryable: true,
+		};
+	}
+
+	if (lower.includes("authentication") || lower.includes("unauthorized") || lower.includes("api key")) {
+		return {
+			code: "auth_error",
+			message: error,
+			provider: normalizedProvider,
+			retryable: false,
+		};
+	}
+
+	if (lower.includes("network") || lower.includes("connection") || lower.includes("temporarily unavailable")) {
+		return {
+			code: "network_error",
+			message: error,
+			provider: normalizedProvider,
+			retryable: true,
+		};
+	}
+
+	return {
+		code: "model_error",
+		message: error,
+		provider: normalizedProvider,
+		retryable: false,
+	};
+}
 
 export const updateStreamContent = internalMutation({
 	args: {
@@ -232,6 +303,20 @@ export const failStream = internalMutation({
 			activeStreamId: undefined,
 			status: "idle",
 			updatedAt: Date.now(),
+		});
+
+		await insertOrUpdateMessage(ctx, {
+			chatId: job.chatId,
+			clientMessageId: job.messageId,
+			role: "assistant",
+			content: args.partialContent || job.content || "",
+			modelId: job.model,
+			provider: job.provider,
+			createdAt: Date.now(),
+			status: "error",
+			userId: job.userId,
+			messageType: "error",
+			error: classifyStreamError(args.error, job.provider),
 		});
 		return null;
 	},

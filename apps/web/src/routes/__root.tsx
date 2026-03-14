@@ -6,6 +6,7 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { Providers } from "../providers";
@@ -181,6 +182,12 @@ function RootComponent() {
 }
 
 function AppShell() {
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      void import("react-grab");
+    }
+  }, []);
+
   // Track page views
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();

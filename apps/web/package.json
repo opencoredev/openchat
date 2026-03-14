@@ -53,6 +53,7 @@
     "posthog-js": "^1.342.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-grab": "^0.1.28",
     "redis": "^5.11.0",
     "resumable-stream": "^2.2.10",
     "server": "workspace:*",

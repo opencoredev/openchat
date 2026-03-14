@@ -10,6 +10,7 @@ import { useModelStore } from "@/stores/model";
 import { useProviderStore } from "@/stores/provider";
 import { analytics } from "@/lib/analytics";
 import { shouldTriggerAutoTitle } from "@/lib/title-generation";
+import { useOpenRouterStore } from "@/stores/openrouter";
 import type { Model } from "@/stores/model";
 import {
 	getUserFriendlyError,
@@ -76,6 +77,7 @@ export function useSendMessage({
 
 			const providerState = useProviderStore.getState();
 			const modelState = useModelStore.getState();
+			const requestProvider = providerState.activeProvider === "openrouter" ? "openrouter" : "osschat";
 			const runtimeModelId = modelState.selectedModelId;
 			const runtimeReasoningEnabled = modelState.reasoningEnabled;
 			const runtimeReasoningEffort = runtimeReasoningEnabled ? "medium" : "none";
@@ -84,9 +86,16 @@ export function useSendMessage({
 				runtimeModelId,
 				runtimeModel,
 			).supportsTools;
-			if (providerState.activeProvider === "osschat" && providerState.isOverLimit()) {
+			const hasOpenRouterKey = useOpenRouterStore.getState().hasApiKey;
+			if (requestProvider === "osschat" && providerState.isOverLimit()) {
 				toast.error("Daily limit reached", {
 					description: "Add your OpenRouter API key to continue.",
+				});
+				return;
+			}
+			if (requestProvider === "openrouter" && !hasOpenRouterKey) {
+				toast.error("OpenRouter key required", {
+					description: "Connect your OpenRouter account in Settings or switch back to OSSChat Cloud.",
 				});
 				return;
 			}
@@ -155,7 +164,7 @@ export function useSendMessage({
 					userId: convexUserId,
 					messageId: assistantMsgId,
 					model: runtimeModelId,
-					provider: activeProvider,
+					provider: requestProvider,
 					messages: allMsgs,
 					options: {
 						enableReasoning: runtimeReasoningEnabled,
@@ -193,7 +202,7 @@ export function useSendMessage({
 						metadata: {
 							reasoningRequested: runtimeReasoningEffort !== "none",
 							modelId: runtimeModelId,
-							provider: activeProvider,
+							provider: requestProvider,
 							reasoningEffort: runtimeReasoningEffort,
 							webSearchEnabled,
 							resumedFromActiveStream: false,
@@ -215,7 +224,7 @@ export function useSendMessage({
 							userId: convexUserId,
 							seedText: message.text.trim().slice(0, 300),
 							length: "standard",
-							provider: activeProvider,
+							provider: requestProvider,
 							mode: "auto",
 						}),
 					})
@@ -276,7 +285,6 @@ export function useSendMessage({
 			messages,
 			messagesResult,
 			models,
-			activeProvider,
 			webSearchEnabled,
 			createChat,
 			sendMessages,

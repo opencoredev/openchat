@@ -456,6 +456,30 @@ describe("streamJobs.failStream", () => {
 		expect(chat?.activeStreamId).toBeUndefined();
 	});
 
+	test("persists an assistant error message for failed streams", async () => {
+		const userId = await seedUser(t);
+		const chatId = await seedChat(t, userId);
+		const jobId = await seedStreamJob(t, userId, chatId, "running");
+
+		await t.mutation(internal.streamJobs.failStream, {
+			jobId,
+			error: "Your OpenRouter account does not have enough credits for this model.",
+		});
+
+		const job = await t.run(async (ctx) => ctx.db.get(jobId));
+		const message = await t.run(async (ctx) =>
+			ctx.db
+				.query("messages")
+				.withIndex("by_client_id", (q) =>
+					q.eq("chatId", chatId).eq("clientMessageId", job!.messageId),
+				)
+				.first(),
+		);
+		expect(message?.messageType).toBe("error");
+		expect(message?.status).toBe("error");
+		expect(message?.error?.message).toContain("does not have enough credits");
+	});
+
 	test("does nothing when job does not exist", async () => {
 		const userId = await seedUser(t);
 		const chatId = await seedChat(t, userId);
