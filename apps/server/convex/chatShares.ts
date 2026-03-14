@@ -18,7 +18,7 @@ const shareDoc = v.object({
 
 const sharedMessageDoc = v.object({
 	id: v.string(),
-	role: v.string(),
+	role: v.union(v.literal("user"), v.literal("assistant")),
 	content: v.string(),
 	createdAt: v.number(),
 });
@@ -39,9 +39,15 @@ const sharedChatDoc = v.object({
 });
 
 const MAX_PUBLIC_MESSAGES = 300;
+type SharedMessage = {
+	id: string;
+	role: "user" | "assistant";
+	content: string;
+	createdAt: number;
+};
 
 function makeShareId() {
-	const token = crypto.randomUUID().replaceAll("-", "");
+	const token = crypto.randomUUID().replace(/-/g, "");
 	return token.slice(0, 22);
 }
 
@@ -62,13 +68,12 @@ async function getActiveShareForChat(
 	userId: Id<"users">,
 	chatId: Id<"chats">,
 ) {
-	return ctx.db
+	const shares = await ctx.db
 		.query("chatShares")
-		.withIndex("by_user_chat_revoked_updated", (q) =>
-			q.eq("userId", userId).eq("chatId", chatId).eq("revokedAt", undefined),
-		)
+		.withIndex("by_user_chat_revoked_updated", (q) => q.eq("userId", userId).eq("chatId", chatId))
 		.order("desc")
-		.first();
+		.collect();
+	return shares.find((share) => !share.revokedAt) ?? null;
 }
 
 function normalizePreviewText(text: string) {
@@ -93,6 +98,31 @@ function buildPreview(messages: Array<{ role: string; content: string }>) {
 	}
 
 	return { firstUserPrompt, firstAssistantResponse };
+}
+
+async function getSharedMessages(ctx: QueryCtx, chatId: Id<"chats">) {
+	const messagesPage = await ctx.db
+		.query("messages")
+		.withIndex("by_chat_not_deleted", (q) =>
+			q.eq("chatId", chatId).eq("deletedAt", undefined),
+		)
+		.order("asc")
+		.paginate({ cursor: null, numItems: MAX_PUBLIC_MESSAGES });
+
+	return messagesPage.page.flatMap<SharedMessage>((message) => {
+		if (message.role !== "user" && message.role !== "assistant") {
+			return [];
+		}
+
+		return [
+			{
+				id: message._id,
+				role: message.role,
+				content: message.content,
+				createdAt: message.createdAt,
+			},
+		];
+	});
 }
 
 export const getByChat = query({
@@ -187,20 +217,7 @@ export const getPreviewByShareId = query({
 		const chat = await ctx.db.get(share.chatId);
 		if (!chat || chat.deletedAt) return null;
 
-		const messagesPage = await ctx.db
-			.query("messages")
-			.withIndex("by_chat_not_deleted", (q) =>
-				q.eq("chatId", chat._id).eq("deletedAt", undefined),
-			)
-			.order("asc")
-			.paginate({ cursor: null, numItems: MAX_PUBLIC_MESSAGES });
-
-		const messages = messagesPage.page
-			.filter((message) => message.role === "user" || message.role === "assistant")
-			.map((message) => ({
-				role: message.role,
-				content: message.content,
-			}));
+		const messages = await getSharedMessages(ctx, chat._id);
 		const preview = buildPreview(messages);
 
 		return {
@@ -227,22 +244,7 @@ export const getPublicByShareId = query({
 		const chat = await ctx.db.get(share.chatId);
 		if (!chat || chat.deletedAt) return null;
 
-		const messagesPage = await ctx.db
-			.query("messages")
-			.withIndex("by_chat_not_deleted", (q) =>
-				q.eq("chatId", chat._id).eq("deletedAt", undefined),
-			)
-			.order("asc")
-			.paginate({ cursor: null, numItems: MAX_PUBLIC_MESSAGES });
-
-		const messages = messagesPage.page
-			.filter((message) => message.role === "user" || message.role === "assistant")
-			.map((message) => ({
-				id: message._id,
-				role: message.role,
-				content: message.content,
-				createdAt: message.createdAt,
-			}));
+		const messages = await getSharedMessages(ctx, chat._id);
 		const preview = buildPreview(messages);
 
 		return {

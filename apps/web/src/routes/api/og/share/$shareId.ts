@@ -11,17 +11,18 @@ const WIDTH = 1200;
 const HEIGHT = 630;
 
 function splitLines(value: string, maxChars: number, maxLines: number) {
-	const words = value.split(/\s+/);
+	const words = value.split(/\s+/).filter(Boolean);
 	const lines: string[] = [];
 	let current = "";
 
-	for (const word of words) {
+	for (const rawWord of words) {
+		const word = truncatePreview(rawWord, maxChars);
 		const candidate = current ? `${current} ${word}` : word;
 		if (candidate.length <= maxChars) {
 			current = candidate;
 			continue;
 		}
-		if (lines.length === maxLines - 1) {
+		if (lines.length >= maxLines - 1) {
 			lines.push(truncatePreview(candidate, maxChars));
 			return lines.map((line) => line.trim()).slice(0, maxLines);
 		}
@@ -99,15 +100,20 @@ function buildSvg({
       <stop stop-color="#141D40" stop-opacity="0.92"/>
       <stop offset="1" stop-color="#111A33" stop-opacity="0.92"/>
     </linearGradient>
+    <clipPath id="cardClip">
+      <rect x="72" y="72" width="1056" height="486" rx="28"/>
+    </clipPath>
   </defs>
   <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#bg)"/>
   <circle cx="1020" cy="-30" r="230" fill="#3B82F6" fill-opacity="0.28"/>
   <circle cx="180" cy="700" r="260" fill="#22D3EE" fill-opacity="0.16"/>
   <rect x="72" y="72" width="1056" height="486" rx="28" fill="url(#card)" stroke="#8FA5FF" stroke-opacity="0.2"/>
-  <text x="108" y="124" fill="#9BB4FF" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="22" font-weight="700">Shared on osschat</text>
-  ${renderLines(titleLines, 108, 188, 46)}
-  ${renderSmallLines(userLines, 108, 288, 36, "Prompt", "#FBBF24")}
-  ${renderSmallLines(assistantLines, 108, 436, 36, "AI Response", "#34D399")}
+  <g clip-path="url(#cardClip)">
+    <text x="108" y="124" fill="#9BB4FF" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="22" font-weight="700">Shared on osschat</text>
+    ${renderLines(titleLines, 108, 188, 46)}
+    ${renderSmallLines(userLines, 108, 288, 36, "Prompt", "#FBBF24")}
+    ${renderSmallLines(assistantLines, 108, 436, 36, "AI Response", "#34D399")}
+  </g>
   <text x="108" y="592" fill="#A7B6E9" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="18">${encodeSvgText(description)}</text>
 </svg>`;
 }

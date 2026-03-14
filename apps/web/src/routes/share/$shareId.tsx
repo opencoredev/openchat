@@ -5,9 +5,8 @@ import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
 import { getConvexServerClient } from "@/lib/convex-server";
+import { FALLBACK_SHARE_ORIGIN, getShareOrigin } from "@/lib/share-origin";
 import { buildShareDescription } from "@/lib/share-preview";
-
-const FALLBACK_ORIGIN = "https://osschat.dev";
 
 type LoaderData = {
 	origin: string;
@@ -30,10 +29,7 @@ type LoaderData = {
 const getSharedChatPageData = createServerFn({ method: "GET" })
 	.validator((input: { shareId: string }) => input)
 	.handler(async ({ data }): Promise<LoaderData> => {
-		const origin =
-			process.env.VITE_APP_URL ||
-			(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ||
-			FALLBACK_ORIGIN;
+		const origin = getShareOrigin();
 
 		const client = getConvexServerClient();
 		const shared = await client.query(api.chatShares.getPublicByShareId, {
@@ -65,8 +61,8 @@ export const Route = createFileRoute("/share/$shareId")({
 					firstAssistantResponse: loaderData.shared.firstAssistantResponse,
 				})
 			: "View a shared chat conversation from osschat.";
-		const ogImage = loaderData?.ogImageUrl ?? `${FALLBACK_ORIGIN}/og-image.png`;
-		const shareUrl = loaderData?.shareUrl ?? FALLBACK_ORIGIN;
+		const ogImage = loaderData?.ogImageUrl ?? `${FALLBACK_SHARE_ORIGIN}/og-image.png`;
+		const shareUrl = loaderData?.shareUrl ?? FALLBACK_SHARE_ORIGIN;
 
 		return {
 			meta: [

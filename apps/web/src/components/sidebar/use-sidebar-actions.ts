@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api } from "@server/convex/_generated/api";
 import type { Id } from "@server/convex/_generated/dataModel";
 import { convexClient } from "@/lib/convex";
+import { getShareOrigin } from "@/lib/share-origin";
 import { useBulkSelectionStore } from "@/stores/bulk-selection";
 import type { MouseEvent } from "react";
 import type { ChatItem } from "./chat-list";
@@ -131,7 +132,8 @@ export function useSidebarActions({
 				});
 				if (shareRequestIdRef.current !== requestId) return;
 				if (typeof window !== "undefined") {
-					setShareUrl(`${window.location.origin}/share/${result.shareId}`);
+					const shareOrigin = getShareOrigin({ windowOrigin: window.location.origin });
+					setShareUrl(`${shareOrigin}/share/${result.shareId}`);
 				}
 			} catch (error) {
 				console.warn("[Chat] Failed to create share link:", error);
