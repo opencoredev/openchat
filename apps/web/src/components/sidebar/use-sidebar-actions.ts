@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api } from "@server/convex/_generated/api";
 import type { Id } from "@server/convex/_generated/dataModel";
 import { convexClient } from "@/lib/convex";
+import { getShareOrigin } from "@/lib/share-origin";
 import { useBulkSelectionStore } from "@/stores/bulk-selection";
 import type { MouseEvent } from "react";
 import type { ChatItem } from "./chat-list";
@@ -41,6 +42,11 @@ export function useSidebarActions({
 	const [deleteChatId, setDeleteChatId] = useState<string | null>(null);
 	const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
 	const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+	const [showShareDialog, setShowShareDialog] = useState(false);
+	const [isGeneratingShare, setIsGeneratingShare] = useState(false);
+	const [isRevokingShare, setIsRevokingShare] = useState(false);
+	const [shareChatId, setShareChatId] = useState<string | null>(null);
+	const [shareUrl, setShareUrl] = useState("");
 	const [editingChatId, setEditingChatId] = useState<string | null>(null);
 	const [editValue, setEditValue] = useState("");
 	const [editOriginal, setEditOriginal] = useState("");
@@ -55,6 +61,7 @@ export function useSidebarActions({
 	const deselectAll = useBulkSelectionStore((s) => s.deselectAll);
 	const getSelectedChatIds = useBulkSelectionStore((s) => s.getSelectedChatIds);
 	const selectionAnchorRef = useRef<string | null>(null);
+	const shareRequestIdRef = useRef(0);
 
 	const deleteChat = useMemo(
 		() => (deleteChatId ? chats.find((chat) => chat._id === deleteChatId) : null),
@@ -107,6 +114,89 @@ export function useSidebarActions({
 		setEditingChatId(chat._id);
 		setEditValue(chat.title);
 	};
+
+	const handleShareFromMenu = useCallback(
+		async (chatId: string) => {
+			if (!convexClient || !convexUser?._id) return;
+			const requestId = shareRequestIdRef.current + 1;
+			shareRequestIdRef.current = requestId;
+
+			setContextMenu(null);
+			setShareChatId(chatId);
+			setShowShareDialog(true);
+			setIsGeneratingShare(true);
+			setShareUrl("");
+			try {
+				const result = await convexClient.mutation(api.chatShares.createOrGet, {
+					chatId: chatId as Id<"chats">,
+				});
+				if (shareRequestIdRef.current !== requestId) return;
+				if (typeof window !== "undefined") {
+					const shareOrigin = getShareOrigin({ windowOrigin: window.location.origin });
+					setShareUrl(`${shareOrigin}/share/${result.shareId}`);
+				}
+			} catch (error) {
+				console.warn("[Chat] Failed to create share link:", error);
+				toast.error("Failed to create share link");
+			} finally {
+				if (shareRequestIdRef.current === requestId) {
+					setIsGeneratingShare(false);
+				}
+			}
+		},
+		[convexClient, convexUser?._id],
+	);
+
+	const handleCopyShareLink = useCallback(async () => {
+		if (!shareUrl) return;
+		try {
+			await navigator.clipboard.writeText(shareUrl);
+			toast.success("Share link copied");
+		} catch (error) {
+			console.warn("[Chat] Failed to copy share link:", error);
+			toast.error("Clipboard access failed. Copy the link manually.");
+		}
+	}, [shareUrl]);
+
+	const handleNativeShare = useCallback(async () => {
+		if (!shareUrl || typeof navigator === "undefined" || !("share" in navigator)) return;
+		const title = chats.find((chat) => chat._id === shareChatId)?.title ?? "Shared chat";
+		try {
+			await navigator.share({
+				title,
+				text: `Check out this shared chat: ${title}`,
+				url: shareUrl,
+			});
+		} catch (error) {
+			// AbortError is expected when user closes native share sheet.
+			if (!(error instanceof DOMException && error.name === "AbortError")) {
+				console.warn("[Chat] Native share failed:", error);
+				toast.error("Native share failed");
+			}
+		}
+	}, [chats, shareChatId, shareUrl]);
+
+	const handleRevokeShare = useCallback(async () => {
+		if (!shareChatId || !convexClient || !convexUser?._id) return;
+
+		setIsRevokingShare(true);
+		try {
+			const result = await convexClient.mutation(api.chatShares.revoke, {
+				chatId: shareChatId as Id<"chats">,
+			});
+			if (!result.revoked) {
+				toast.error("Share link is no longer active");
+				return;
+			}
+			setShareUrl("");
+			toast.success("Share link revoked");
+		} catch (error) {
+			console.warn("[Chat] Failed to revoke share link:", error);
+			toast.error("Failed to revoke share link");
+		} finally {
+			setIsRevokingShare(false);
+		}
+	}, [convexClient, convexUser?._id, shareChatId]);
 
 	const handleStartEdit = (chatId: string, title: string, event: React.MouseEvent) => {
 		event.preventDefault();
@@ -347,6 +437,12 @@ export function useSidebarActions({
 		showBulkDeleteDialog,
 		setShowBulkDeleteDialog,
 		isBulkDeleting,
+		showShareDialog,
+		setShowShareDialog,
+		isGeneratingShare,
+		isRevokingShare,
+		shareChatId,
+		shareUrl,
 		editingChatId,
 		editValue,
 		setEditValue,
@@ -356,6 +452,10 @@ export function useSidebarActions({
 		handleChatContextMenu,
 		handleQuickDelete,
 		handleRenameFromMenu,
+		handleShareFromMenu,
+		handleCopyShareLink,
+		handleNativeShare,
+		handleRevokeShare,
 		handleStartEdit,
 		handleCancelEdit,
 		handleSubmitEdit,

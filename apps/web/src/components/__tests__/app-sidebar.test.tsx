@@ -140,8 +140,12 @@ vi.mock('@/components/icons', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+	CopyIcon: () => <span data-testid="copy-icon" />,
 	GitForkIcon: () => <span data-testid="git-fork-icon" />,
+	MailIcon: () => <span data-testid="mail-icon" />,
+	MessageCircleIcon: () => <span data-testid="message-circle-icon" />,
 	PencilIcon: () => <span data-testid="pencil-icon" />,
+	Share2Icon: () => <span data-testid="share2-icon" />,
 	SparklesIcon: () => <span data-testid="sparkles-icon" />,
 	Trash2Icon: () => <span data-testid="trash2-icon" />,
 	XIcon: () => <span data-testid="x-icon" />,

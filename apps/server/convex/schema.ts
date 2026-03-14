@@ -66,6 +66,17 @@ export default defineSchema({
 		.index("by_user_last_message", ["userId", "lastMessageAt"])
 		.index("by_user_not_deleted", ["userId", "deletedAt", "updatedAt"])
 		.index("by_user_title", ["userId", "title"]),
+	chatShares: defineTable({
+		userId: v.id("users"),
+		chatId: v.id("chats"),
+		shareId: v.string(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+		revokedAt: v.optional(v.number()),
+	})
+		.index("by_share_id", ["shareId"])
+		.index("by_user_chat_revoked_updated", ["userId", "chatId", "revokedAt", "updatedAt"])
+		.index("by_chat_revoked_updated", ["chatId", "revokedAt", "updatedAt"]),
 	messages: defineTable({
 		chatId: v.id("chats"),
 		clientMessageId: v.optional(v.string()),
