@@ -6,11 +6,11 @@
 
 // polyfill MessageChannel without using node:events
 class MockMessagePort {
-	onmessage: ((this: MessagePort, ev: MessageEvent) => any) | null = null;
-	onmessageerror: ((this: MessagePort, ev: MessageEvent) => any) | null = null;
+	onmessage: ((this: MessagePort, ev: MessageEvent) => void) | null = null;
+	onmessageerror: ((this: MessagePort, ev: MessageEvent) => void) | null = null;
 
 	close() {}
-	postMessage(_message: any, _transfer?: Transferable[]) {}
+	postMessage(_message: unknown, _transfer?: Transferable[]) {}
 	start() {}
 	addEventListener(
 		_type: string,

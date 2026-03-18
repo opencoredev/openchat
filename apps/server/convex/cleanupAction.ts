@@ -1,9 +1,26 @@
 "use node";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
+import type { FunctionReference } from "convex/server";
 import { internalAction } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { v } from "convex/values";
+
+const cleanupSoftDeletedRecordsRef =
+	"crons:cleanupSoftDeletedRecords" as unknown as FunctionReference<
+		"mutation",
+		"internal",
+		{
+			retentionDays?: number;
+			batchSize?: number;
+			dryRun?: boolean;
+		},
+		{
+			success: boolean;
+			deleted: number;
+			dryRun: boolean;
+			cutoffDate: string;
+		}
+	>;
 
 function safeCompare(a: string, b: string, hmacKey: string): boolean {
 	const hmacA = createHmac("sha256", hmacKey).update(a).digest();
@@ -43,7 +60,7 @@ export const runCleanupBatchForWorkflow = internalAction({
 			throw new Error("batchSize must be between 1 and 1000");
 		}
 
-		const result = await ctx.runMutation(internal.crons.cleanupSoftDeletedRecords, {
+		const result = await ctx.runMutation(cleanupSoftDeletedRecordsRef, {
 			retentionDays,
 			batchSize,
 			dryRun: args.dryRun,

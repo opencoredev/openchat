@@ -54,30 +54,56 @@ async function getConnectedClient() {
 	return redisStore;
 }
 
+function isStreamMetaStatus(value: unknown): value is StreamMeta["status"] {
+	return value === "streaming" || value === "completed" || value === "error";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
 function parseStreamMeta(value: unknown): StreamMeta | null {
 	if (!value) return null;
 	if (typeof value === "string") {
 		try {
-			return JSON.parse(value) as StreamMeta;
+			return parseStreamMeta(JSON.parse(value));
 		} catch {
 			return null;
 		}
 	}
-	if (typeof value === "object") {
-		const candidate = value as Partial<StreamMeta>;
-		if (
-			(candidate.status === "streaming" ||
-				candidate.status === "completed" ||
-				candidate.status === "error") &&
-			typeof candidate.chatId === "string" &&
-			typeof candidate.userId === "string" &&
-			typeof candidate.messageId === "string" &&
-			typeof candidate.startedAt === "number"
-		) {
-			return candidate as StreamMeta;
-		}
+
+	if (!isRecord(value)) {
+		return null;
 	}
-	return null;
+
+	const { status, chatId, userId, messageId, startedAt, completedAt, error } = value;
+	if (
+		!isStreamMetaStatus(status) ||
+		typeof chatId !== "string" ||
+		typeof userId !== "string" ||
+		typeof messageId !== "string" ||
+		typeof startedAt !== "number"
+	) {
+		return null;
+	}
+
+	if (completedAt !== undefined && typeof completedAt !== "number") {
+		return null;
+	}
+
+	if (error !== undefined && typeof error !== "string") {
+		return null;
+	}
+
+	return {
+		status,
+		chatId,
+		userId,
+		messageId,
+		startedAt,
+		...(completedAt !== undefined ? { completedAt } : {}),
+		...(error !== undefined ? { error } : {}),
+	};
 }
 
 export async function initStream(

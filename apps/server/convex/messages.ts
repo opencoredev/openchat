@@ -12,6 +12,10 @@ import {
 	messageTypeValidator,
 } from "./message_validators";
 import { insertOrUpdateMessage } from "./message_helpers";
+import {
+	completeActiveAndPendingStreams,
+	softDeleteMessagesAfter,
+} from "./chat_cleanup_helpers";
 
 export { list, getFirstUserMessage, getActiveStream } from "./message_queries";
 
@@ -181,41 +185,18 @@ export const editAndRegenerate = mutation({
 		}
 
 		const now = Date.now();
-
-		const activeStreams = await ctx.db
-			.query("streamJobs")
-			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId).eq("status", "running"))
-			.collect();
-		const pendingStreams = await ctx.db
-			.query("streamJobs")
-			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId).eq("status", "pending"))
-			.collect();
-
-		for (const stream of [...activeStreams, ...pendingStreams]) {
-			await ctx.db.patch(stream._id, {
-				status: "completed",
-				completedAt: now,
-			});
-		}
+		await completeActiveAndPendingStreams(ctx, args.chatId, now);
 
 		await ctx.db.patch(args.messageId, {
 			content: newContent,
 		});
 
-		const messagesToDelete = await ctx.db
-			.query("messages")
-			.withIndex("by_chat_not_deleted", (q) =>
-				q.eq("chatId", args.chatId).eq("deletedAt", undefined)
-			)
-			.order("asc")
-			.filter((q) => q.gt(q.field("createdAt"), message.createdAt))
-			.collect();
-
-		for (const msg of messagesToDelete) {
-			await ctx.db.patch(msg._id, { deletedAt: now });
-		}
-
-		const softDeletedCount = messagesToDelete.length;
+		const softDeletedCount = await softDeleteMessagesAfter(
+			ctx,
+			args.chatId,
+			message.createdAt,
+			now,
+		);
 		const currentCount = chat.messageCount ?? 0;
 		await ctx.db.patch(args.chatId, {
 			messageCount: Math.max(0, currentCount - softDeletedCount),
@@ -263,37 +244,13 @@ export const retryMessage = mutation({
 		}
 
 		const now = Date.now();
-
-		const activeStreams = await ctx.db
-			.query("streamJobs")
-			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId).eq("status", "running"))
-			.collect();
-		const pendingStreams = await ctx.db
-			.query("streamJobs")
-			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId).eq("status", "pending"))
-			.collect();
-		for (const stream of [...activeStreams, ...pendingStreams]) {
-			await ctx.db.patch(stream._id, {
-				status: "completed",
-				completedAt: now,
-			});
-		}
-
-		const allMessages = await ctx.db
-			.query("messages")
-			.withIndex("by_chat_not_deleted", (q) =>
-				q.eq("chatId", args.chatId).eq("deletedAt", undefined)
-			)
-			.order("asc")
-			.collect();
-
-		let softDeletedCount = 0;
-		for (const msg of allMessages) {
-			if (msg.createdAt > message.createdAt) {
-				await ctx.db.patch(msg._id, { deletedAt: now });
-				softDeletedCount += 1;
-			}
-		}
+		await completeActiveAndPendingStreams(ctx, args.chatId, now);
+		const softDeletedCount = await softDeleteMessagesAfter(
+			ctx,
+			args.chatId,
+			message.createdAt,
+			now,
+		);
 
 		const currentCount = chat.messageCount ?? 0;
 		await ctx.db.patch(args.chatId, {

@@ -1,8 +1,16 @@
+import type { FunctionReference } from "convex/server";
 import type { Id } from "../_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";
-import { api } from "../_generated/api";
 
 type AuthCtx = QueryCtx | MutationCtx;
+type ActionAuthUser = { _id: Id<"users"> } | null;
+
+const getByExternalIdRef = "users:getByExternalId" as unknown as FunctionReference<
+	"query",
+	"public",
+	{ externalId: string },
+	ActionAuthUser
+>;
 
 export async function requireAuthUserId(
 	ctx: AuthCtx,
@@ -37,7 +45,7 @@ export async function requireAuthUserIdFromAction(
 		throw new Error("Unauthorized");
 	}
 
-	const user = await ctx.runQuery(api.users.getByExternalId, {
+	const user = await ctx.runQuery(getByExternalIdRef, {
 		externalId: identity.subject,
 	});
 	if (!user) {

@@ -23,7 +23,13 @@ export const streamOptionsValidator = v.object({
 	maxSteps: v.optional(v.number()),
 });
 
-const streamJobOptionsReturnValidator = v.record(v.string(), v.any());
+type StreamJobOptions = {
+	enableReasoning?: boolean;
+	reasoningEffort?: string;
+	enableWebSearch?: boolean;
+	supportsToolCalls?: boolean;
+	maxSteps?: number;
+};
 
 const executeStreamRef = "streamExecution:executeStream" as unknown as FunctionReference<
 	"action",
@@ -65,7 +71,7 @@ const streamJobReturnShape = v.union(
 		status: v.string(),
 		model: v.string(),
 		provider: v.string(),
-		options: v.optional(streamJobOptionsReturnValidator),
+		options: v.optional(streamOptionsValidator),
 		content: v.string(),
 		reasoning: v.optional(v.string()),
 		chainOfThoughtParts: v.optional(v.array(chainOfThoughtPartValidator)),
@@ -89,7 +95,7 @@ function pickJobFields(job: {
 	status: string;
 	model: string;
 	provider: string;
-	options?: Record<string, unknown>;
+	options?: StreamJobOptions;
 	content: string;
 	reasoning?: string;
 	chainOfThoughtParts?: ChainOfThoughtPart[];

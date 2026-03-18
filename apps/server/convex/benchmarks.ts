@@ -1,6 +1,6 @@
+import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { internalAction, internalMutation, query } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { buildMatchingMap, type AAModel } from "./lib/model_matching";
 import { createLogger } from "./lib/logger";
 
@@ -32,6 +32,29 @@ const benchmarkValidator = v.object({
 	math500: v.optional(v.float64()),
 	aime: v.optional(v.float64()),
 });
+
+const storeBenchmarksRef =
+	"benchmarks:storeBenchmarks" as unknown as FunctionReference<
+		"mutation",
+		"internal",
+		{
+			benchmarks: Array<{
+				openRouterModelId: string;
+				aaSlug: string;
+				aaCreatorName: string;
+				intelligenceIndex?: number;
+				codingIndex?: number;
+				mathIndex?: number;
+				mmluPro?: number;
+				gpqa?: number;
+				scicode?: number;
+				livecodebench?: number;
+				math500?: number;
+				aime?: number;
+			}>;
+		},
+		unknown
+	>;
 
 export const fetchAndStoreBenchmarks = internalAction({
 	args: {},
@@ -87,7 +110,7 @@ export const fetchAndStoreBenchmarks = internalAction({
 				}];
 			});
 
-			await ctx.runMutation(internal.benchmarks.storeBenchmarks, { benchmarks });
+			await ctx.runMutation(storeBenchmarksRef, { benchmarks });
 		} catch (error) {
 			void logger.error("Failed to refresh Artificial Analysis benchmarks", error);
 		}
@@ -183,5 +206,4 @@ export const getAllBenchmarks = query({
 		};
 	},
 });
-
 

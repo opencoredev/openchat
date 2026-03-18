@@ -1,5 +1,7 @@
-import { useEffect, useState, useMemo } from "react";
+import { useMemo } from "react";
 import type { Model } from "@/stores/model";
+
+export { useIsMobile } from "@/hooks/use-mobile";
 
 export type UniqueProvider = {
 	id: string;
@@ -8,19 +10,6 @@ export type UniqueProvider = {
 	logoId: string;
 	count: number;
 };
-
-export function useIsMobile() {
-	const [isMobile, setIsMobile] = useState(false);
-
-	useEffect(() => {
-		const checkMobile = () => setIsMobile(window.innerWidth < 768);
-		checkMobile();
-		window.addEventListener("resize", checkMobile);
-		return () => window.removeEventListener("resize", checkMobile);
-	}, []);
-
-	return isMobile;
-}
 
 export function useUniqueProviders(models: Model[]): UniqueProvider[] {
 	return useMemo(() => {

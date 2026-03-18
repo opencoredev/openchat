@@ -39,17 +39,19 @@ export function usePromptDraft({ chatId, textInputController }: UsePromptDraftOp
 
 	// Track if we've already restored the draft (to avoid overwriting user input)
 	const hasRestoredRef = useRef(false);
+	const skipNextSaveRef = useRef(false);
 
 	// Restore draft on mount or when chatId changes
 	useEffect(() => {
 		// Reset restoration flag when chatId changes
 		hasRestoredRef.current = false;
+		skipNextSaveRef.current = true;
 
 		const savedDraft = getDraft(chatId);
 		if (savedDraft) {
-			hasRestoredRef.current = true;
 			textInputController.setInput(savedDraft);
 		}
+		hasRestoredRef.current = true;
 
 		// Cleanup debounce on unmount
 		return () => {
@@ -72,17 +74,24 @@ export function usePromptDraft({ chatId, textInputController }: UsePromptDraftOp
 	// Using chatId and setDraft directly to avoid re-running on saveDraft recreation
 	useEffect(() => {
 		// Only save after initial restoration
-		if (hasRestoredRef.current) {
-			// Clear any existing timeout
-			if (debounceTimeoutRef.current) {
-				clearTimeout(debounceTimeoutRef.current);
-			}
-
-			// Schedule a new save
-			debounceTimeoutRef.current = setTimeout(() => {
-				setDraft(chatId, textInputController.value);
-			}, DEBOUNCE_MS);
+		if (!hasRestoredRef.current) {
+			return;
 		}
+
+		if (skipNextSaveRef.current) {
+			skipNextSaveRef.current = false;
+			return;
+		}
+
+		// Clear any existing timeout
+		if (debounceTimeoutRef.current) {
+			clearTimeout(debounceTimeoutRef.current);
+		}
+
+		// Schedule a new save
+		debounceTimeoutRef.current = setTimeout(() => {
+			setDraft(chatId, textInputController.value);
+		}, DEBOUNCE_MS);
 	}, [textInputController.value, chatId, setDraft]);
 
 	return {

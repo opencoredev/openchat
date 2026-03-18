@@ -26,11 +26,9 @@ import { PremiumPromptInputInner } from "./premium-prompt-input";
 import type { UIDataTypes, UIMessagePart, UITools } from "ai";
 
 function useIsMac() {
-	const [isMac, setIsMac] = useState(true);
-
-	useEffect(() => {
-		setIsMac(navigator.platform.toLowerCase().includes("mac"));
-	}, []);
+	const [isMac] = useState(() =>
+		typeof navigator === "undefined" ? true : navigator.platform.toLowerCase().includes("mac"),
+	);
 
 	return isMac;
 }
