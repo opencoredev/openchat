@@ -1,5 +1,6 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { rateLimiter } from "./lib/rateLimiter";
 import { throwRateLimitError } from "./lib/rateLimitUtils";
 import { sanitizeText } from "./lib/sanitize";
@@ -61,6 +62,33 @@ const promptTemplateListItemDoc = v.object({
 // Security configuration
 const MAX_TEMPLATE_LIST_LIMIT = 200;
 const DEFAULT_TEMPLATE_LIST_LIMIT = 50;
+
+type PromptTemplateCtx = MutationCtx | QueryCtx;
+
+async function getOwnedActiveTemplate(
+	ctx: PromptTemplateCtx,
+	templateId: Id<"promptTemplates">,
+	userId: Id<"users">,
+) {
+	const template = await ctx.db.get(templateId);
+	if (!template || template.userId !== userId || template.deletedAt) {
+		return null;
+	}
+	return template;
+}
+
+async function getActiveTemplateByCommand(
+	ctx: PromptTemplateCtx,
+	userId: Id<"users">,
+	command: string,
+) {
+	return await ctx.db
+		.query("promptTemplates")
+		.withIndex("by_command_not_deleted", (q) =>
+			q.eq("userId", userId).eq("command", command).eq("deletedAt", undefined)
+		)
+		.first();
+}
 
 export const list = query({
 	args: {
@@ -131,11 +159,7 @@ export const get = query({
 	returns: v.union(promptTemplateDoc, v.null()),
 	handler: async (ctx, args) => {
 		const userId = await requireAuthUserId(ctx, args.userId);
-		const template = await ctx.db.get(args.templateId);
-		if (!template || template.userId !== userId || template.deletedAt) {
-			return null;
-		}
-		return template;
+		return await getOwnedActiveTemplate(ctx, args.templateId, userId);
 	},
 });
 
@@ -147,13 +171,7 @@ export const getByCommand = query({
 	returns: v.union(promptTemplateDoc, v.null()),
 	handler: async (ctx, args) => {
 		const userId = await requireAuthUserId(ctx, args.userId);
-		const templates = await ctx.db
-			.query("promptTemplates")
-			.withIndex("by_command", (q) =>
-				q.eq("userId", userId).eq("command", args.command)
-			)
-			.filter(q => q.eq(q.field("deletedAt"), undefined))
-			.first();
+		const templates = await getActiveTemplateByCommand(ctx, userId, args.command);
 
 		if (!templates) return null;
 		return templates;
@@ -205,13 +223,7 @@ export const create = mutation({
 		}
 
 		// Check for duplicate command
-		const existing = await ctx.db
-			.query("promptTemplates")
-			.withIndex("by_command", (q) =>
-				q.eq("userId", userId).eq("command", sanitizedCommand)
-			)
-			.filter(q => q.eq(q.field("deletedAt"), undefined))
-			.first();
+		const existing = await getActiveTemplateByCommand(ctx, userId, sanitizedCommand);
 
 		if (existing) {
 			throw new Error(`Command ${sanitizedCommand} already exists`);
@@ -259,8 +271,8 @@ export const update = mutation({
 			throwRateLimitError("updates", retryAfter);
 		}
 
-		const existing = await ctx.db.get(args.templateId);
-		if (!existing || existing.userId !== userId || existing.deletedAt) {
+		const existing = await getOwnedActiveTemplate(ctx, args.templateId, userId);
+		if (!existing) {
 			return { ok: false };
 		}
 
@@ -274,13 +286,7 @@ export const update = mutation({
 		if (args.command !== undefined) {
 			const sanitizedCommand = sanitizeCommand(args.command);
 			// Check for duplicate command (excluding current template)
-			const duplicate = await ctx.db
-				.query("promptTemplates")
-				.withIndex("by_command", (q) =>
-					q.eq("userId", userId).eq("command", sanitizedCommand)
-				)
-				.filter(q => q.eq(q.field("deletedAt"), undefined))
-				.first();
+			const duplicate = await getActiveTemplateByCommand(ctx, userId, sanitizedCommand);
 
 			if (duplicate && duplicate._id !== args.templateId) {
 				throw new Error(`Command ${sanitizedCommand} already exists`);
@@ -325,8 +331,8 @@ export const autoSave = mutation({
 			throwRateLimitError("auto-saves", retryAfter);
 		}
 
-		const existing = await ctx.db.get(args.templateId);
-		if (!existing || existing.userId !== userId || existing.deletedAt) {
+		const existing = await getOwnedActiveTemplate(ctx, args.templateId, userId);
+		if (!existing) {
 			return { ok: false };
 		}
 
@@ -363,8 +369,8 @@ export const remove = mutation({
 			throwRateLimitError("deletions", retryAfter);
 		}
 
-		const template = await ctx.db.get(args.templateId);
-		if (!template || template.userId !== userId || template.deletedAt) {
+		const template = await getOwnedActiveTemplate(ctx, args.templateId, userId);
+		if (!template) {
 			return { ok: false };
 		}
 
@@ -385,8 +391,8 @@ export const incrementUsage = mutation({
 	returns: v.object({ ok: v.boolean() }),
 	handler: async (ctx, args) => {
 		const userId = await requireAuthUserId(ctx, args.userId);
-		const template = await ctx.db.get(args.templateId);
-		if (!template || template.userId !== userId || template.deletedAt) {
+		const template = await getOwnedActiveTemplate(ctx, args.templateId, userId);
+		if (!template) {
 			return { ok: false };
 		}
 

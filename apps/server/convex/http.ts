@@ -1,12 +1,44 @@
 import "./polyfills";
+import type { FunctionReference } from "convex/server";
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { api, internal } from "./_generated/api";
 import { authComponent, createAuth } from "./auth";
 import { getAllowedOrigins, getCorsOrigin } from "./lib/origins";
 import { createLogger } from "./lib/logger";
 
 const logger = createLogger("http");
+
+type PublicStats = {
+  messages: number;
+  users: number;
+  chats: number;
+  stars: number;
+  models: number;
+};
+
+const getPublicStatsRef = "stats:getPublicStats" as unknown as FunctionReference<
+  "query",
+  "public",
+  Record<string, never>,
+  PublicStats
+>;
+
+const runCleanupBatchForWorkflowRef = "cleanupAction:runCleanupBatchForWorkflow" as unknown as FunctionReference<
+  "action",
+  "internal",
+  {
+    workflowToken: string;
+    retentionDays?: number;
+    batchSize?: number;
+    dryRun?: boolean;
+  },
+  {
+    success: boolean;
+    deleted: number;
+    dryRun: boolean;
+    cutoffDate: string;
+  }
+>;
 
 const http = httpRouter();
 
@@ -48,7 +80,7 @@ http.route({
     const origin = request.headers.get("origin");
     const allowedOrigin = getCorsOrigin(origin);
 
-    const stats = await ctx.runQuery(api.stats.getPublicStats, {});
+    const stats = await ctx.runQuery(getPublicStatsRef, {});
 
     const headers: Record<string, string> = {
       "content-type": "application/json",
@@ -113,7 +145,7 @@ http.route({
 
     let result;
     try {
-      result = await ctx.runAction(internal.cleanupAction.runCleanupBatchForWorkflow, {
+      result = await ctx.runAction(runCleanupBatchForWorkflowRef, {
         workflowToken,
         retentionDays:
           typeof payload.retentionDays === "number" && Number.isFinite(payload.retentionDays)

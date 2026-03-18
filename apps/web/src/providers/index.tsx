@@ -81,33 +81,53 @@ function useStableConvexAuth() {
 function UserSyncProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, loading } = useAuth();
   const ensureUser = useMutation(api.users.ensure);
-  const syncedRef = useRef(false);
-  const syncingRef = useRef(false);
+  const syncedUserIdRef = useRef<string | null>(null);
+  const syncingUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (!isAuthenticated || !user?.id) {
+      syncedUserIdRef.current = null;
+      syncingUserIdRef.current = null;
+    }
+  }, [isAuthenticated, user?.id]);
+
+  useEffect(() => {
+    const userId = user?.id;
+
     // Only sync once when user is authenticated and we have user data
-    if (loading || !isAuthenticated || !user?.id || syncedRef.current || syncingRef.current) {
+    if (
+      loading ||
+      !isAuthenticated ||
+      !userId ||
+      syncedUserIdRef.current === userId ||
+      syncingUserIdRef.current === userId
+    ) {
       return;
     }
 
-    syncingRef.current = true;
+    syncingUserIdRef.current = userId;
 
     // Sync Better Auth user to Convex users table
     ensureUser({
-      externalId: user.id,
+      externalId: userId,
       email: user.email,
       name: user.name,
       avatarUrl: user.image ?? undefined,
     })
       .then(() => {
-        syncedRef.current = true;
+        syncedUserIdRef.current = userId;
+        if (syncingUserIdRef.current === userId) {
+          syncingUserIdRef.current = null;
+        }
       })
       .catch((error) => {
         console.error("[UserSync] Failed to sync user to Convex:", error);
         // Reset so we can retry on next render
-        syncingRef.current = false;
+        if (syncingUserIdRef.current === userId) {
+          syncingUserIdRef.current = null;
+        }
       });
-  }, [loading, isAuthenticated, user, ensureUser]);
+  }, [loading, isAuthenticated, user?.id, user?.email, user?.name, user?.image, ensureUser]);
 
   return <>{children}</>;
 }
@@ -148,37 +168,49 @@ function UsageSyncProvider({ children }: { children: React.ReactNode }) {
  * This syncs the hasApiKey state without exposing the actual key to the client.
  */
 function OpenRouterKeyStatusProvider({ children }: { children: React.ReactNode }) {
-	const { isAuthenticated, loading } = useAuth();
+	const { user, isAuthenticated, loading } = useAuth();
 	const initialize = useOpenRouterStore((s) => s.initialize);
-	const checkedRef = useRef(false);
-	const checkingRef = useRef(false);
+	const checkedUserIdRef = useRef<string | null>(null);
+	const checkingUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (!isAuthenticated || !user?.id) {
+      checkedUserIdRef.current = null;
+      checkingUserIdRef.current = null;
+    }
+  }, [isAuthenticated, user?.id]);
+
+  useEffect(() => {
+    const userId = user?.id;
+
     // Only check once when user is authenticated
-    if (loading || !isAuthenticated || checkedRef.current || checkingRef.current) {
+    if (
+      loading ||
+      !isAuthenticated ||
+      !userId ||
+      checkedUserIdRef.current === userId ||
+      checkingUserIdRef.current === userId
+    ) {
       return;
     }
 
-    checkingRef.current = true;
+    checkingUserIdRef.current = userId;
     
 		initialize()
 			.then(() => {
-				checkedRef.current = true;
+				checkedUserIdRef.current = userId;
+        if (checkingUserIdRef.current === userId) {
+          checkingUserIdRef.current = null;
+        }
 			})
       .catch((error: unknown) => {
         console.error("[OpenRouterKeyStatus] Failed to check API key status:", error);
         // Reset so we can retry on next render
-        checkingRef.current = false;
+        if (checkingUserIdRef.current === userId) {
+          checkingUserIdRef.current = null;
+        }
       });
-	}, [loading, isAuthenticated, initialize]);
-
-  // Reset checked state when user logs out
-  useEffect(() => {
-    if (!isAuthenticated && !loading) {
-      checkedRef.current = false;
-      checkingRef.current = false;
-    }
-  }, [isAuthenticated, loading]);
+	}, [loading, isAuthenticated, user?.id, initialize]);
 
   return <>{children}</>;
 }

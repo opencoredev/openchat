@@ -12,8 +12,7 @@
  * 3. Configure the schedule in Convex dashboard under "Crons"
  */
 
-import { cronJobs } from "convex/server";
-import { internal } from "./_generated/api";
+import { cronJobs, type FunctionReference } from "convex/server";
 import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { decrementStat, getStats, STAT_KEYS } from "./lib/dbStats";
@@ -27,9 +26,17 @@ const ALERT_THRESHOLDS = {
 	maxUsers: 1_000_000,
 } as const;
 
+const fetchAndStoreBenchmarksRef =
+	"benchmarks:fetchAndStoreBenchmarks" as unknown as FunctionReference<
+		"action",
+		"internal",
+		Record<string, never>,
+		unknown
+	>;
+
 const crons = cronJobs();
 
-crons.interval("refresh benchmarks", { hours: 8 }, internal.benchmarks.fetchAndStoreBenchmarks);
+crons.interval("refresh benchmarks", { hours: 8 }, fetchAndStoreBenchmarksRef);
 
 /**
  * Cleanup soft-deleted records

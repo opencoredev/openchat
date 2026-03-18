@@ -1,6 +1,6 @@
+import type { FunctionReference } from "convex/server";
 import { webSearch } from "@valyu/ai-sdk";
 import type { Id } from "./_generated/dataModel";
-import { internal } from "./_generated/api";
 import {
 	compactWebSearchOutput,
 	searchOutputToContext,
@@ -13,10 +13,18 @@ import {
 } from "./streamUtils";
 import type { StreamState } from "./streamUtils";
 
+const incrementSearchUsageInternalRef =
+	"search:incrementSearchUsageInternal" as unknown as FunctionReference<
+		"mutation",
+		"internal",
+		{ userId: Id<"users"> },
+		unknown
+	>;
+
 export async function executePrefetchedSearches(
 	ctx: {
 		runMutation: (
-			fn: typeof internal.search.incrementSearchUsageInternal,
+			fn: typeof incrementSearchUsageInternalRef,
 			args: { userId: Id<"users"> },
 		) => Promise<unknown>;
 	},
@@ -58,7 +66,7 @@ export async function executePrefetchedSearches(
 			// so it will throw if the limit is already reached.
 			// This prevents the TOCTOU race where two concurrent requests
 			// could both pass the initial check and exceed the limit.
-			await ctx.runMutation(internal.search.incrementSearchUsageInternal, {
+			await ctx.runMutation(incrementSearchUsageInternalRef, {
 				userId,
 			});
 

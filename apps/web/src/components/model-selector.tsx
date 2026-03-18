@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import type { Model } from "@/stores/model";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { getModelById, useModelStore, useModels } from "@/stores/model";
 import { useFavoriteModels } from "@/hooks/use-favorite-models";
@@ -13,7 +14,7 @@ import { ModelInfoPanel } from "@/components/model-info-panel";
 import { ProviderLogo } from "./model-selector/provider-logo";
 import { MobileDrawer } from "./model-selector/mobile-drawer";
 import { DesktopDropdown } from "./model-selector/desktop-dropdown";
-import { useIsMobile, useUniqueProviders, useFilteredModels, useFlatList } from "./model-selector/use-model-filter";
+import { useUniqueProviders, useFilteredModels, useFlatList } from "./model-selector/use-model-filter";
 
 interface ModelSelectorProps {
 	value: string;

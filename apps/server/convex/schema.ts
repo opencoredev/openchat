@@ -195,6 +195,7 @@ export default defineSchema({
 	})
 		.index("by_user", ["userId", "uploadedAt"])
 		.index("by_chat", ["chatId", "uploadedAt"])
+		.index("by_chat_not_deleted", ["chatId", "deletedAt", "uploadedAt"])
 		.index("by_storage", ["storageId"])
 		.index("by_user_not_deleted", ["userId", "deletedAt", "uploadedAt"]),
 	// PERFORMANCE OPTIMIZATION: Database statistics table for efficient monitoring
@@ -237,6 +238,7 @@ export default defineSchema({
 	})
 		.index("by_user", ["userId", "deletedAt", "updatedAt"])
 		.index("by_command", ["userId", "command"])
+		.index("by_command_not_deleted", ["userId", "command", "deletedAt"])
 		.index("by_category", ["userId", "category", "deletedAt"])
 		.index("by_public", ["isPublic", "deletedAt"])
 		.index("by_draft", ["userId", "isDraft", "deletedAt"]),

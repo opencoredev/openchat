@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { createLogger } from "./lib/logger";
@@ -7,6 +7,88 @@ import { throwRateLimitError } from "./lib/rateLimitUtils";
 import { sanitizeFilename } from "./lib/sanitize";
 import { requireAuthUserId } from "./lib/auth";
 import { MAX_USER_FILES, validateFileType, validateFileSize } from "./file_validators";
+
+type FileSummary = {
+	_id: Id<"fileUploads">;
+	_creationTime: number;
+	storageId: Id<"_storage">;
+	filename: string;
+	contentType: string;
+	size: number;
+	uploadedAt: number;
+};
+
+type FileAccessCtx = MutationCtx | QueryCtx;
+
+function toFileSummary(file: FileSummary) {
+	return {
+		_id: file._id,
+		_creationTime: file._creationTime,
+		storageId: file.storageId,
+		filename: file.filename,
+		contentType: file.contentType,
+		size: file.size,
+		uploadedAt: file.uploadedAt,
+	};
+}
+
+async function assertUserAndOwnedChat(
+	ctx: MutationCtx,
+	userId: Id<"users">,
+	chatId: Id<"chats">,
+) {
+	const [user, chat] = await Promise.all([ctx.db.get(userId), ctx.db.get(chatId)]);
+
+	if (!user) {
+		throw new Error("User not found");
+	}
+
+	if (!chat) {
+		throw new Error("Chat not found");
+	}
+
+	if (chat.userId !== userId) {
+		throw new Error("Unauthorized: You do not own this chat");
+	}
+
+	return user;
+}
+
+async function getOwnedChat(
+	ctx: FileAccessCtx,
+	chatId: Id<"chats">,
+	userId: Id<"users">,
+) {
+	const chat = await ctx.db.get(chatId);
+	if (!chat) {
+		throw new Error("Chat not found");
+	}
+	if (chat.userId !== userId) {
+		throw new Error("Unauthorized: You do not own this chat");
+	}
+	return chat;
+}
+
+async function getOwnedFileByStorageId(
+	ctx: FileAccessCtx,
+	storageId: Id<"_storage">,
+	userId: Id<"users">,
+) {
+	const file = await ctx.db
+		.query("fileUploads")
+		.withIndex("by_storage", (q) => q.eq("storageId", storageId))
+		.unique();
+
+	if (!file) {
+		return null;
+	}
+
+	if (file.userId !== userId) {
+		throw new Error("Unauthorized: You do not own this file");
+	}
+
+	return file;
+}
 
 /**
  * Generates a URL for uploading a file to Convex storage.
@@ -34,25 +116,7 @@ export const generateUploadUrl = mutation({
 			throwRateLimitError("upload URL requests", retryAfter);
 		}
 
-		// PERFORMANCE OPTIMIZATION: Fetch user and chat in parallel to reduce latency
-		// This reduces total wait time from T(user) + T(chat) to max(T(user), T(chat))
-		const [user, chat] = await Promise.all([
-			ctx.db.get(userId),
-			ctx.db.get(args.chatId),
-		]);
-
-		// Verify user exists
-		if (!user) {
-			throw new Error("User not found");
-		}
-
-		// Verify the chat exists and belongs to the user
-		if (!chat) {
-			throw new Error("Chat not found");
-		}
-		if (chat.userId !== userId) {
-			throw new Error("Unauthorized: You do not own this chat");
-		}
+		const user = await assertUserAndOwnedChat(ctx, userId, args.chatId);
 
 		// Check if user has exceeded their file quota
 		const currentFileCount = user.fileUploadCount || 0;
@@ -111,25 +175,7 @@ export const saveFileMetadata = mutation({
 		// Validate file type
 		validateFileType(args.contentType);
 
-		// PERFORMANCE OPTIMIZATION: Fetch user and chat in parallel
-		// This eliminates duplicate user lookup (was fetched again after file insert)
-		const [user, chat] = await Promise.all([
-			ctx.db.get(userId),
-			ctx.db.get(args.chatId),
-		]);
-
-		// Verify user exists
-		if (!user) {
-			throw new Error("User not found");
-		}
-
-		// Verify the chat exists and belongs to the user
-		if (!chat) {
-			throw new Error("Chat not found");
-		}
-		if (chat.userId !== userId) {
-			throw new Error("Unauthorized: You do not own this chat");
-		}
+		const user = await assertUserAndOwnedChat(ctx, userId, args.chatId);
 
 		// Sanitize the filename
 		const sanitizedFilename = sanitizeFilename(args.filename);
@@ -180,18 +226,11 @@ export const getFileUrl = query({
 	handler: async (ctx, args) => {
 		const userId = await requireAuthUserId(ctx, args.userId);
 		// Find the file by storage ID
-		const file = await ctx.db
-			.query("fileUploads")
-			.withIndex("by_storage", (q) => q.eq("storageId", args.storageId))
-			.unique();
+		const file = await getOwnedFileByStorageId(ctx, args.storageId, userId);
 
 		// Verify file exists and user owns it
 		if (!file) {
 			return null;
-		}
-
-		if (file.userId !== userId) {
-			throw new Error("Unauthorized: You do not own this file");
 		}
 
 		// Check if file has been deleted
@@ -307,18 +346,10 @@ export const deleteFile = mutation({
 		}
 
 		// Find the file by storage ID
-		const file = await ctx.db
-			.query("fileUploads")
-			.withIndex("by_storage", (q) => q.eq("storageId", args.storageId))
-			.unique();
+		const file = await getOwnedFileByStorageId(ctx, args.storageId, userId);
 
 		if (!file) {
 			return { ok: false };
-		}
-
-		// Verify ownership
-		if (file.userId !== userId) {
-			throw new Error("Unauthorized: You do not own this file");
 		}
 
 		// Check if already deleted
@@ -407,32 +438,18 @@ export const getFilesByChat = query({
 	),
 	handler: async (ctx, args) => {
 		const userId = await requireAuthUserId(ctx, args.userId);
-		// Verify the chat exists and belongs to the user
-		const chat = await ctx.db.get(args.chatId);
-		if (!chat) {
-			throw new Error("Chat not found");
-		}
-		if (chat.userId !== userId) {
-			throw new Error("Unauthorized: You do not own this chat");
-		}
+		await getOwnedChat(ctx, args.chatId, userId);
 
 		// Query all non-deleted files for this chat
 		const files = await ctx.db
 			.query("fileUploads")
-			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
-			.filter((q) => q.eq(q.field("deletedAt"), undefined))
+			.withIndex("by_chat_not_deleted", (q) =>
+				q.eq("chatId", args.chatId).eq("deletedAt", undefined)
+			)
 			.order("desc")
 			.collect();
 
-		return files.map((file) => ({
-			_id: file._id,
-			_creationTime: file._creationTime,
-			storageId: file.storageId,
-			filename: file.filename,
-			contentType: file.contentType,
-			size: file.size,
-			uploadedAt: file.uploadedAt,
-		}));
+		return files.map(toFileSummary);
 	},
 });
 
@@ -470,14 +487,8 @@ export const getFilesByUser = query({
 			.collect();
 
 		return files.map((file) => ({
-			_id: file._id,
-			_creationTime: file._creationTime,
+			...toFileSummary(file),
 			chatId: file.chatId,
-			storageId: file.storageId,
-			filename: file.filename,
-			contentType: file.contentType,
-			size: file.size,
-			uploadedAt: file.uploadedAt,
 		}));
 	},
 });

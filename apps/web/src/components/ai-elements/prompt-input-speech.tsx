@@ -10,10 +10,10 @@ interface SpeechRecognition extends EventTarget {
 	lang: string;
 	start: () => void;
 	stop: () => void;
-	onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
-	onend: ((this: SpeechRecognition, ev: Event) => any) | null;
-	onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
-	onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null;
+	onstart: ((this: SpeechRecognition, ev: Event) => void) | null;
+	onend: ((this: SpeechRecognition, ev: Event) => void) | null;
+	onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void) | null;
+	onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => void) | null;
 }
 
 interface SpeechRecognitionEvent extends Event {
@@ -43,14 +43,14 @@ interface SpeechRecognitionErrorEvent extends Event {
 	error: string;
 }
 
+interface SpeechRecognitionConstructor {
+	new (): SpeechRecognition;
+}
+
 declare global {
 	interface Window {
-		SpeechRecognition: {
-			new (): SpeechRecognition;
-		};
-		webkitSpeechRecognition: {
-			new (): SpeechRecognition;
-		};
+		SpeechRecognition?: SpeechRecognitionConstructor;
+		webkitSpeechRecognition?: SpeechRecognitionConstructor;
 	}
 }
 
@@ -72,10 +72,8 @@ export const PromptInputSpeechButton = ({
 	useEffect(() => {
 		if (typeof window === "undefined") return;
 
-		/* eslint-disable @typescript-eslint/no-unnecessary-condition */
 		const SpeechRecognitionClass = window.SpeechRecognition ?? window.webkitSpeechRecognition;
 		if (SpeechRecognitionClass) {
-			/* eslint-enable @typescript-eslint/no-unnecessary-condition */
 			const speechRecognition = new SpeechRecognitionClass();
 
 			speechRecognition.continuous = true;

@@ -1,8 +1,9 @@
+import type { FunctionReference } from "convex/server";
 import { stepCountIs, streamText } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { createLogger } from "./lib/logger";
 
 const logger = createLogger("streamExecution");
@@ -33,12 +34,165 @@ import {
 } from "./streamUtils";
 import { executePrefetchedSearches } from "./streamWebSearch";
 
+type StreamJobOptions = {
+	enableReasoning?: boolean;
+	reasoningEffort?: string;
+	enableWebSearch?: boolean;
+	supportsToolCalls?: boolean;
+	maxSteps?: number;
+};
+
+type StreamExecutionJob = {
+	chatId: Id<"chats">;
+	userId: Id<"users">;
+	messageId: string;
+	model: string;
+	provider: string;
+	messages: Array<{ role: string; content: string }>;
+	options?: StreamJobOptions;
+	content: string;
+	createdAt: number;
+} | null;
+
+type StreamExecutionMessage = {
+	role: "user" | "assistant" | "system";
+	content: string;
+};
+
+type StreamUpdateArgs = {
+	jobId: Id<"streamJobs">;
+	content: string;
+	reasoning?: string;
+	chainOfThoughtParts?: unknown[];
+	thinkingTimeMs?: number;
+	thinkingTimeSec?: number;
+	reasoningCharCount?: number;
+	reasoningChunkCount?: number;
+	reasoningTokenCount?: number;
+	reasoningRequested?: boolean;
+	webSearchUsed?: boolean;
+	webSearchCallCount?: number;
+	toolCallCount?: number;
+	status?: "pending" | "running" | "completed" | "error";
+	error?: string;
+};
+
+type CompleteStreamArgs = {
+	jobId: Id<"streamJobs">;
+	content: string;
+	reasoning?: string;
+	chainOfThoughtParts?: unknown[];
+	thinkingTimeMs?: number;
+	thinkingTimeSec?: number;
+	reasoningCharCount?: number;
+	reasoningChunkCount?: number;
+	reasoningTokenCount?: number;
+	reasoningRequested?: boolean;
+	webSearchUsed?: boolean;
+	webSearchCallCount?: number;
+	toolCallCount?: number;
+	tokensPerSecond?: number;
+	timeToFirstTokenMs?: number;
+	totalDurationMs?: number;
+	tokenUsage?: {
+		promptTokens: number;
+		completionTokens: number;
+		totalTokens: number;
+	};
+};
+
+type FailStreamArgs = {
+	jobId: Id<"streamJobs">;
+	error: string;
+	partialContent?: string;
+};
+
+type SearchLimitResult = {
+	canSearch: boolean;
+	remaining: number;
+};
+
+const getJobInternalRef = "backgroundStream:getJobInternal" as unknown as FunctionReference<
+	"query",
+	"internal",
+	{ jobId: Id<"streamJobs"> },
+	StreamExecutionJob
+>;
+
+const failStreamRef = "backgroundStream:failStream" as unknown as FunctionReference<
+	"mutation",
+	"internal",
+	FailStreamArgs,
+	null
+>;
+
+const updateStreamContentRef =
+	"backgroundStream:updateStreamContent" as unknown as FunctionReference<
+		"mutation",
+		"internal",
+		StreamUpdateArgs,
+		null
+	>;
+
+const completeStreamRef = "backgroundStream:completeStream" as unknown as FunctionReference<
+	"mutation",
+	"internal",
+	CompleteStreamArgs,
+	null
+>;
+
+const getOpenRouterKeyInternalRef =
+	"users:getOpenRouterKeyInternal" as unknown as FunctionReference<
+		"query",
+		"internal",
+		{ userId: Id<"users"> },
+		string | null
+	>;
+
+const checkSearchLimitInternalRef =
+	"search:checkSearchLimitInternal" as unknown as FunctionReference<
+		"query",
+		"internal",
+		{ userId: Id<"users"> },
+		SearchLimitResult
+	>;
+
+const incrementAiUsageRef = "users:incrementAiUsage" as unknown as FunctionReference<
+	"mutation",
+	"internal",
+	{ userId: Id<"users">; usageCents: number },
+	unknown
+>;
+
+function toStreamMessages(
+	messages: Array<{ role: string; content: string }>,
+): StreamExecutionMessage[] {
+	return messages.map((message) => ({
+		role: message.role as StreamExecutionMessage["role"],
+		content: message.content,
+	}));
+}
+
+function prependSystemMessages(
+	messages: StreamExecutionMessage[],
+	systemMessages: string[],
+): StreamExecutionMessage[] {
+	if (systemMessages.length === 0) {
+		return messages;
+	}
+
+	return [
+		...systemMessages.map((content) => ({ role: "system" as const, content })),
+		...messages,
+	];
+}
+
 export const executeStream = internalAction({
 	args: {
 		jobId: v.id("streamJobs"),
 	},
 	handler: async (ctx, args) => {
-		const job = await ctx.runQuery(internal.backgroundStream.getJobInternal, {
+		const job = await ctx.runQuery(getJobInternalRef, {
 			jobId: args.jobId,
 		});
 
@@ -55,14 +209,14 @@ export const executeStream = internalAction({
 				reservedDateKey = currentDate;
 				if (reservedTotal > DAILY_AI_LIMIT_CENTS) {
 					await adjustDailyUsageInUpstash(job.userId, currentDate, -reservedUsageCents);
-					await ctx.runMutation(internal.backgroundStream.failStream, {
+					await ctx.runMutation(failStreamRef, {
 						jobId: args.jobId,
 						error: "Daily usage limit reached. Connect your OpenRouter account to continue.",
 					});
 					return;
 				}
 			} else {
-				await ctx.runMutation(internal.backgroundStream.failStream, {
+				await ctx.runMutation(failStreamRef, {
 					jobId: args.jobId,
 					error: "Usage tracking temporarily unavailable. Please retry shortly.",
 				});
@@ -70,7 +224,7 @@ export const executeStream = internalAction({
 			}
 		}
 
-		await ctx.runMutation(internal.backgroundStream.updateStreamContent, {
+		await ctx.runMutation(updateStreamContentRef, {
 			jobId: args.jobId,
 			content: "",
 			status: "running",
@@ -84,14 +238,14 @@ export const executeStream = internalAction({
 		if (job.provider === "osschat") {
 			apiKey = OPENROUTER_API_KEY ?? null;
 		} else {
-			const encryptedKey = await ctx.runQuery(internal.users.getOpenRouterKeyInternal, {
+			const encryptedKey = await ctx.runQuery(getOpenRouterKeyInternalRef, {
 				userId: job.userId,
 			});
 			apiKey = encryptedKey ? await decryptSecret(encryptedKey) : null;
 		}
 
 		if (!apiKey) {
-			await ctx.runMutation(internal.backgroundStream.failStream, {
+			await ctx.runMutation(failStreamRef, {
 				jobId: args.jobId,
 				error: "No API key available",
 			});
@@ -115,7 +269,7 @@ export const executeStream = internalAction({
 			if (!force && state.pendingUpdateCounter < UPDATE_INTERVAL) return;
 			state.pendingUpdateCounter = 0;
 			const toolMetrics = getToolMetrics(state);
-			await ctx.runMutation(internal.backgroundStream.updateStreamContent, {
+			await ctx.runMutation(updateStreamContentRef, {
 				jobId: args.jobId,
 				content: state.fullContent,
 				reasoning: reasoningRequested ? state.fullReasoning || undefined : undefined,
@@ -146,18 +300,7 @@ export const executeStream = internalAction({
 				job.options?.reasoningEffort,
 			);
 
-			const streamOptions: Parameters<typeof streamText>[0] = {
-				model: aiModel as Parameters<typeof streamText>[0]["model"],
-				messages: job.messages.map((message: { role: string; content: string }) => ({
-					role: message.role as "user" | "assistant" | "system",
-					content: message.content,
-				})),
-				abortSignal: controller.signal,
-				maxOutputTokens,
-				providerOptions: {
-					openrouter: openRouterOptions,
-				},
-			};
+			let streamMessages = toStreamMessages(job.messages);
 
 			const webSearchRequested = Boolean(job.options?.enableWebSearch);
 			const supportsToolCalls = job.options?.supportsToolCalls !== false;
@@ -167,7 +310,7 @@ export const executeStream = internalAction({
 			let availableSearches = 0;
 
 			if (webSearchRequested) {
-				const searchLimit = await ctx.runQuery(internal.search.checkSearchLimitInternal, {
+				const searchLimit = await ctx.runQuery(checkSearchLimitInternalRef, {
 					userId: job.userId,
 				});
 				availableSearches = searchLimit.remaining;
@@ -193,14 +336,9 @@ export const executeStream = internalAction({
 				unavailableToolPart.state = "output-error";
 				unavailableToolPart.errorText = webSearchUnavailableReason ?? "Web search is unavailable.";
 				state.pendingUpdateCounter++;
-				streamOptions.messages = [
-					{
-						role: "system",
-						content:
-							"Web search is unavailable for this request. Do not claim live web access; answer using existing knowledge only.",
-					},
-					...(streamOptions.messages as Array<{ role: "user" | "assistant" | "system"; content: string }>),
-				];
+				streamMessages = prependSystemMessages(streamMessages, [
+					"Web search is unavailable for this request. Do not claim live web access; answer using existing knowledge only.",
+				]);
 			}
 
 			if (webSearchMode === "tool" && valyuApiKey) {
@@ -215,18 +353,10 @@ export const executeStream = internalAction({
 				);
 
 				if (contextChunks.length > 0) {
-					streamOptions.messages = [
-						{
-							role: "system",
-							content:
-								"Use the following web search results for up-to-date facts. Cite source URLs in your answer when making factual claims.",
-						},
-						{
-							role: "system",
-							content: `Web search results:\n${contextChunks.join("\n\n")}`,
-						},
-						...(streamOptions.messages as Array<{ role: "user" | "assistant" | "system"; content: string }>),
-					];
+					streamMessages = prependSystemMessages(streamMessages, [
+						"Use the following web search results for up-to-date facts. Cite source URLs in your answer when making factual claims.",
+						`Web search results:\n${contextChunks.join("\n\n")}`,
+					]);
 				}
 			}
 
@@ -237,9 +367,16 @@ export const executeStream = internalAction({
 					? Math.floor(job.options.maxSteps)
 					: undefined;
 			const stepLimit = Math.max(1, Math.min(configuredMaxSteps ?? 1, 10));
-			streamOptions.stopWhen = stepCountIs(stepLimit);
-
-			const result = streamText(streamOptions);
+			const result = streamText({
+				model: aiModel,
+				messages: streamMessages,
+				abortSignal: controller.signal,
+				maxOutputTokens,
+				providerOptions: {
+					openrouter: openRouterOptions,
+				},
+				stopWhen: stepCountIs(stepLimit),
+			});
 
 			for await (const part of result.fullStream) {
 				switch (part.type) {
@@ -400,7 +537,7 @@ export const executeStream = internalAction({
 				if (usageCents && usageCents > 0) {
 					for (let attempt = 0; attempt < 2; attempt++) {
 						try {
-							await ctx.runMutation(internal.users.incrementAiUsage, {
+							await ctx.runMutation(incrementAiUsageRef, {
 								userId: job.userId,
 								usageCents,
 							});
@@ -441,7 +578,7 @@ export const executeStream = internalAction({
 			const thinkingTimeSec = getThinkingTimeSec(state);
 			const toolMetrics = getToolMetrics(state);
 
-			await ctx.runMutation(internal.backgroundStream.completeStream, {
+			await ctx.runMutation(completeStreamRef, {
 				jobId: args.jobId,
 				content: state.fullContent,
 				reasoning: reasoningRequested ? state.fullReasoning || undefined : undefined,
@@ -475,7 +612,7 @@ export const executeStream = internalAction({
 					void logger.error("Upstash refund adjustment failed", adjustError);
 				}
 			}
-			await ctx.runMutation(internal.backgroundStream.failStream, {
+			await ctx.runMutation(failStreamRef, {
 				jobId: args.jobId,
 				error: "An error occurred while processing your request.",
 				partialContent: state.fullContent,

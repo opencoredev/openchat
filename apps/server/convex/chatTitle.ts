@@ -1,3 +1,4 @@
+import type { FunctionReference } from "convex/server";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { action, internalAction, internalMutation, internalQuery, mutation } from "./_generated/server";
@@ -23,6 +24,38 @@ const TITLE_STYLE_PROMPTS: Record<"short" | "standard" | "long", string> = {
 type TitleLength = "short" | "standard" | "long";
 type TitleProvider = "osschat" | "openrouter";
 
+const getOpenRouterKeyInternalRef =
+	"users:getOpenRouterKeyInternal" as unknown as FunctionReference<
+		"query",
+		"internal",
+		{ userId: Id<"users"> },
+		string | null
+	>;
+
+const enforceTitleRateLimitRef =
+	"chatTitle:enforceTitleRateLimit" as unknown as FunctionReference<
+		"mutation",
+		"internal",
+		{ userId: Id<"users"> },
+		null
+	>;
+
+const getChatForTitleGenerationInternalRef =
+	"chatTitle:getChatForTitleGenerationInternal" as unknown as FunctionReference<
+		"query",
+		"internal",
+		{ chatId: Id<"chats">; userId: Id<"users"> },
+		{ title?: string | null } | null
+	>;
+
+const setGeneratedTitleInternalRef =
+	"chatTitle:setGeneratedTitleInternal" as unknown as FunctionReference<
+		"mutation",
+		"internal",
+		{ chatId: Id<"chats">; userId: Id<"users">; title: string; force?: boolean },
+		null
+	>;
+
 async function resolveOpenRouterKey(
 	ctx: ActionCtx,
 	userId: Id<"users">,
@@ -32,7 +65,7 @@ async function resolveOpenRouterKey(
 		return process.env.OPENROUTER_API_KEY ?? null;
 	}
 
-	const encryptedKey = await ctx.runQuery(internal.users.getOpenRouterKeyInternal, {
+	const encryptedKey = await ctx.runQuery(getOpenRouterKeyInternalRef, {
 		userId,
 	});
 	return encryptedKey ? await decryptSecret(encryptedKey) : null;
@@ -111,7 +144,7 @@ export const generateTitle = action({
 	returns: v.union(v.string(), v.null()),
 	handler: async (_ctx, args) => {
 		const userId = await requireAuthUserIdFromAction(_ctx, args.userId);
-		await _ctx.runMutation(internal.chatTitle.enforceTitleRateLimit, {
+		await _ctx.runMutation(enforceTitleRateLimitRef, {
 			userId,
 		});
 
@@ -140,7 +173,7 @@ export const generateAndSetTitleInternal = internalAction({
 		reason: v.optional(v.string()),
 	}),
 	handler: async (ctx, args) => {
-		const chat = await ctx.runQuery(internal.chatTitle.getChatForTitleGenerationInternal, {
+		const chat = await ctx.runQuery(getChatForTitleGenerationInternalRef, {
 			chatId: args.chatId,
 			userId: args.userId,
 		});
@@ -157,7 +190,7 @@ export const generateAndSetTitleInternal = internalAction({
 			return { saved: false, reason: "empty_seed" };
 		}
 
-		await ctx.runMutation(internal.chatTitle.enforceTitleRateLimit, {
+		await ctx.runMutation(enforceTitleRateLimitRef, {
 			userId: args.userId,
 		});
 
@@ -175,7 +208,7 @@ export const generateAndSetTitleInternal = internalAction({
 			return { saved: false, reason: "generation_failed" };
 		}
 
-		await ctx.runMutation(internal.chatTitle.setGeneratedTitleInternal, {
+		await ctx.runMutation(setGeneratedTitleInternalRef, {
 			chatId: args.chatId,
 			userId: args.userId,
 			title: generatedTitle,

@@ -1,10 +1,72 @@
 import { action, internalMutation, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import type { FunctionReference } from "convex/server";
 import { decrementStat, STAT_KEYS } from "./lib/dbStats";
-import { components, internal } from "./_generated/api";
+import { components } from "./_generated/api";
 import { requireAuthUserId, requireAuthUserIdFromAction } from "./lib/auth";
 
 const MAX_DELETE_BATCH_LOOPS = 1_000;
+
+type DeleteBatchResult = {
+	deleted: number;
+	hasMore: boolean;
+};
+
+const deleteUserStreamJobsRef =
+	"users:deleteUserStreamJobs" as unknown as FunctionReference<
+		"mutation",
+		"internal",
+		{ userId: string; batchSize?: number },
+		DeleteBatchResult
+	>;
+
+const deleteUserMessagesRef =
+	"users:deleteUserMessages" as unknown as FunctionReference<
+		"mutation",
+		"internal",
+		{ userId: string; batchSize?: number },
+		DeleteBatchResult
+	>;
+
+const deleteUserChatsRef =
+	"users:deleteUserChats" as unknown as FunctionReference<
+		"mutation",
+		"internal",
+		{ userId: string; batchSize?: number },
+		DeleteBatchResult
+	>;
+
+const deleteUserFilesRef =
+	"users:deleteUserFiles" as unknown as FunctionReference<
+		"mutation",
+		"internal",
+		{ userId: string; batchSize?: number },
+		DeleteBatchResult
+	>;
+
+const deleteUserChatReadStatusesRef =
+	"users:deleteUserChatReadStatuses" as unknown as FunctionReference<
+		"mutation",
+		"internal",
+		{ userId: string },
+		DeleteBatchResult
+	>;
+
+const deleteUserPromptTemplatesRef =
+	"users:deleteUserPromptTemplates" as unknown as FunctionReference<
+		"mutation",
+		"internal",
+		{ userId: string },
+		DeleteBatchResult
+	>;
+
+const deleteUserRecordRef =
+	"users:deleteUserRecord" as unknown as FunctionReference<
+		"mutation",
+		"internal",
+		{ userId: string; externalId: string },
+		{ success: boolean }
+	>;
 
 export const deleteUserRecord = internalMutation({
 	args: {
@@ -90,36 +152,36 @@ export const deleteAccountWorkflowStep = action({
 
 		switch (args.step) {
 			case "delete-stream-jobs":
-				return await ctx.runMutation(internal.users.deleteUserStreamJobs, {
+				return await ctx.runMutation(deleteUserStreamJobsRef, {
 					userId,
 					batchSize: args.batchSize,
 				});
 			case "delete-messages":
-				return await ctx.runMutation(internal.users.deleteUserMessages, {
+				return await ctx.runMutation(deleteUserMessagesRef, {
 					userId,
 					batchSize: args.batchSize,
 				});
 			case "delete-chats":
-				return await ctx.runMutation(internal.users.deleteUserChats, {
+				return await ctx.runMutation(deleteUserChatsRef, {
 					userId,
 					batchSize: args.batchSize,
 				});
 			case "delete-files":
-				return await ctx.runMutation(internal.users.deleteUserFiles, {
+				return await ctx.runMutation(deleteUserFilesRef, {
 					userId,
 					batchSize: args.batchSize,
 				});
 			case "delete-chat-read-statuses":
-				return await ctx.runMutation(internal.users.deleteUserChatReadStatuses, {
+				return await ctx.runMutation(deleteUserChatReadStatusesRef, {
 					userId,
 				});
 			case "delete-prompt-templates":
-				return await ctx.runMutation(internal.users.deleteUserPromptTemplates, {
+				return await ctx.runMutation(deleteUserPromptTemplatesRef, {
 					userId,
 				});
 			case "delete-user": {
 				const result: { success: boolean } = await ctx.runMutation(
-					internal.users.deleteUserRecord,
+					deleteUserRecordRef,
 					{
 						userId,
 						externalId: args.externalId,
@@ -190,7 +252,7 @@ export const deleteAccount = mutation({
 
 		// 4. Delete streamJobs
 		for (let batch = 0; batch < MAX_DELETE_BATCH_LOOPS; batch++) {
-			const result = await ctx.runMutation(internal.users.deleteUserStreamJobs, {
+			const result = await ctx.runMutation(deleteUserStreamJobsRef, {
 				userId,
 			});
 			if (!result.hasMore) break;
@@ -198,7 +260,7 @@ export const deleteAccount = mutation({
 
 		// 5. Delete chatReadStatus
 		for (let batch = 0; batch < MAX_DELETE_BATCH_LOOPS; batch++) {
-			const result = await ctx.runMutation(internal.users.deleteUserChatReadStatuses, {
+			const result = await ctx.runMutation(deleteUserChatReadStatusesRef, {
 				userId,
 			});
 			if (!result.hasMore) break;
@@ -206,7 +268,7 @@ export const deleteAccount = mutation({
 
 		// 6. Delete fileUploads AND storage blobs
 		for (let batch = 0; batch < MAX_DELETE_BATCH_LOOPS; batch++) {
-			const result = await ctx.runMutation(internal.users.deleteUserFiles, {
+			const result = await ctx.runMutation(deleteUserFilesRef, {
 				userId,
 			});
 			if (!result.hasMore) break;
@@ -214,7 +276,7 @@ export const deleteAccount = mutation({
 
 		// 7. Delete messages (all messages for all user's chats)
 		for (let batch = 0; batch < MAX_DELETE_BATCH_LOOPS; batch++) {
-			const result = await ctx.runMutation(internal.users.deleteUserMessages, {
+			const result = await ctx.runMutation(deleteUserMessagesRef, {
 				userId,
 			});
 			if (!result.hasMore) break;
@@ -222,7 +284,7 @@ export const deleteAccount = mutation({
 
 		// 8. Delete chats
 		for (let batch = 0; batch < MAX_DELETE_BATCH_LOOPS; batch++) {
-			const result = await ctx.runMutation(internal.users.deleteUserChats, {
+			const result = await ctx.runMutation(deleteUserChatsRef, {
 				userId,
 			});
 			if (!result.hasMore) break;
@@ -230,7 +292,7 @@ export const deleteAccount = mutation({
 
 		// 9. Delete promptTemplates
 		for (let batch = 0; batch < MAX_DELETE_BATCH_LOOPS; batch++) {
-			const result = await ctx.runMutation(internal.users.deleteUserPromptTemplates, {
+			const result = await ctx.runMutation(deleteUserPromptTemplatesRef, {
 				userId,
 			});
 			if (!result.hasMore) break;

@@ -15,10 +15,18 @@ const DEFAULT_FAVORITES = [
   "x-ai/grok-4.1-fast",
 ];
 
+function serializeFavorites(favorites: Iterable<string>) {
+  return JSON.stringify(Array.from(favorites).sort());
+}
+
 export function useFavoriteModels() {
   const { user } = useAuth();
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const isInitialized = useRef(false);
+  const activeUserIdRef = useRef<string | null>(null);
+  const lastServerSnapshotRef = useRef<string | null>(null);
+  const lastLocalSnapshotRef = useRef(serializeFavorites([]));
+  const hasPendingOptimisticUpdateRef = useRef(false);
 
   const convexUser = useQuery(
     api.users.getByExternalId,
@@ -35,31 +43,69 @@ export function useFavoriteModels() {
   const toggleFavoriteMutation = useMutation(api.users.toggleFavoriteModel);
   const setFavoritesMutation = useMutation(api.users.setFavoriteModels);
 
+  const applyFavorites = useCallback((nextFavorites: Set<string>, markOptimistic = false) => {
+    lastLocalSnapshotRef.current = serializeFavorites(nextFavorites);
+    hasPendingOptimisticUpdateRef.current = markOptimistic;
+    setFavorites(new Set(nextFavorites));
+  }, []);
+
   useEffect(() => {
-    if (serverFavorites !== undefined && !isInitialized.current) {
-      setFavorites(new Set(serverFavorites ?? []));
-      isInitialized.current = true;
+    if (!convexUserId) {
+      activeUserIdRef.current = null;
+      lastServerSnapshotRef.current = null;
+      isInitialized.current = false;
+      applyFavorites(new Set());
+      return;
     }
-  }, [serverFavorites]);
 
-  const toggleFavorite = useCallback(
-    (modelId: string) => {
-      if (!convexUserId) return;
+    if (serverFavorites === undefined) {
+      if (activeUserIdRef.current !== convexUserId) {
+        activeUserIdRef.current = convexUserId;
+        lastServerSnapshotRef.current = null;
+        isInitialized.current = false;
+        applyFavorites(new Set());
+      }
+      return;
+    }
 
-      setFavorites((prev) => {
-        const next = new Set(prev);
-        if (next.has(modelId)) {
-          next.delete(modelId);
-        } else {
-          next.add(modelId);
-        }
-        return next;
-      });
+    const serverSet = new Set(serverFavorites ?? []);
+    const serverSnapshot = serializeFavorites(serverSet);
+    const userChanged = activeUserIdRef.current !== convexUserId;
+    const serverSnapshotChanged = serverSnapshot !== lastServerSnapshotRef.current;
 
-      toggleFavoriteMutation({ userId: convexUserId, modelId });
-    },
-    [convexUserId, toggleFavoriteMutation],
-  );
+    if (
+      userChanged ||
+      !hasPendingOptimisticUpdateRef.current ||
+      serverSnapshot === lastLocalSnapshotRef.current ||
+      serverSnapshotChanged
+    ) {
+      applyFavorites(serverSet);
+    }
+
+    activeUserIdRef.current = convexUserId;
+    lastServerSnapshotRef.current = serverSnapshot;
+    isInitialized.current = true;
+  }, [convexUserId, serverFavorites, applyFavorites]);
+
+	const toggleFavorite = useCallback(
+		(modelId: string) => {
+			if (!convexUserId) return;
+
+			const nextFavorites = new Set(favorites);
+			if (nextFavorites.has(modelId)) {
+				nextFavorites.delete(modelId);
+			} else {
+				nextFavorites.add(modelId);
+			}
+
+			lastLocalSnapshotRef.current = serializeFavorites(nextFavorites);
+			hasPendingOptimisticUpdateRef.current = true;
+			setFavorites(nextFavorites);
+
+			toggleFavoriteMutation({ userId: convexUserId, modelId });
+		},
+		[convexUserId, favorites, toggleFavoriteMutation],
+	);
 
   const isFavorite = useCallback(
     (modelId: string) => favorites.has(modelId),
@@ -68,11 +114,11 @@ export function useFavoriteModels() {
 
   const addDefaults = useCallback(() => {
     const newFavorites = new Set([...favorites, ...DEFAULT_FAVORITES]);
-    setFavorites(newFavorites);
+    applyFavorites(newFavorites, true);
     if (convexUserId) {
       setFavoritesMutation({ userId: convexUserId, modelIds: Array.from(newFavorites) });
     }
-  }, [convexUserId, setFavoritesMutation, favorites]);
+  }, [applyFavorites, convexUserId, setFavoritesMutation, favorites]);
 
   const missingDefaults = DEFAULT_FAVORITES.filter((id) => !favorites.has(id));
   const missingDefaultsCount = missingDefaults.length;

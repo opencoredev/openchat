@@ -7,6 +7,7 @@ import { rateLimiter } from "./lib/rateLimiter";
 import { throwRateLimitError } from "./lib/rateLimitUtils";
 import { sanitizeTitle } from "./lib/sanitize";
 import { requireAuthUserId } from "./lib/auth";
+import { softDeleteAllMessagesInChat } from "./chat_cleanup_helpers";
 
 const chatDoc = v.object({
 	_id: v.id("chats"),
@@ -165,34 +166,16 @@ export const remove = mutation({
 			throwRateLimitError("deletions", retryAfter);
 		}
 
-		const chat = await ctx.db.get(args.chatId);
-		if (!chat || chat.userId !== userId || chat.deletedAt) {
+		const chat = await assertOwnsChat(ctx, args.chatId, userId);
+		if (!chat) {
 			return { ok: false } as const;
 		}
 		const now = Date.now();
 
-		const messages = await ctx.db
-			.query("messages")
-			.withIndex("by_chat_not_deleted", (q) =>
-				q.eq("chatId", args.chatId).eq("deletedAt", undefined)
-			)
-			.collect();
-
-		await Promise.all(
-			messages.map((message) =>
-				ctx.db.patch(message._id, {
-					deletedAt: now,
-				}),
-			),
-		);
-
-		await ctx.db.patch(args.chatId, {
-			deletedAt: now,
-			messageCount: 0,
-		});
+		const deletedMessages = await softDeleteChatWithMessages(ctx, args.chatId, now);
 
 		await incrementStat(ctx, STAT_KEYS.CHATS_SOFT_DELETED);
-		await incrementStat(ctx, STAT_KEYS.MESSAGES_SOFT_DELETED, messages.length);
+		await incrementStat(ctx, STAT_KEYS.MESSAGES_SOFT_DELETED, deletedMessages);
 
 		return { ok: true } as const;
 	},
@@ -238,51 +221,23 @@ export const removeBulk = mutation({
 		let totalMessages = 0;
 
 		// First pass: validate all chats and collect valid ones
-		const validChats: Array<{ chatId: Id<"chats"> }> = [];
+		const validChats: Array<Id<"chats">> = [];
 		for (const chatId of args.chatIds) {
-			const chat = await ctx.db.get(chatId);
+			const chat = await assertOwnsChat(ctx, chatId, userId);
 
 			// Skip if chat doesn't exist, doesn't belong to user, or is already deleted
-			if (!chat || chat.userId !== userId || chat.deletedAt) {
+			if (!chat) {
 				failed++;
 				continue;
 			}
 
-			validChats.push({ chatId });
+			validChats.push(chatId);
 		}
 
-		// Second pass: fetch all messages for valid chats in parallel
-		const messagesByChat = await Promise.all(
-			validChats.map(async ({ chatId }) => {
-				const messages = await ctx.db
-					.query("messages")
-					.withIndex("by_chat_not_deleted", (q) =>
-						q.eq("chatId", chatId).eq("deletedAt", undefined)
-					)
-					.collect();
-				return { chatId, messages };
-			})
-		);
-
-		// Third pass: soft-delete all messages and chats
-		for (const { chatId, messages } of messagesByChat) {
-			// Soft-delete all messages for this chat
-			await Promise.all(
-				messages.map((message) =>
-					ctx.db.patch(message._id, {
-						deletedAt: now,
-					}),
-				),
-			);
-
-			// Soft-delete the chat
-			await ctx.db.patch(chatId, {
-				deletedAt: now,
-				messageCount: 0,
-			});
-
+		for (const chatId of validChats) {
+			const deletedMessages = await softDeleteChatWithMessages(ctx, chatId, now);
 			deleted++;
-			totalMessages += messages.length;
+			totalMessages += deletedMessages;
 		}
 
 		// Update stats
@@ -307,6 +262,19 @@ export async function assertOwnsChat(
 		return null;
 	}
 	return chat;
+}
+
+async function softDeleteChatWithMessages(
+	ctx: MutationCtx,
+	chatId: Id<"chats">,
+	now: number,
+) {
+	const deletedMessages = await softDeleteAllMessagesInChat(ctx, chatId, now);
+	await ctx.db.patch(chatId, {
+		deletedAt: now,
+		messageCount: 0,
+	});
+	return deletedMessages;
 }
 
 export const checkExportRateLimit = mutation({

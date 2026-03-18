@@ -10,6 +10,35 @@ import {
 	isSameOrigin,
 } from "@/lib/server-auth";
 
+function parseChatId(value: unknown): Id<"chats"> | null {
+	if (typeof value !== "string") {
+		return null;
+	}
+
+	const chatId = value.trim();
+	return chatId ? (chatId as Id<"chats">) : null;
+}
+
+function parseTypingBody(value: unknown): { chatId: Id<"chats">; isTyping: boolean } | null {
+	if (!value || typeof value !== "object") {
+		return null;
+	}
+
+	const { chatId, isTyping } = value as {
+		chatId?: unknown;
+		isTyping?: unknown;
+	};
+	const parsedChatId = parseChatId(chatId);
+	if (!parsedChatId) {
+		return null;
+	}
+
+	return {
+		chatId: parsedChatId,
+		isTyping: Boolean(isTyping),
+	};
+}
+
 export const Route = createFileRoute("/api/typing")({
 	server: {
 		handlers: {
@@ -31,16 +60,14 @@ export const Route = createFileRoute("/api/typing")({
 						return json({ error: "Unauthorized" }, { status: 401 });
 					}
 
-					const body = await request.json();
-					const { chatId, isTyping } = body;
-
-					if (!chatId) {
+					const parsedBody = parseTypingBody(await request.json());
+					if (!parsedBody) {
 						return json({ error: "chatId required" }, { status: 400 });
 					}
 
 					// Verify user owns the chat before allowing typing status update
 					const chat = await convexClient.query(api.chats.get, {
-						chatId: chatId as Id<"chats">,
+						chatId: parsedBody.chatId,
 						userId: convexUserId,
 					});
 					if (!chat) {
@@ -51,7 +78,7 @@ export const Route = createFileRoute("/api/typing")({
 						return json({ ok: true });
 					}
 
-					await redis.typing.set(chatId, convexUserId, !!isTyping);
+					await redis.typing.set(parsedBody.chatId, convexUserId, parsedBody.isTyping);
 					return json({ ok: true });
 				} catch (error) {
 					console.error("[Typing API POST] Error:", error);
@@ -78,15 +105,14 @@ export const Route = createFileRoute("/api/typing")({
 					}
 
 					const url = new URL(request.url);
-					const chatId = url.searchParams.get("chatId");
-
+					const chatId = parseChatId(url.searchParams.get("chatId"));
 					if (!chatId) {
 						return json({ error: "chatId required" }, { status: 400 });
 					}
 
 					// Verify user owns the chat before allowing typing status read
 					const chat = await convexClient.query(api.chats.get, {
-						chatId: chatId as Id<"chats">,
+						chatId,
 						userId: convexUserId,
 					});
 					if (!chat) {
