@@ -272,7 +272,7 @@ export const update = mutation({
 		}
 
 		const existing = await getOwnedActiveTemplate(ctx, args.templateId, userId);
-		if (!existing || existing.userId !== userId || existing.deletedAt) {
+		if (!existing) {
 			return { ok: false };
 		}
 

@@ -87,26 +87,25 @@ export function useFavoriteModels() {
     isInitialized.current = true;
   }, [convexUserId, serverFavorites, applyFavorites]);
 
-  const toggleFavorite = useCallback(
-    (modelId: string) => {
-      if (!convexUserId) return;
+	const toggleFavorite = useCallback(
+		(modelId: string) => {
+			if (!convexUserId) return;
 
-      setFavorites((prev) => {
-        const next = new Set(prev);
-        if (next.has(modelId)) {
-          next.delete(modelId);
-        } else {
-          next.add(modelId);
-        }
-        lastLocalSnapshotRef.current = serializeFavorites(next);
-        hasPendingOptimisticUpdateRef.current = true;
-        return next;
-      });
+			const nextFavorites = new Set(favorites);
+			if (nextFavorites.has(modelId)) {
+				nextFavorites.delete(modelId);
+			} else {
+				nextFavorites.add(modelId);
+			}
 
-      toggleFavoriteMutation({ userId: convexUserId, modelId });
-    },
-    [convexUserId, toggleFavoriteMutation],
-  );
+			lastLocalSnapshotRef.current = serializeFavorites(nextFavorites);
+			hasPendingOptimisticUpdateRef.current = true;
+			setFavorites(nextFavorites);
+
+			toggleFavoriteMutation({ userId: convexUserId, modelId });
+		},
+		[convexUserId, favorites, toggleFavoriteMutation],
+	);
 
   const isFavorite = useCallback(
     (modelId: string) => favorites.has(modelId),
