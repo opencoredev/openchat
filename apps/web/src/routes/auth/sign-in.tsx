@@ -459,23 +459,47 @@ function SignInPage() {
               <img
                 src="https://models.dev/logos/openai.svg"
                 alt="OpenAI"
-                className="h-4 dark:invert"
+                width={80}
+                height={16}
+                loading="lazy"
+                decoding="async"
+                className="h-4 w-auto dark:invert"
               />
               <img
                 src="https://models.dev/logos/anthropic.svg"
                 alt="Anthropic"
-                className="h-4 dark:invert"
+                width={80}
+                height={16}
+                loading="lazy"
+                decoding="async"
+                className="h-4 w-auto dark:invert"
               />
               <img
                 src="https://models.dev/logos/google.svg"
                 alt="Google"
-                className="h-4 dark:invert"
+                width={80}
+                height={16}
+                loading="lazy"
+                decoding="async"
+                className="h-4 w-auto dark:invert"
               />
-              <img src="https://models.dev/logos/xai.svg" alt="xAI" className="h-4 dark:invert" />
+              <img
+                src="https://models.dev/logos/xai.svg"
+                alt="xAI"
+                width={80}
+                height={16}
+                loading="lazy"
+                decoding="async"
+                className="h-4 w-auto dark:invert"
+              />
               <img
                 src="https://models.dev/logos/deepseek.svg"
                 alt="DeepSeek"
-                className="h-4 dark:invert"
+                width={80}
+                height={16}
+                loading="lazy"
+                decoding="async"
+                className="h-4 w-auto dark:invert"
               />
             </div>
 

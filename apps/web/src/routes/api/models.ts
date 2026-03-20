@@ -5,6 +5,8 @@ import { redisStore, shouldFailClosedForMissingUpstash, upstashRedis } from "@/l
 
 const MODELS_CACHE_KEY = "openchat:models";
 const MODELS_CACHE_TTL_SECONDS = 60 * 60 * 4;
+/** Anonymous catalog is identical for all clients; short browser cache reduces origin load (Redis still holds 4h). */
+const MODELS_HTTP_CACHE_CONTROL = "public, max-age=600, stale-while-revalidate=3600";
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 const OPENROUTER_FETCH_TIMEOUT_MS = 10_000;
 const TRUST_PROXY_MODE = process.env.TRUST_PROXY?.trim().toLowerCase();
@@ -79,7 +81,7 @@ async function fetchModelsFromOpenRouter(): Promise<Response> {
 			status: 200,
 			headers: {
 				"Content-Type": "application/json",
-				"Cache-Control": "no-store",
+				"Cache-Control": MODELS_HTTP_CACHE_CONTROL,
 			},
 		});
 	} catch (error) {
@@ -182,7 +184,7 @@ export const Route = createFileRoute("/api/models")({
 							status: 200,
 							headers: {
 								"Content-Type": "application/json",
-								"Cache-Control": "no-store",
+								"Cache-Control": MODELS_HTTP_CACHE_CONTROL,
 							},
 						});
 					}

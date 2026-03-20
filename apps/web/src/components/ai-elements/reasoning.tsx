@@ -12,6 +12,7 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { useLinkSafetyConfig } from "./streamdown-link-safety";
 
 type ReasoningContextValue = {
 	isStreaming: boolean;
@@ -144,8 +145,9 @@ export type ReasoningContentProps = ComponentProps<
 	children: string;
 };
 
-export const ReasoningContent = memo(
-	({ className, children, ...props }: ReasoningContentProps) => (
+export const ReasoningContent = memo(({ className, children, ...props }: ReasoningContentProps) => {
+	const linkSafety = useLinkSafetyConfig();
+	return (
 		<CollapsibleContent
 			className={cn(
 				"mt-4 text-sm",
@@ -154,10 +156,10 @@ export const ReasoningContent = memo(
 			)}
 			{...props}
 		>
-			<Streamdown>{children}</Streamdown>
+			<Streamdown linkSafety={linkSafety}>{children}</Streamdown>
 		</CollapsibleContent>
-	),
-);
+	);
+});
 
 Reasoning.displayName = "Reasoning";
 ReasoningTrigger.displayName = "ReasoningTrigger";

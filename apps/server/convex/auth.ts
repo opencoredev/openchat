@@ -5,6 +5,7 @@ import { betterAuth } from "better-auth";
 import { oAuthProxy } from "better-auth/plugins";
 import { components } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
+import { v } from "convex/values";
 import { query } from "./_generated/server";
 
 import { getAllowedOrigins } from "./lib/origins";
@@ -12,6 +13,27 @@ import { LOCAL_APP_URL } from "./lib/constants";
 import { createLogger } from "./lib/logger";
 
 const logger = createLogger("auth");
+
+/** Public session user shape — excludes secrets such as encrypted API key material. */
+const currentUserPublicValidator = v.object({
+	_id: v.id("users"),
+	_creationTime: v.number(),
+	externalId: v.string(),
+	email: v.optional(v.string()),
+	name: v.optional(v.string()),
+	avatarUrl: v.optional(v.string()),
+	fileUploadCount: v.optional(v.number()),
+	searchUsageCount: v.optional(v.number()),
+	searchUsageDate: v.optional(v.string()),
+	aiUsageCents: v.optional(v.number()),
+	aiUsageDate: v.optional(v.string()),
+	banned: v.optional(v.boolean()),
+	bannedAt: v.optional(v.number()),
+	banReason: v.optional(v.string()),
+	banExpiresAt: v.optional(v.number()),
+	createdAt: v.number(),
+	updatedAt: v.number(),
+});
 
 /**
  * Production Convex site URL - used for OAuth callbacks.
@@ -190,12 +212,17 @@ export const createAuth = (
  */
 export const getCurrentUser = query({
 	args: {},
+	returns: v.union(currentUserPublicValidator, v.null()),
 	handler: async (ctx) => {
 		const identity = await ctx.auth.getUserIdentity();
 		if (!identity) return null;
-		return await ctx.db
+		const user = await ctx.db
 			.query("users")
 			.withIndex("by_external_id", (q) => q.eq("externalId", identity.subject))
 			.unique();
+		if (!user) return null;
+		const { encryptedOpenRouterKey: _secretKey, ...publicUser } = user;
+		void _secretKey;
+		return publicUser;
 	},
 });

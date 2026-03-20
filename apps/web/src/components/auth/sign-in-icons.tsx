@@ -82,7 +82,15 @@ export function Logo({
         className,
       )}
     >
-      <img src="/logo.png" alt="osschat" className={sizes.logo} />
+      <img
+        src="/logo.png"
+        alt="osschat"
+        width={32}
+        height={32}
+        loading="eager"
+        decoding="async"
+        className={sizes.logo}
+      />
       <span className={cn("font-sans font-bold", sizes.text)}>
         <span className="text-foreground">oss</span>
         <span className="text-primary">chat</span>
