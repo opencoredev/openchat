@@ -112,20 +112,27 @@ export const list = query({
 			limit = MAX_TEMPLATE_LIST_LIMIT;
 		}
 
-		// Use by_user index to efficiently filter by user and non-deleted templates
-		let query = ctx.db
-			.query("promptTemplates")
-			.withIndex("by_user", (q) =>
-				q.eq("userId", userId).eq("deletedAt", undefined)
-			)
-			.order("desc");
+		const categoryFilter =
+			args.category !== undefined && args.category.trim().length > 0
+				? args.category.trim().slice(0, MAX_CATEGORY_LENGTH)
+				: null;
 
-		// Filter by category BEFORE pagination to ensure correct page size
-		if (args.category) {
-			query = query.filter(q => q.eq(q.field("category"), args.category));
-		}
+		// Prefer by_category when filtering so pagination is index-backed
+		const listQuery = categoryFilter
+			? ctx.db
+					.query("promptTemplates")
+					.withIndex("by_category", (q) =>
+						q.eq("userId", userId).eq("category", categoryFilter).eq("deletedAt", undefined),
+					)
+					.order("desc")
+			: ctx.db
+					.query("promptTemplates")
+					.withIndex("by_user", (q) =>
+						q.eq("userId", userId).eq("deletedAt", undefined),
+					)
+					.order("desc");
 
-		const results = await query.paginate({
+		const results = await listQuery.paginate({
 			cursor: args.cursor ?? null,
 			numItems: limit,
 		});

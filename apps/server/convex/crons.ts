@@ -106,11 +106,10 @@ export const cleanupSoftDeletedRecords = internalMutation({
 		let totalDeleted = 0;
 
 		try {
-			// Cleanup soft-deleted chats
+			// Cleanup soft-deleted chats (indexed: only rows with deletedAt set are in by_deleted_at)
 			const chatsToDelete = await ctx.db
 				.query("chats")
-				.filter((q) => q.neq(q.field("deletedAt"), undefined))
-				.filter((q) => q.lt(q.field("deletedAt"), cutoffDate))
+				.withIndex("by_deleted_at", (q) => q.lt("deletedAt", cutoffDate))
 				.take(batchSize);
 
 			for (const chat of chatsToDelete) {
@@ -135,8 +134,7 @@ export const cleanupSoftDeletedRecords = internalMutation({
 			// Cleanup soft-deleted messages
 			const messagesToDelete = await ctx.db
 				.query("messages")
-				.filter((q) => q.neq(q.field("deletedAt"), undefined))
-				.filter((q) => q.lt(q.field("deletedAt"), cutoffDate))
+				.withIndex("by_deleted_at", (q) => q.lt("deletedAt", cutoffDate))
 				.take(batchSize);
 
 			for (const message of messagesToDelete) {

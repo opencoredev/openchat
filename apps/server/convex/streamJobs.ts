@@ -292,18 +292,26 @@ export const cleanupStaleJobs = mutation({
 	args: {
 		userId: v.id("users"),
 	},
+	returns: v.object({
+		cleaned: v.number(),
+		total: v.number(),
+	}),
 	handler: async (ctx, args) => {
 		const userId = await requireAuthUserId(ctx, args.userId);
-		const staleJobs = await ctx.db
-			.query("streamJobs")
-			.withIndex("by_user", (q) => q.eq("userId", userId))
-			.filter((q) =>
-				q.or(
-					q.eq(q.field("status"), "running"),
-					q.eq(q.field("status"), "pending")
-				)
-			)
-			.collect();
+		const [pendingJobs, runningJobs] = await Promise.all([
+			ctx.db
+				.query("streamJobs")
+				.withIndex("by_user", (q) => q.eq("userId", userId).eq("status", "pending"))
+				.collect(),
+			ctx.db
+				.query("streamJobs")
+				.withIndex("by_user", (q) => q.eq("userId", userId).eq("status", "running"))
+				.collect(),
+		]);
+		const byId = new Map<Id<"streamJobs">, (typeof pendingJobs)[number]>();
+		for (const job of pendingJobs) byId.set(job._id, job);
+		for (const job of runningJobs) byId.set(job._id, job);
+		const staleJobs = [...byId.values()];
 
 		const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
 		let cleaned = 0;

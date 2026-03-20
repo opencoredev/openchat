@@ -65,7 +65,8 @@ export default defineSchema({
 		.index("by_user_created", ["userId", "createdAt"])
 		.index("by_user_last_message", ["userId", "lastMessageAt"])
 		.index("by_user_not_deleted", ["userId", "deletedAt", "updatedAt"])
-		.index("by_user_title", ["userId", "title"]),
+		.index("by_user_title", ["userId", "title"])
+		.index("by_deleted_at", ["deletedAt"]),
 	chatShares: defineTable({
 		userId: v.id("users"),
 		chatId: v.id("chats"),
@@ -182,7 +183,8 @@ export default defineSchema({
 		.index("by_chat_not_deleted", ["chatId", "deletedAt", "createdAt"])
 		.index("by_user_created", ["userId", "createdAt"])
 		.index("by_stream_id", ["streamId"])
-		.index("by_chat_status", ["chatId", "status", "deletedAt"]),
+		.index("by_chat_status", ["chatId", "status", "deletedAt"])
+		.index("by_deleted_at", ["deletedAt"]),
 	fileUploads: defineTable({
 		userId: v.id("users"),
 		chatId: v.id("chats"),
