@@ -143,7 +143,7 @@ export function useModels() {
 	});
 
 	const models = cache.models ?? getFallbackModels();
-	const isLoading = cache.loading;
+	const isLoading = cache.loading || (cache.models === null && cache.error === null);
 	const error = cache.error;
 
 	const reload = useCallback(async () => {
