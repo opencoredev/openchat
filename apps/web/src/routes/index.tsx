@@ -4,6 +4,7 @@ import { useAuth } from "../lib/auth-client";
 import { Button } from "../components/ui/button";
 import { ChatInterface } from "../components/chat";
 import { convexClient } from "../lib/convex";
+import { AppLoadingPlaceholder } from "../components/app-loading-placeholder";
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -104,6 +105,7 @@ function InteractiveStaircase({
       className={`${className} relative`}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
+      aria-hidden
     >
       {squares.map(({ col, row, key }) => {
         const rightPos = (gridSize - 1 - col) * stepSize
@@ -241,7 +243,7 @@ function HomePage() {
   }, [isAuthenticated]);
 
   if (!convexClient || loading) {
-    return <div className="flex h-full bg-background" />;
+    return <AppLoadingPlaceholder message="Loading" />;
   }
 
   if (!isAuthenticated) {

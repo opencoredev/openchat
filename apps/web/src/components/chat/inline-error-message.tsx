@@ -61,12 +61,13 @@ export function InlineErrorMessage({ error, onRetry }: InlineErrorMessageProps) 
 	return (
 		<div className="w-full rounded-xl border border-destructive/30 bg-destructive/10 p-4">
 			<div className="flex items-start gap-3">
-				<div className="flex-shrink-0 mt-0.5">
+				<div className="flex-shrink-0 mt-0.5" aria-hidden>
 					<svg
 						className="size-5 text-destructive"
 						fill="none"
 						viewBox="0 0 24 24"
 						stroke="currentColor"
+						aria-hidden
 					>
 						<path
 							strokeLinecap="round"
@@ -85,8 +86,10 @@ export function InlineErrorMessage({ error, onRetry }: InlineErrorMessageProps) 
 					{error.details && (
 						<div className="mt-2">
 							<button
+								type="button"
 								onClick={() => setShowDetails(!showDetails)}
 								className="text-xs text-destructive/60 hover:text-destructive transition-colors"
+								aria-expanded={showDetails}
 							>
 								{showDetails ? "Hide details" : "Show details"}
 							</button>

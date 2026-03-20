@@ -170,10 +170,6 @@ export function ModelSelector({
 					e.preventDefault();
 					handleClose();
 					break;
-				case "Tab":
-					e.preventDefault();
-					handleClose();
-					break;
 			}
 		}
 

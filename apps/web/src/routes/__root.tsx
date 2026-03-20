@@ -17,6 +17,7 @@ import { usePostHogPageView } from "../providers/posthog";
 import { convexClient } from "../lib/convex";
 import { useGlobalShortcuts } from "@/hooks/use-global-shortcuts";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
+import { AppLoadingPlaceholder } from "@/components/app-loading-placeholder";
 import type { InitialAuthUser } from "../lib/auth-client";
 
 import appCss from "../styles.css?url";
@@ -193,12 +194,7 @@ function AppShell() {
   const showHelpButton = isAuthenticated && (pathname === "/" || pathname.startsWith("/c/"));
 
   if (!convexClient || loading) {
-    return (
-      <div className="flex h-screen w-full bg-sidebar">
-        <div className="w-64 shrink-0 bg-sidebar" />
-        <div className="flex-1 bg-background" />
-      </div>
-    );
+    return <AppLoadingPlaceholder variant="app-shell" message="Loading application" />;
   }
 
   if (!isAuthenticated) {

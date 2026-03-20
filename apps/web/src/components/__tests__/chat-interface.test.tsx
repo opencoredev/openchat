@@ -231,6 +231,7 @@ function makeDefaultState() {
 		chatId: null,
 		isResuming: false,
 		resumedContent: '',
+		resetChatError: vi.fn(),
 	}
 }
 

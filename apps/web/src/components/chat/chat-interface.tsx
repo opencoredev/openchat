@@ -51,6 +51,8 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
 		error,
 		stop,
 		isNewChat,
+		isLoadingMessages,
+		resetChatError,
 	} = usePersistentChat({
 		chatId,
 		onChatCreated: (newChatId) => {
@@ -92,7 +94,9 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
 				messages={messages}
 				isLoading={isLoading}
 				isNewChat={isNewChat}
-				error={error ?? null}
+				isLoadingHistory={Boolean(chatId) && isLoadingMessages}
+				streamError={error ?? null}
+				onDismissStreamError={resetChatError}
 				stop={stop}
 				handleSubmit={handleSubmit}
 				onEditMessage={editMessage}
@@ -114,7 +118,9 @@ interface ChatInterfaceContentProps {
 	}>;
 	isLoading: boolean;
 	isNewChat: boolean;
-	error: Error | null;
+	isLoadingHistory: boolean;
+	streamError: Error | null;
+	onDismissStreamError: () => void;
 	stop: () => void;
 	handleSubmit: (message: PromptInputMessage) => Promise<void>;
 	onEditMessage: (messageId: string, newContent: string) => Promise<void>;
@@ -128,7 +134,9 @@ const ChatInterfaceContent = memo(function ChatInterfaceContent({
 	messages,
 	isLoading,
 	isNewChat,
-	error: _error,
+	isLoadingHistory,
+	streamError,
+	onDismissStreamError,
 	stop,
 	handleSubmit,
 	onEditMessage,
@@ -137,6 +145,8 @@ const ChatInterfaceContent = memo(function ChatInterfaceContent({
 	textareaRef,
 }: ChatInterfaceContentProps) {
 	const controller = usePromptInputController();
+	const promptValueRef = useRef(controller.textInput.value);
+	promptValueRef.current = controller.textInput.value;
 	const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 	const [isSavingEdit, setIsSavingEdit] = useState(false);
 	const savedDraftRef = useRef<string>("");
@@ -201,14 +211,14 @@ const ChatInterfaceContent = memo(function ChatInterfaceContent({
 
 	const startEdit = useCallback(
 		(messageId: string, content: string) => {
-			savedDraftRef.current = controller.textInput.value;
+			savedDraftRef.current = promptValueRef.current;
 			setEditingMessageId(messageId);
 			setInput(content);
 			setTimeout(() => {
 				textareaRef.current?.focus();
 			}, 0);
 		},
-		[controller.textInput.value, setInput, textareaRef],
+		[setInput, textareaRef],
 	);
 
 	const cancelEdit = useCallback(() => {
@@ -260,6 +270,9 @@ const ChatInterfaceContent = memo(function ChatInterfaceContent({
 				messages={messages}
 				isLoading={isLoading}
 				isNewChat={isNewChat}
+				isLoadingHistory={isLoadingHistory}
+				streamError={streamError}
+				onDismissStreamError={onDismissStreamError}
 				onPromptSelect={onPromptSelect}
 				onRetryMessage={onRetryMessage}
 				onForkMessage={onForkMessage}
@@ -270,11 +283,16 @@ const ChatInterfaceContent = memo(function ChatInterfaceContent({
 			<div className="px-2 md:px-4 pt-2 md:pt-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:pb-4">
 				<div className="mx-auto max-w-3xl">
 					{editingMessageId && (
-						<div className="mb-2 flex items-center justify-between rounded-lg bg-primary/10 border border-primary/20 px-3 py-2">
+						<div
+							className="mb-2 flex items-center justify-between rounded-lg bg-primary/10 border border-primary/20 px-3 py-2"
+							role="status"
+							aria-live="polite"
+						>
 							<span className="text-sm text-primary font-medium">Editing message</span>
 							<button
 								type="button"
 								onClick={cancelEdit}
+								aria-label="Cancel editing message"
 								className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
 							>
 								<XIcon className="size-3" />
