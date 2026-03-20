@@ -180,6 +180,7 @@ export default defineSchema({
 		.index("by_user", ["userId"])
 		.index("by_user_status", ["userId", "status", "createdAt"])
 		.index("by_chat_not_deleted", ["chatId", "deletedAt", "createdAt"])
+		.index("by_chat_not_deleted_role", ["chatId", "deletedAt", "role", "createdAt"])
 		.index("by_user_created", ["userId", "createdAt"])
 		.index("by_stream_id", ["streamId"])
 		.index("by_chat_status", ["chatId", "status", "deletedAt"]),

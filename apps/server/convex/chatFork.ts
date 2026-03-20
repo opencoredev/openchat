@@ -1,4 +1,5 @@
-import { mutation } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import { mutation, type MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { incrementStat, STAT_KEYS } from "./lib/dbStats";
 import { rateLimiter } from "./lib/rateLimiter";
@@ -7,6 +8,48 @@ import { requireAuthUserId } from "./lib/auth";
 import { assertOwnsChat } from "./chats";
 
 const MAX_FORK_MESSAGE_COPY = 200;
+const FORK_PAGE_SIZE = 200;
+
+function matchesForkPoint(message: Doc<"messages">, messageId: string): boolean {
+	return String(message._id) === messageId || message.clientMessageId === messageId;
+}
+
+/**
+ * Loads messages from the start of the chat in ascending order until the fork
+ * point is reached. Avoids scanning the entire chat when the fork is early.
+ */
+async function collectMessagesThroughFork(
+	ctx: MutationCtx,
+	chatId: Id<"chats">,
+	messageId: string,
+): Promise<Doc<"messages">[]> {
+	const collected: Doc<"messages">[] = [];
+	let cursor: string | null = null;
+
+	while (true) {
+		const page = await ctx.db
+			.query("messages")
+			.withIndex("by_chat_not_deleted", (q) =>
+				q.eq("chatId", chatId).eq("deletedAt", undefined),
+			)
+			.order("asc")
+			.paginate({ cursor, numItems: FORK_PAGE_SIZE });
+
+		for (const message of page.page) {
+			collected.push(message);
+			if (matchesForkPoint(message, messageId)) {
+				return collected;
+			}
+		}
+
+		if (page.isDone) {
+			break;
+		}
+		cursor = page.continueCursor;
+	}
+
+	throw new Error("Fork point message not found");
+}
 
 export const fork = mutation({
 	args: {
@@ -32,26 +75,13 @@ export const fork = mutation({
 			throwRateLimitError("messages forked", retryAfter);
 		}
 
-		const allMessages = await ctx.db
-			.query("messages")
-			.withIndex("by_chat_not_deleted", (q) =>
-				q.eq("chatId", args.chatId).eq("deletedAt", undefined)
-			)
-			.order("asc")
-			.collect();
-
-		const forkIndex = allMessages.findIndex(
-			(message) =>
-				String(message._id) === args.messageId ||
-				message.clientMessageId === args.messageId,
+		const prefixThroughFork = await collectMessagesThroughFork(
+			ctx,
+			args.chatId,
+			args.messageId,
 		);
-		if (forkIndex === -1) {
-			throw new Error("Fork point message not found");
-		}
 
-		const messagesToCopy = allMessages
-			.slice(0, forkIndex + 1)
-			.slice(-MAX_FORK_MESSAGE_COPY);
+		const messagesToCopy = prefixThroughFork.slice(-MAX_FORK_MESSAGE_COPY);
 
 		const now = Date.now();
 		const newChatId = await ctx.db.insert("chats", {

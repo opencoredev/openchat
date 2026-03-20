@@ -413,8 +413,11 @@ export const getUserQuota = query({
 	},
 });
 
+/** Cap for list queries to avoid unbounded reads on accounts with many uploads. */
+const MAX_FILES_LIST = 2000;
+
 /**
- * Retrieves all non-deleted files for a specific chat.
+ * Retrieves non-deleted files for a specific chat (most recent first, capped).
  *
  * @param chatId - The ID of the chat
  * @param userId - The ID of the user (for authorization)
@@ -440,21 +443,20 @@ export const getFilesByChat = query({
 		const userId = await requireAuthUserId(ctx, args.userId);
 		await getOwnedChat(ctx, args.chatId, userId);
 
-		// Query all non-deleted files for this chat
 		const files = await ctx.db
 			.query("fileUploads")
 			.withIndex("by_chat_not_deleted", (q) =>
 				q.eq("chatId", args.chatId).eq("deletedAt", undefined)
 			)
 			.order("desc")
-			.collect();
+			.take(MAX_FILES_LIST);
 
 		return files.map(toFileSummary);
 	},
 });
 
 /**
- * Retrieves all non-deleted files for a specific user.
+ * Retrieves non-deleted files for a specific user (most recent first, capped).
  *
  * @param userId - The ID of the user
  * @returns Array of file metadata objects with chat information
@@ -477,14 +479,13 @@ export const getFilesByUser = query({
 	),
 	handler: async (ctx, args) => {
 		const userId = await requireAuthUserId(ctx, args.userId);
-		// Query all non-deleted files for this user
 		const files = await ctx.db
 			.query("fileUploads")
 			.withIndex("by_user_not_deleted", (q) =>
 				q.eq("userId", userId).eq("deletedAt", undefined)
 			)
 			.order("desc")
-			.collect();
+			.take(MAX_FILES_LIST);
 
 		return files.map((file) => ({
 			...toFileSummary(file),
