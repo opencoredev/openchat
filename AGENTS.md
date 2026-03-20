@@ -95,3 +95,27 @@ bun run verify:prod
   - `git subtree push --prefix=docs-site https://github.com/tryosschat/docs.git main`
 - `docs-site/` is external Mintlify docs; `docs/` contains internal deployment docs.
 - `bunfig.toml` isolates Bun's own test discovery; use Vitest commands for project tests.
+
+## Cursor Cloud specific instructions
+
+### Environment
+- Bun is installed at `~/.bun/bin/bun`; ensure `~/.bun/bin` is on `PATH`.
+- Use `bun run test` (not bare `bun test`) to invoke the `vitest run --coverage` script from `package.json`. Bare `bun test` triggers Bun's built-in test runner, which fails because the `bunfig.toml` root (`.bun-tests/`) doesn't exist.
+- The `.env.local` files for `apps/web` and `apps/server` are not checked in. They must be created before starting dev servers. Minimal dev defaults: `VITE_CONVEX_URL=http://localhost:3210`, `VITE_CONVEX_SITE_URL=http://localhost:3210` in `apps/web/.env.local`.
+
+### Services
+| Service | Command | Notes |
+|---------|---------|-------|
+| Web (Vite dev) | `bun dev:web` or `cd apps/web && bunx vite dev` | Runs on port 3000 by default. SSR requires all route modules to load cleanly. |
+| Convex backend | `bun dev:server` | Requires Convex cloud credentials; connects to a remote Convex project. |
+| Extension | `bun dev:extension` | Optional; not needed for core chat flow. |
+
+### Verification commands
+- Lint: `bun check` (runs Oxlint via Turbo across all workspaces)
+- Tests: `bun run test` (Vitest with coverage)
+- Type check: `bun check-types` (runs `tsc --noEmit` in web and extension workspaces; server uses `|| true`)
+
+### Known caveats
+- The Convex backend (`bun dev:server`) requires a Convex cloud project. Without one, the backend won't start. Auth features (GitHub OAuth) also require Convex environment variables (`AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, `BETTER_AUTH_SECRET`).
+- Redis is optional for development; the `scripts/check-redis.ts` script gracefully skips when Redis is unreachable in dev mode.
+- No Docker or local database is required; Convex is the sole data store.
