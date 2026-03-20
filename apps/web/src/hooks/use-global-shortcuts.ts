@@ -129,26 +129,25 @@ export function useGlobalShortcuts({ navigate, isAuthenticated, pathname }: UseG
 	const isMac = useMemo(() => isMacPlatform(), []);
 	const onChatRoute = isChatRoute(pathname);
 
-	const bindingsRef = useRef(bindings);
-	bindingsRef.current = bindings;
+	const bindingMap = useMemo(() => getEffectiveBindingsMap(bindings, isMac), [bindings, isMac]);
+	const bindingMapRef = useRef(bindingMap);
+	bindingMapRef.current = bindingMap;
+
 	const isAuthenticatedRef = useRef(isAuthenticated);
 	isAuthenticatedRef.current = isAuthenticated;
 	const navigateRef = useRef(navigate);
 	navigateRef.current = navigate;
 	const onChatRouteRef = useRef(onChatRoute);
 	onChatRouteRef.current = onChatRoute;
-	const isMacRef = useRef(isMac);
-	isMacRef.current = isMac;
 
 	useMountEffect(() => {
 		function onKeyDown(event: KeyboardEvent) {
 			if (event.defaultPrevented || event.repeat || event.isComposing) return;
 
-			const bindingMap = getEffectiveBindingsMap(bindingsRef.current, isMacRef.current);
 			const currentBinding = eventToBinding(event);
 			if (!currentBinding) return;
 
-			const matched: ShortcutDefinition | undefined = bindingMap.get(currentBinding);
+			const matched: ShortcutDefinition | undefined = bindingMapRef.current.get(currentBinding);
 			if (!matched) return;
 
 			if (!isAuthenticatedRef.current) return;
