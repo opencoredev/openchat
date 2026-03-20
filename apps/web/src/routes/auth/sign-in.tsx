@@ -2,7 +2,8 @@
  * Sign In Page - GitHub OAuth authentication
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useEffectOnDeps, useMountEffect } from "@/hooks/use-mount-effect";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   signInWithEmail,
@@ -151,14 +152,14 @@ function SignInPage() {
   const [stats, setStats] = useState<PublicStats | null>(cachedStats);
 
   // Redirect if already authenticated
-  useEffect(() => {
+  useEffectOnDeps(() => {
     if (!loading && isAuthenticated) {
       navigate({ to: "/" });
     }
   }, [loading, isAuthenticated, navigate]);
 
   // Fetch real stats from backend (cached)
-  useEffect(() => {
+  useMountEffect(() => {
     // Use cache if fresh
     if (cachedStats && Date.now() - cacheTimestamp < CACHE_TTL) {
       setStats(cachedStats);
@@ -178,7 +179,7 @@ function SignInPage() {
         }
       })
       .catch(() => null);
-  }, []);
+  });
 
   // Fallback stats while loading
   const displayStats = stats || {

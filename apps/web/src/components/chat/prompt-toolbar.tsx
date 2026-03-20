@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import { ArrowUpIcon, BrainIcon, GlobeIcon, SquareIcon } from "lucide-react";
@@ -63,7 +63,7 @@ export function ReasoningToggleButton({ disabled }: ToolbarToggleProps) {
 	const capabilities = getModelCapabilities(selectedModelId, currentModel);
 	const supportsReasoning = capabilities.supportsReasoning;
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (!supportsReasoning && reasoningEnabled) {
 			setReasoningEnabled(false);
 		}
@@ -105,7 +105,7 @@ export function WebSearchToggleButton({ disabled }: ToolbarToggleProps) {
 		? !backendSearchAvailability.canSearch
 		: localIsLimitReached;
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (!isConfigured && webSearchEnabled) {
 			setWebSearchEnabled(false);
 		}

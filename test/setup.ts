@@ -35,8 +35,8 @@ const sessionStorageMock = (() => {
 	};
 })();
 
-global.localStorage = localStorageMock as any;
-global.sessionStorage = sessionStorageMock as any;
+globalThis.localStorage = localStorageMock as unknown as Storage;
+globalThis.sessionStorage = sessionStorageMock as unknown as Storage;
 
 // Mock window and document globals for browser environment
 if (typeof window !== "undefined") {
@@ -64,7 +64,7 @@ global.IntersectionObserver = class IntersectionObserver {
 		return [];
 	}
 	unobserve() {}
-} as any;
+} as unknown as typeof IntersectionObserver;
 
 // Mock ResizeObserver
 global.ResizeObserver = class ResizeObserver {
@@ -72,7 +72,7 @@ global.ResizeObserver = class ResizeObserver {
 	disconnect() {}
 	observe() {}
 	unobserve() {}
-} as any;
+} as unknown as typeof ResizeObserver;
 
 // Cleanup after each test case
 afterEach(() => {

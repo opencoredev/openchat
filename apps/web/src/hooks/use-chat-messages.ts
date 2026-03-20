@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import type { Id } from "@server/convex/_generated/dataModel";
@@ -28,7 +28,7 @@ export function useChatMessages({
 		chatId && convexUserId ? { chatId: chatId as Id<"chats">, userId: convexUserId } : "skip",
 	);
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (!messagesResult || status === "streaming" || status === "submitted") return;
 
 		setMessages((prevMessages) => {

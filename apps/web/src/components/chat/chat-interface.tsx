@@ -10,7 +10,8 @@
  * - Convex persistence for chat history
  */
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useRef, useState } from "react";
+import { useMountEffect } from "@/hooks/use-mount-effect";
 import { useNavigate } from "@tanstack/react-router";
 import { XIcon } from "lucide-react";
 import { PromptInputProvider, usePromptInputController } from "@/components/ai-elements/prompt-input";
@@ -88,6 +89,7 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
 	return (
 		<PromptInputProvider>
 			<ChatInterfaceContent
+				key={chatId ?? "__new__"}
 				chatId={chatId ?? null}
 				messages={messages}
 				isLoading={isLoading}
@@ -148,12 +150,12 @@ const ChatInterfaceContent = memo(function ChatInterfaceContent({
 		textInputController: controller.textInput,
 	});
 
-	useEffect(() => {
-		setEditingMessageId(null);
-		setIsSavingEdit(false);
-	}, [chatId]);
+	const isLoadingRef = useRef(isLoading);
+	isLoadingRef.current = isLoading;
+	const stopRef = useRef(stop);
+	stopRef.current = stop;
 
-	useEffect(() => {
+	useMountEffect(() => {
 		const onFocusPromptToggle = () => {
 			const textarea = textareaRef.current;
 			if (!textarea) return;
@@ -175,8 +177,8 @@ const ChatInterfaceContent = memo(function ChatInterfaceContent({
 		};
 
 		const onStopGeneration = () => {
-			if (!isLoading) return;
-			stop();
+			if (!isLoadingRef.current) return;
+			stopRef.current();
 		};
 
 		window.addEventListener(SHORTCUT_EVENT_FOCUS_PROMPT_TOGGLE, onFocusPromptToggle);
@@ -186,7 +188,7 @@ const ChatInterfaceContent = memo(function ChatInterfaceContent({
 			window.removeEventListener(SHORTCUT_EVENT_FOCUS_PROMPT_TOGGLE, onFocusPromptToggle);
 			window.removeEventListener(SHORTCUT_EVENT_STOP_GENERATION, onStopGeneration);
 		};
-	}, [isLoading, stop, textareaRef]);
+	});
 
 	const setInput = controller.textInput.setInput;
 	const onPromptSelect = useCallback(
@@ -218,17 +220,22 @@ const ChatInterfaceContent = memo(function ChatInterfaceContent({
 		savedDraftRef.current = "";
 	}, [setInput]);
 
-	useEffect(() => {
+	const editingMessageIdRef = useRef(editingMessageId);
+	editingMessageIdRef.current = editingMessageId;
+	const cancelEditRef = useRef(cancelEdit);
+	cancelEditRef.current = cancelEdit;
+
+	useMountEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === "Escape" && editingMessageId) {
+			if (e.key === "Escape" && editingMessageIdRef.current) {
 				e.preventDefault();
-				cancelEdit();
+				cancelEditRef.current();
 			}
 		};
 
 		document.addEventListener("keydown", handleKeyDown);
 		return () => document.removeEventListener("keydown", handleKeyDown);
-	}, [cancelEdit, editingMessageId]);
+	});
 
 	const handleSubmitWithDraftClear = useCallback(
 		async (message: PromptInputMessage) => {

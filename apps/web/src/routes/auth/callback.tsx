@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import { useAuth } from "../../lib/auth-client";
 
 export const Route = createFileRoute("/auth/callback")({
@@ -18,7 +19,7 @@ function AuthCallbackPage() {
   const [error, setError] = useState<string | null>(null);
   const [attempts, setAttempts] = useState(0);
 
-  useEffect(() => {
+  useEffectOnDeps(() => {
     // Check URL for error params
     const params = new URLSearchParams(window.location.search);
     const errorParam = params.get("error");

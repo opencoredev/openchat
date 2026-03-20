@@ -5,7 +5,8 @@
  * Used from Settings page when user wants to connect their own API key.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import { CheckIcon, ExternalLinkIcon, KeyIcon, XIcon } from "lucide-react";
 import { Button } from "./ui/button";
 import { useOpenRouterKey } from "@/stores/openrouter";
@@ -29,7 +30,7 @@ export function OpenRouterConnectModal({ open, onOpenChange }: OpenRouterConnect
 	}, [onOpenChange]);
 
 	// Close modal when API key is set (successful connection)
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (hasApiKey && open) {
 			// Small delay to show success state
 			const timer = setTimeout(() => {
@@ -40,7 +41,7 @@ export function OpenRouterConnectModal({ open, onOpenChange }: OpenRouterConnect
 	}, [hasApiKey, open, onOpenChange]);
 
 	// Handle Escape key to close modal
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (!open) return;
 		function handleKeyDown(e: KeyboardEvent) {
 			if (e.key === "Escape") {

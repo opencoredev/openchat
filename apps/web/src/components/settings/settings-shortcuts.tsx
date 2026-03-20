@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import { useShortcutsStore } from "@/stores/shortcuts";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,7 +38,7 @@ export function ShortcutsSection() {
 		}));
 	}, []);
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (!recordingId) return;
 
 		const onKeyDown = (event: KeyboardEvent) => {

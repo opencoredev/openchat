@@ -1,4 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useConversationScroll, Conversation, ConversationContent } from "@/components/ai-elements/conversation";
@@ -14,7 +15,7 @@ function AutoScroll({ messageCount }: { messageCount: number }) {
 	const prevCountRef = useRef(messageCount);
 	const initialScrollDone = useRef(false);
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (messageCount > 0 && !initialScrollDone.current) {
 			initialScrollDone.current = true;
 			requestAnimationFrame(() => {
@@ -62,7 +63,7 @@ export interface ChatMessageListProps {
 }
 
 export const ChatMessageList = memo(function ChatMessageList({
-	chatId,
+	chatId: _chatId,
 	messages,
 	isLoading,
 	isNewChat,
@@ -73,14 +74,6 @@ export const ChatMessageList = memo(function ChatMessageList({
 	onStartEdit,
 }: ChatMessageListProps) {
 	const [openByMessageId, setOpenByMessageId] = useState<Record<string, boolean>>({});
-
-	const prevChatIdRef = useRef(chatId);
-	useEffect(() => {
-		if (prevChatIdRef.current !== chatId) {
-			setOpenByMessageId({});
-			prevChatIdRef.current = chatId;
-		}
-	}, [chatId]);
 	const prevThinkingStreamingByMessageIdRef = useRef<Record<string, boolean>>({});
 
 	const processedMessages = useMemo(() => {
@@ -192,7 +185,7 @@ export const ChatMessageList = memo(function ChatMessageList({
 		});
 	}, [messages]);
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		const prevThinkingStreamingByMessageId = prevThinkingStreamingByMessageIdRef.current;
 		setOpenByMessageId((prev) => {
 			let changed = false;

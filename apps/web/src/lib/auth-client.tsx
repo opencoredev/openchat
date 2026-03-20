@@ -3,7 +3,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useRef,
   useState
 } from "react";
@@ -14,7 +13,8 @@ import {
 } from "@convex-dev/better-auth/client/plugins";
 import { env } from "./env";
 import { analytics } from "./analytics";
-import type {ReactNode} from "react";
+import type { ReactNode } from "react";
+import { useMountEffect } from "@/hooks/use-mount-effect";
 
 
 /**
@@ -125,7 +125,7 @@ export function StableAuthProvider({
     }
   }, []);
 
-  useEffect(() => {
+  useMountEffect(() => {
     if (fetchedRef.current) return;
     fetchedRef.current = true;
 
@@ -150,7 +150,7 @@ export function StableAuthProvider({
     } else {
       fetchSession();
     }
-  }, [fetchSession]);
+  });
 
   const value: AuthContextValue = {
     user: sessionData.user,

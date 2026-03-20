@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import type { FileUIPart } from "ai";
 import type { ChangeEventHandler, FormEvent, FormEventHandler, HTMLAttributes } from "react";
 import { InputGroup } from "@/components/ui/input-group";
@@ -170,18 +171,18 @@ export const PromptInput = ({
 		? controller.attachments.openFileDialog
 		: openFileDialogLocal;
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (!usingProvider) return;
 		controller.__registerFileInput(inputRef, () => inputRef.current?.click());
 	}, [usingProvider, controller]);
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (syncHiddenInput && inputRef.current && files.length === 0) {
 			inputRef.current.value = "";
 		}
 	}, [files, syncHiddenInput]);
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		const form = formRef.current;
 		if (!form) return;
 		if (globalDrop) return;
@@ -207,7 +208,7 @@ export const PromptInput = ({
 		};
 	}, [add, globalDrop]);
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (!globalDrop) return;
 
 		const onDragOver = (e: DragEvent) => {
@@ -231,7 +232,7 @@ export const PromptInput = ({
 		};
 	}, [add, globalDrop]);
 
-	useEffect(
+	useEffectOnDeps(
 		() => () => {
 			if (!usingProvider) {
 				for (const f of filesRef.current) {

@@ -1,4 +1,5 @@
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import type { Id } from "@server/convex/_generated/dataModel";
@@ -36,7 +37,7 @@ export function useChatStreaming({
 		chatId && convexUserId ? { chatId: chatId as Id<"chats">, userId: convexUserId } : "skip",
 	);
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (!activeStreamJob) {
 			if (status === "streaming" || status === "submitted") {
 				if (streamingRef.current) {

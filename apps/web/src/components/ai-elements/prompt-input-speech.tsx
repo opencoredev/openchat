@@ -1,5 +1,6 @@
 import { MicIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import type { ComponentProps, RefObject } from "react";
 import { cn } from "@/lib/utils";
 import { PromptInputButton } from "./prompt-input-primitives";
@@ -69,7 +70,7 @@ export const PromptInputSpeechButton = ({
 	const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
 	const recognitionRef = useRef<SpeechRecognition | null>(null);
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (typeof window === "undefined") return;
 
 		const SpeechRecognitionClass = window.SpeechRecognition ?? window.webkitSpeechRecognition;

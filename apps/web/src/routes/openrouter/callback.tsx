@@ -6,7 +6,8 @@
  */
 
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useEffectOnDeps, useMountEffect } from "@/hooks/use-mount-effect";
 import { useOpenRouterKey } from "../../stores/openrouter";
 import {
   Card,
@@ -47,12 +48,12 @@ function OpenRouterCallbackPage() {
   const processedRef = useRef(false);
 
   // Prevent hydration mismatch by only running client-side logic after mount
-  useEffect(() => {
+  useMountEffect(() => {
     setMounted(true);
-  }, []);
+  });
 
   // Handle the OAuth callback (with guard against double-execution from Strict Mode)
-  useEffect(() => {
+  useEffectOnDeps(() => {
     if (!mounted || processedRef.current) return;
     processedRef.current = true;
 

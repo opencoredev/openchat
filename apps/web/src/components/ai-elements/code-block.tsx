@@ -7,7 +7,6 @@ import {
   memo,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -21,6 +20,7 @@ import type {
 } from 'shiki'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useEffectOnDeps, useMountEffect } from '@/hooks/use-mount-effect'
 
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
   code: string
@@ -212,7 +212,7 @@ const CodeBlockContent = ({
   const rawTokens = useMemo(() => createRawTokens(code), [code])
   const [tokenized, setTokenized] = useState<TokenizedCode>(rawTokens)
 
-  useEffect(() => {
+  useEffectOnDeps(() => {
     let cancelled = false
     setTokenized(rawTokens)
 
@@ -362,11 +362,10 @@ export const CodeBlockCopyButton = ({
     }
   }, [code, isCopied, onCopy, onError, timeout])
 
-  useEffect(
+  useMountEffect(
     () => () => {
       window.clearTimeout(timeoutRef.current)
     },
-    [],
   )
 
   const Icon = isCopied ? CheckIcon : CopyIcon

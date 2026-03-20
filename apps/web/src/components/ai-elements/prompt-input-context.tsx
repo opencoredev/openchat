@@ -3,13 +3,13 @@ import {
 	createContext,
 	useCallback,
 	useContext,
-	useEffect,
 	useMemo,
 	useRef,
 	useState,
 } from "react";
 import type { FileUIPart } from "ai";
 import type { PropsWithChildren, RefObject } from "react";
+import { useMountEffect } from "@/hooks/use-mount-effect";
 
 // ============================================================================
 // Provider Context & Types
@@ -149,7 +149,7 @@ export function PromptInputProvider({
 	attachmentsRef.current = attachmentFiles;
 
 	// Cleanup blob URLs on unmount to prevent memory leaks
-	useEffect(() => {
+	useMountEffect(() => {
 		return () => {
 			for (const f of attachmentsRef.current) {
 				if (f.url) {
@@ -157,7 +157,7 @@ export function PromptInputProvider({
 				}
 			}
 		};
-	}, []);
+	});
 
 	const openFileDialog = useCallback(() => {
 		openRef.current();

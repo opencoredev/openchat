@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useMountEffect } from "@/hooks/use-mount-effect";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import { analytics } from "@/lib/analytics";
@@ -7,7 +8,7 @@ export type { Model, ModelCapabilities, ReasoningEffort } from "./model-data";
 export { getCacheStatus, getModelById, getModelCapabilities, prefetchModels } from "./model-utils";
 
 import type { Model } from "./model-data";
-import { CACHE_TTL, cache, fetchAllModels, getFallbackModels, reloadModels, subscribe } from "./model-utils";
+import { cache, fetchAllModels, getFallbackModels, reloadModels, subscribe } from "./model-utils";
 
 type ReasoningEffort = "none" | "low" | "medium" | "high";
 
@@ -129,60 +130,27 @@ export const useModelStore = create<ModelState>()(
 );
 
 export function useModels() {
-	const [models, setModels] = useState<Array<Model>>(() => cache.models || getFallbackModels());
-	const [isLoading, setIsLoading] = useState(() => cache.loading || !cache.models);
-	const [error, setError] = useState<Error | null>(() => cache.error);
 	const [, forceUpdate] = useState(0);
 
-	useEffect(() => {
-		return subscribe(() => forceUpdate((n) => n + 1));
-	}, []);
+	useMountEffect(() => {
+		const unsubscribe = subscribe(() => {
+			forceUpdate((n) => n + 1);
+		});
+		void fetchAllModels().catch(() => {
+			/* Errors are stored on `cache` by fetchAllModels; avoid unhandled rejection */
+		});
+		return unsubscribe;
+	});
 
-	useEffect(() => {
-		let cancelled = false;
-
-		async function load() {
-			if (cache.models && Date.now() - cache.timestamp < CACHE_TTL) {
-				setModels(cache.models);
-				setIsLoading(false);
-				setError(null);
-				return;
-			}
-
-			setIsLoading(true);
-
-			try {
-				const fetched = await fetchAllModels();
-				if (!cancelled) {
-					setModels(fetched);
-					setError(null);
-				}
-			} catch (e) {
-				if (!cancelled) {
-					setError(e instanceof Error ? e : new Error("Failed"));
-					setModels(getFallbackModels());
-				}
-			} finally {
-				if (!cancelled) setIsLoading(false);
-			}
-		}
-
-		load();
-		return () => {
-			cancelled = true;
-		};
-	}, []);
+	const models = cache.models ?? getFallbackModels();
+	const isLoading = cache.loading;
+	const error = cache.error;
 
 	const reload = useCallback(async () => {
-		setIsLoading(true);
-		setError(null);
 		try {
-			const fetched = await reloadModels();
-			setModels(fetched);
-		} catch (e) {
-			setError(e instanceof Error ? e : new Error("Failed"));
-		} finally {
-			setIsLoading(false);
+			await reloadModels();
+		} catch {
+			/* cache.error set by fetch path; subscribe notifies */
 		}
 	}, []);
 

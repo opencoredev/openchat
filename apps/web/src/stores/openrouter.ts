@@ -232,7 +232,7 @@ export const useOpenRouterStore = create<OpenRouterState>()(
  *   const { hasApiKey, initiateLogin, clearApiKey, initialize, isInitialized } = useOpenRouterKey();
  *
  *   // Initialize on mount to check server for existing key
- *   useEffect(() => {
+ *   useEffectOnDeps(() => {
  *     if (!isInitialized) {
  *       initialize();
  *     }

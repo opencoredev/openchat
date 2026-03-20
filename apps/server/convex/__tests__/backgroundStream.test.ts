@@ -299,9 +299,9 @@ describe("backgroundStream", () => {
 
 		// A new message should have been created
 		const message = await t.run(async (ctx) => {
-			return await (ctx.db as any)
+			return await ctx.db
 				.query("messages")
-				.withIndex("by_client_id", (q: any) =>
+				.withIndex("by_client_id", (q) =>
 					q.eq("chatId", chatId).eq("clientMessageId", "msg-008"),
 				)
 				.first();
@@ -353,9 +353,9 @@ describe("backgroundStream", () => {
 
 		// Only one message should exist for this clientMessageId
 		const allMessages = await t.run(async (ctx) => {
-			return await (ctx.db as any)
+			return await ctx.db
 				.query("messages")
-				.withIndex("by_client_id", (q: any) =>
+				.withIndex("by_client_id", (q) =>
 					q.eq("chatId", chatId).eq("clientMessageId", "msg-009"),
 				)
 				.collect();
