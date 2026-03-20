@@ -51,7 +51,42 @@ openchat/
 - Assume dev servers are already running; do not start `bun dev*` unless explicitly requested.
 - Prefer build/typecheck/test verification when runtime validation is needed.
 
+## Coding Standards & Banned Patterns
+
+These rules apply to all AI agents and human contributors working in this repository.
+
+### Choose Your Bug — Why We Ban useEffect Misuse
+
+Misusing `useEffect` doesn't help you avoid bugs — it just lets you choose which bug you get. Every effect that syncs state, fetches data, or reacts to user actions is a latent race condition, stale closure, or infinite loop waiting to happen. The rules below eliminate this entire class of bugs.
+
+### Rules
+
+**Rule 1 — BAN direct use of `useEffect`**
+
+Do not use `useEffect` directly. Use `useMountEffect()` only for rare, justified external side-effect syncs (e.g. third-party SDK initialization). Any other use must be approved and documented with a comment explaining why no alternative works.
+
+**Rule 2 — BAN `as any` casts**
+
+Do not use TypeScript `as any` casts. Use proper types, generics, or type guards. If you cannot type something, use `unknown` and narrow it explicitly. `as any` silences the compiler and hides real bugs.
+
+**Rule 3 — Derive state inline, never sync it with effects**
+
+Do not use `useEffect` + `useState` to sync or transform other state. Derive computed values inline during render, or use `useMemo` if the computation is expensive. Effect-based state sync always has at least one render where the derived state is stale.
+
+**Rule 4 — Use data-fetching libraries instead of fetch-in-effect**
+
+Do not fetch data inside `useEffect`. Use `useQuery` (TanStack Query) or an equivalent data-fetching library. These libraries handle caching, deduplication, background refetching, loading states, and error states correctly. Effect-based fetching is a manual reimplementation of these features, done worse.
+
+**Rule 5 — Use event handlers for user actions, not effect flags**
+
+Do not use `useEffect` to react to user interactions by watching a flag or state change. Put the logic directly in the event handler. Effects that watch for 'action triggers' fire one render late and make code impossible to follow.
+
+**Rule 6 — Reset components with keys, not dependency choreography**
+
+Do not use complex `useEffect` dependency arrays to reset or reinitialize component state when an ID or key prop changes. Instead, pass the relevant value as the `key` prop to the component — React will fully remount it, resetting all state cleanly with zero effect logic.
+
 ## ANTI-PATTERNS (THIS PROJECT)
+- Follow **Coding Standards & Banned Patterns** above for enforced React and TypeScript rules (`useEffect` misuse, `as any`, and related patterns).
 - Do not use `NEXT_PUBLIC_*` env vars in web code.
 - Do not treat `docs-site/` like a regular workspace; it is a git subtree.
 - Do not introduce new logic against deprecated message fields when `chainOfThoughtParts` exists.
