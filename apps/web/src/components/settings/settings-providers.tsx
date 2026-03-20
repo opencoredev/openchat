@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import type { MouseEvent } from "react";
 import { useOpenRouterKey } from "@/stores/openrouter";
 import { DAILY_LIMIT_CENTS, isPreviewDeployment, useProviderStore } from "@/stores/provider";
@@ -14,7 +15,7 @@ export function ProvidersSection() {
 	const remainingBudget = useProviderStore((s) => s.remainingBudgetCents());
 	const [connectModalOpen, setConnectModalOpen] = useState(false);
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (!isInitialized) {
 			void initialize();
 		}

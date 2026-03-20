@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import type { UIMessage } from "ai";
@@ -49,12 +50,9 @@ export function usePersistentChat({
 	const chatIdRef = useRef<string | null>(chatId ?? null);
 	const streamingRef = useRef<StreamingState | null>(null);
 	const onChatCreatedRef = useRef(onChatCreated);
+	onChatCreatedRef.current = onChatCreated;
 
-	useEffect(() => {
-		onChatCreatedRef.current = onChatCreated;
-	}, [onChatCreated]);
-
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (chatId) {
 			chatIdRef.current = chatId;
 			setCurrentChatId(chatId);

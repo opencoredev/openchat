@@ -2,7 +2,8 @@
 
 import { useControllableState } from "@radix-ui/react-use-controllable-state";
 import { BrainIcon, ChevronDownIcon } from "lucide-react";
-import { createContext, memo, useContext, useEffect, useState } from "react";
+import { createContext, memo, useContext, useState } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import { Streamdown } from "streamdown";
 import { Shimmer } from "./shimmer";
 import type { ComponentProps, ReactNode } from "react";
@@ -63,7 +64,7 @@ export const Reasoning = memo(
 
 		const [startTime, setStartTime] = useState<number | null>(null);
 
-		useEffect(() => {
+		useEffectOnDeps(() => {
 			if (isStreaming) {
 				if (startTime === null) {
 					setStartTime(Date.now());

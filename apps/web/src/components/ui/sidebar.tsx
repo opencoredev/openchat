@@ -4,6 +4,7 @@ import { useRender } from "@base-ui/react/use-render"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { useIsMobile } from "@/hooks/use-mobile"
+import { useMountEffect } from "@/hooks/use-mount-effect"
 import { SHORTCUT_EVENT_TOGGLE_SIDEBAR } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -92,15 +93,18 @@ function SidebarProvider({
     return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open)
   }, [isMobile, setOpen, setOpenMobile])
 
+  const toggleSidebarRef = React.useRef(toggleSidebar)
+  toggleSidebarRef.current = toggleSidebar
+
   // Listens for global shortcut events to toggle the sidebar.
-  React.useEffect(() => {
+  useMountEffect(() => {
     const onShortcutToggle = () => {
-      toggleSidebar()
+      toggleSidebarRef.current()
     }
 
     window.addEventListener(SHORTCUT_EVENT_TOGGLE_SIDEBAR, onShortcutToggle)
     return () => window.removeEventListener(SHORTCUT_EVENT_TOGGLE_SIDEBAR, onShortcutToggle)
-  }, [toggleSidebar])
+  })
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.

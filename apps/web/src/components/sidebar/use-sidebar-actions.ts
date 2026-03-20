@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useEffectOnDeps, useMountEffect } from "@/hooks/use-mount-effect";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { api } from "@server/convex/_generated/api";
@@ -62,6 +63,12 @@ export function useSidebarActions({
 	const getSelectedChatIds = useBulkSelectionStore((s) => s.getSelectedChatIds);
 	const selectionAnchorRef = useRef<string | null>(null);
 	const shareRequestIdRef = useRef(0);
+
+	contextMenuRef.current = contextMenu;
+	const deselectAllRef = useRef(deselectAll);
+	deselectAllRef.current = deselectAll;
+	const selectedChatIdsRef = useRef(selectedChatIds);
+	selectedChatIdsRef.current = selectedChatIds;
 
 	const deleteChat = useMemo(
 		() => (deleteChatId ? chats.find((chat) => chat._id === deleteChatId) : null),
@@ -373,11 +380,7 @@ export function useSidebarActions({
 		[confirmDelete, handleDeleteChat],
 	);
 
-	useEffect(() => {
-		contextMenuRef.current = contextMenu;
-	}, [contextMenu]);
-
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (typeof window === "undefined") return;
 		if (!contextMenu || !contextMenuElementRef.current) return;
 		const rect = contextMenuElementRef.current.getBoundingClientRect();
@@ -391,14 +394,14 @@ export function useSidebarActions({
 		}
 	}, [contextMenu]);
 
-	useEffect(() => {
+	useMountEffect(() => {
 		isMountedRef.current = true;
 		return () => {
 			isMountedRef.current = false;
 		};
-	}, []);
+	});
 
-	useEffect(() => {
+	useMountEffect(() => {
 		const handleDismiss = () => {
 			if (!contextMenuRef.current) return;
 			if (!isMountedRef.current) return;
@@ -411,8 +414,8 @@ export function useSidebarActions({
 				setContextMenu(null);
 				setDeleteChatId(null);
 			}
-			if (event.key === "Escape" && selectedChatIds.size > 0) {
-				deselectAll();
+			if (event.key === "Escape" && selectedChatIdsRef.current.size > 0) {
+				deselectAllRef.current();
 			}
 		};
 
@@ -425,7 +428,7 @@ export function useSidebarActions({
 			window.removeEventListener("contextmenu", handleDismiss);
 			window.removeEventListener("keydown", handleKey);
 		};
-	}, [deselectAll, selectedChatIds.size]);
+	});
 
 	return {
 		contextMenu,

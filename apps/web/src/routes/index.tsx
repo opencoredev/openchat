@@ -1,5 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useEffectOnDeps, useMountEffect } from "@/hooks/use-mount-effect";
 import { useAuth } from "../lib/auth-client";
 import { Button } from "../components/ui/button";
 import { ChatInterface } from "../components/chat";
@@ -40,7 +41,7 @@ function InteractiveStaircase({
   )
   const [layout, setLayout] = useState({ gridSize: 12, squareSize: 40 })
 
-  useEffect(() => {
+  useMountEffect(() => {
     const updateLayout = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect()
@@ -63,7 +64,7 @@ function InteractiveStaircase({
       cancelAnimationFrame(rafId)
       window.removeEventListener('resize', updateLayout)
     }
-  }, [])
+  })
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     // Use cached rect to avoid getBoundingClientRect on every mouse move
@@ -219,7 +220,7 @@ function HomePage() {
   const { isAuthenticated, loading } = useAuth();
 
   // Load autochangelog in-app widget only on root page for authenticated users
-  useEffect(() => {
+  useEffectOnDeps(() => {
     if (!isAuthenticated) return;
 
     const scriptId = 'autochangelog-in-app';

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConvexProviderWithAuth, useMutation, useQuery } from "convex/react";
 import { Toaster } from "sonner";
@@ -50,7 +51,7 @@ const queryClient = new QueryClient({
 });
 
 interface ProvidersProps {
-  children: React.ReactNode;
+  children: ReactNode;
   initialUser?: InitialAuthUser;
 }
 
@@ -78,26 +79,26 @@ function useStableConvexAuth() {
  * This is CRITICAL - without this, convexUserId will be undefined
  * and message sending will silently fail.
  */
-function UserSyncProvider({ children }: { children: React.ReactNode }) {
+function UserSyncProvider({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, loading } = useAuth();
+  // @ts-expect-error TS2589 — Convex `useMutation(api.users.ensure)` hits excessive instantiation depth under this workspace's tsc settings.
   const ensureUser = useMutation(api.users.ensure);
   const syncedUserIdRef = useRef<string | null>(null);
   const syncingUserIdRef = useRef<string | null>(null);
 
-  useEffect(() => {
+  // Imperative Convex ensureUser when Better Auth identity loads or changes (no user gesture).
+  useEffectOnDeps(() => {
     if (!isAuthenticated || !user?.id) {
       syncedUserIdRef.current = null;
       syncingUserIdRef.current = null;
+      return;
     }
-  }, [isAuthenticated, user?.id]);
 
-  useEffect(() => {
     const userId = user?.id;
 
     // Only sync once when user is authenticated and we have user data
     if (
       loading ||
-      !isAuthenticated ||
       !userId ||
       syncedUserIdRef.current === userId ||
       syncingUserIdRef.current === userId
@@ -132,7 +133,7 @@ function UserSyncProvider({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function UsageSyncProvider({ children }: { children: React.ReactNode }) {
+function UsageSyncProvider({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, loading } = useAuth();
   const syncUsage = useProviderStore((s) => s.syncUsage);
   const resetDailyUsage = useProviderStore((s) => s.resetDailyUsage);
@@ -141,7 +142,8 @@ function UsageSyncProvider({ children }: { children: React.ReactNode }) {
     !loading && isAuthenticated && user?.id ? { externalId: user.id } : "skip",
   );
 
-  useEffect(() => {
+  // Push server usage limits into client Zustand when Convex user doc updates.
+  useEffectOnDeps(() => {
     if (!isAuthenticated || !user?.id) {
       resetDailyUsage();
       return;
@@ -167,26 +169,25 @@ function UsageSyncProvider({ children }: { children: React.ReactNode }) {
  * Component that checks OpenRouter API key status from the server.
  * This syncs the hasApiKey state without exposing the actual key to the client.
  */
-function OpenRouterKeyStatusProvider({ children }: { children: React.ReactNode }) {
+function OpenRouterKeyStatusProvider({ children }: { children: ReactNode }) {
 	const { user, isAuthenticated, loading } = useAuth();
 	const initialize = useOpenRouterStore((s) => s.initialize);
 	const checkedUserIdRef = useRef<string | null>(null);
 	const checkingUserIdRef = useRef<string | null>(null);
 
-  useEffect(() => {
+  // Server round-trip for OpenRouter key presence; tied to auth identity, not a click handler.
+  useEffectOnDeps(() => {
     if (!isAuthenticated || !user?.id) {
       checkedUserIdRef.current = null;
       checkingUserIdRef.current = null;
+      return;
     }
-  }, [isAuthenticated, user?.id]);
 
-  useEffect(() => {
     const userId = user?.id;
 
     // Only check once when user is authenticated
     if (
       loading ||
-      !isAuthenticated ||
       !userId ||
       checkedUserIdRef.current === userId ||
       checkingUserIdRef.current === userId
@@ -215,7 +216,7 @@ function OpenRouterKeyStatusProvider({ children }: { children: React.ReactNode }
   return <>{children}</>;
 }
 
-function ConvexAuthWrapper({ children }: { children: React.ReactNode }) {
+function ConvexAuthWrapper({ children }: { children: ReactNode }) {
   return (
     <ConvexProviderWithAuth client={convexClient!} useAuth={useStableConvexAuth}>
       <UserSyncProvider>
@@ -227,12 +228,16 @@ function ConvexAuthWrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function Providers({ children, initialUser }: ProvidersProps) {
-  const [isClient, setIsClient] = useState(false);
+function useIsClient(): boolean {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+}
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+export function Providers({ children, initialUser }: ProvidersProps) {
+  const isClient = useIsClient();
 
   const content = (
     <ThemeProvider>

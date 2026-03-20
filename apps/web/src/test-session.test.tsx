@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest'
 import { render } from '@testing-library/react'
-import { useEffect } from 'react'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 
 function TestComp() {
-  useEffect(() => {
+  useMountEffect(() => {
     try {
       sessionStorage.getItem('test-key')
     } catch (e) {
       console.warn('caught error', e)
     }
-  }, [])
+  })
   return <div>test</div>
 }
 

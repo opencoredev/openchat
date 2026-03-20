@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import { usePromptDraftStore } from "@/stores/prompt-draft";
 
 /**
@@ -42,7 +43,7 @@ export function usePromptDraft({ chatId, textInputController }: UsePromptDraftOp
 	const skipNextSaveRef = useRef(false);
 
 	// Restore draft on mount or when chatId changes
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		// Reset restoration flag when chatId changes
 		hasRestoredRef.current = false;
 		skipNextSaveRef.current = true;
@@ -72,7 +73,7 @@ export function usePromptDraft({ chatId, textInputController }: UsePromptDraftOp
 
 	// Sync text changes to sessionStorage (debounced)
 	// Using chatId and setDraft directly to avoid re-running on saveDraft recreation
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		// Only save after initial restoration
 		if (!hasRestoredRef.current) {
 			return;

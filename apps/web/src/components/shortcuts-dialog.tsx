@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import { useNavigate } from "@tanstack/react-router";
 import { CircleHelpIcon, SearchIcon, SettingsIcon, XIcon } from "lucide-react";
 import {
@@ -50,7 +51,7 @@ export function ShortcutsDialog({ showHelpButton }: { showHelpButton: boolean })
 	const [search, setSearch] = useState("");
 
 	// Reset search when dialog opens
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (shortcutsDialogOpen) {
 			setSearch("");
 		}

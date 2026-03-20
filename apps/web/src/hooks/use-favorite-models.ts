@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import { useAuth } from "@/lib/auth-client";
 
 const DEFAULT_FAVORITES = [
@@ -49,7 +50,7 @@ export function useFavoriteModels() {
     setFavorites(new Set(nextFavorites));
   }, []);
 
-  useEffect(() => {
+  useEffectOnDeps(() => {
     if (!convexUserId) {
       activeUserIdRef.current = null;
       lastServerSnapshotRef.current = null;

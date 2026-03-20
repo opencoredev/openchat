@@ -1,11 +1,12 @@
 import * as React from "react"
+import { useMountEffect } from "@/hooks/use-mount-effect"
 
 const MOBILE_BREAKPOINT = 768
 
 export function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
 
-  React.useEffect(() => {
+  useMountEffect(() => {
     const onChange = () => {
       setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
     }
@@ -30,7 +31,7 @@ export function useIsMobile() {
         window.removeEventListener("resize", onChange)
       }
     }
-  }, [])
+  })
 
   return !!isMobile
 }

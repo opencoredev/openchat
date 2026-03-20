@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, act } from "@testing-library/react";
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 import {
 	LocalAttachmentsContext,
 	PromptInputProvider,
@@ -391,7 +392,7 @@ describe("PromptInputProvider attachments", () => {
 		function Registrar() {
 			const ctx = usePromptInputController();
 			const ref = useRef<HTMLInputElement | null>(null);
-			useEffect(() => {
+			useEffectOnDeps(() => {
 				ctx.__registerFileInput(ref, openFn);
 			}, [ctx]);
 			return null;

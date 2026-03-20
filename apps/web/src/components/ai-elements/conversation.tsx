@@ -11,7 +11,8 @@
  */
 
 import { ArrowDownIcon } from "lucide-react";
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { useMountEffect } from "@/hooks/use-mount-effect";
 import type { ComponentProps, RefObject } from "react";
 import { cn } from "@/lib/utils";
 
@@ -58,7 +59,7 @@ export const Conversation = ({ className, children, showScrollButton = false, ..
   }, []);
 
   // Track scroll position
-  useEffect(() => {
+  useMountEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
 
@@ -72,7 +73,7 @@ export const Conversation = ({ className, children, showScrollButton = false, ..
     handleScroll(); // Check initial state
 
     return () => el.removeEventListener("scroll", handleScroll);
-  }, []);
+  });
 
   return (
     <ConversationContext.Provider value={{ scrollRef, isAtBottom, scrollToBottom }}>

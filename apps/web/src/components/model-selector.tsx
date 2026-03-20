@@ -1,4 +1,5 @@
-import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useLayoutEffect, useRef, useState } from "react";
+import { useEffectOnDeps, useMountEffect } from "@/hooks/use-mount-effect";
 import { createPortal, flushSync } from "react-dom";
 import type { Model } from "@/stores/model";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -73,7 +74,7 @@ export function ModelSelector({
 	const filteredModels = useFilteredModels(models, deferredQuery, selectedProvider, showFavoritesOnly, favorites);
 	const flatList = useFlatList(filteredModels);
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		setHighlightedIndex(-1);
 	}, [deferredQuery, selectedProvider, showFavoritesOnly]);
 
@@ -147,7 +148,7 @@ export function ModelSelector({
 		[toggleFavorite],
 	);
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (!open) return;
 
 		function handleKeyDown(e: KeyboardEvent) {
@@ -181,7 +182,7 @@ export function ModelSelector({
 		return () => document.removeEventListener("keydown", handleKeyDown);
 	}, [open, flatList, highlightedIndex, handleSelect, handleClose]);
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (!listRef.current || !open) return;
 		const selectedElement = listRef.current.querySelector(`[data-index="${highlightedIndex}"]`);
 		if (selectedElement) {
@@ -189,13 +190,13 @@ export function ModelSelector({
 		}
 	}, [highlightedIndex, open]);
 
-	useEffect(() => {
+	useMountEffect(() => {
 		return () => {
 			if (infoHoverTimerRef.current) clearTimeout(infoHoverTimerRef.current);
 		};
-	}, []);
+	});
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (!open) return;
 
 		function handleClickOutside(e: MouseEvent) {

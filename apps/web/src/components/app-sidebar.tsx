@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
+import { useEffectOnDeps, useMountEffect } from "@/hooks/use-mount-effect";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
@@ -63,19 +64,19 @@ export function AppSidebar({
 
 	const cachedChatsRef = useRef<Array<ChatItem> | null>(null);
 
-	useEffect(() => {
+	useMountEffect(() => {
 		if (typeof window === "undefined") return;
 		try {
 			const stored = sessionStorage.getItem(CHATS_CACHE_KEY);
 			if (stored && !cachedChatsRef.current) {
-				cachedChatsRef.current = JSON.parse(stored);
+				cachedChatsRef.current = JSON.parse(stored) as Array<ChatItem>;
 			}
 		} catch (e) {
 			console.warn("Failed to load chats from sessionStorage:", e);
 		}
-	}, []);
+	});
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		if (chatsResult?.chats && chatsResult.chats.length > 0) {
 			cachedChatsRef.current = chatsResult.chats;
 			try {

@@ -1,4 +1,5 @@
-import { useEffect, useMemo } from "react";
+import { useMemo, useRef } from "react";
+import { useMountEffect } from "@/hooks/use-mount-effect";
 import type { NavigateFn } from "@tanstack/react-router";
 import {
 	type ShortcutActionId,
@@ -128,27 +129,37 @@ export function useGlobalShortcuts({ navigate, isAuthenticated, pathname }: UseG
 	const isMac = useMemo(() => isMacPlatform(), []);
 	const onChatRoute = isChatRoute(pathname);
 
-	useEffect(() => {
-		const bindingMap = getEffectiveBindingsMap(bindings, isMac);
+	const bindingsRef = useRef(bindings);
+	bindingsRef.current = bindings;
+	const isAuthenticatedRef = useRef(isAuthenticated);
+	isAuthenticatedRef.current = isAuthenticated;
+	const navigateRef = useRef(navigate);
+	navigateRef.current = navigate;
+	const onChatRouteRef = useRef(onChatRoute);
+	onChatRouteRef.current = onChatRoute;
+	const isMacRef = useRef(isMac);
+	isMacRef.current = isMac;
 
+	useMountEffect(() => {
 		function onKeyDown(event: KeyboardEvent) {
 			if (event.defaultPrevented || event.repeat || event.isComposing) return;
 
+			const bindingMap = getEffectiveBindingsMap(bindingsRef.current, isMacRef.current);
 			const currentBinding = eventToBinding(event);
 			if (!currentBinding) return;
 
 			const matched: ShortcutDefinition | undefined = bindingMap.get(currentBinding);
 			if (!matched) return;
 
-			if (!isAuthenticated) return;
-			if (!onChatRoute && CHAT_ONLY_SHORTCUTS.has(matched.id)) return;
+			if (!isAuthenticatedRef.current) return;
+			if (!onChatRouteRef.current && CHAT_ONLY_SHORTCUTS.has(matched.id)) return;
 			if (isEditableElement(event.target) && !matched.allowInInput) return;
 
 			event.preventDefault();
-			runShortcutAction(matched.id, navigate);
+			runShortcutAction(matched.id, navigateRef.current);
 		}
 
 		document.addEventListener("keydown", onKeyDown);
 		return () => document.removeEventListener("keydown", onKeyDown);
-	}, [bindings, isAuthenticated, isMac, navigate, onChatRoute]);
+	});
 }

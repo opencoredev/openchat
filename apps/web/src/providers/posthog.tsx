@@ -2,7 +2,7 @@
  * PostHog Analytics Provider
  */
 
-import { useEffect } from "react";
+import { useEffectOnDeps, useMountEffect } from "@/hooks/use-mount-effect";
 import posthog from "posthog-js";
 import { PostHogProvider as PHProvider } from "posthog-js/react";
 import { env } from "@/lib/env";
@@ -26,9 +26,9 @@ function initPostHog() {
 }
 
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
-  useEffect(() => {
+  useMountEffect(() => {
     initPostHog();
-  }, []);
+  });
 
   // If no PostHog key, just render children without provider
   if (!env.POSTHOG_KEY) {
@@ -71,7 +71,7 @@ function getSanitizedUrl(): string {
 
 // Hook to capture page views (call this in your router)
 export function usePostHogPageView(pathname: string) {
-  useEffect(() => {
+  useEffectOnDeps(() => {
     if (env.POSTHOG_KEY && posthogInitialized) {
       posthog.capture("$pageview", {
         $current_url: getSanitizedUrl(),

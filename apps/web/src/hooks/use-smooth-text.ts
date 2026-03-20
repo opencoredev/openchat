@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useEffectOnDeps, useMountEffect } from "@/hooks/use-mount-effect";
 
 // Each frame reveals ~1/K of the remaining queue.
 // K=8 at 60fps drains a 100-char burst in ~330ms — fast enough to feel linear,
@@ -55,7 +56,7 @@ export function useSmoothText(
 		rafRef.current = requestAnimationFrame(tick);
 	}, []);
 
-	useEffect(() => {
+	useEffectOnDeps(() => {
 		const shouldSkipInitialAnimation =
 			options?.skipInitialAnimation === true &&
 			!hasHandledInitialSyncRef.current &&
@@ -94,12 +95,12 @@ export function useSmoothText(
 		ensureRunning();
 	}, [text, isStreaming, ensureRunning, options?.skipInitialAnimation]);
 
-	useEffect(() => {
+	useMountEffect(() => {
 		return () => {
 			cancelAnimationFrame(rafRef.current);
 			runningRef.current = false;
 		};
-	}, []);
+	});
 
 	return displayed;
 }

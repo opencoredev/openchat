@@ -533,7 +533,7 @@ describe("message loading state", () => {
 		expect(result.current.isLoadingMessages).toBe(false);
 	});
 
-	it("messages are populated from Convex result via useEffect", async () => {
+	it("messages are populated from Convex result via useEffectOnDeps", async () => {
 		mockMessagesResult = [
 			{
 				_id: "server-msg-1",

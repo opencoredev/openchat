@@ -5,7 +5,8 @@
  * This provider just manages the React state for theme switching.
  */
 
-import { createContext, useEffect, useState } from "react";
+import { createContext, useState, useSyncExternalStore } from "react";
+import { useEffectOnDeps } from "@/hooks/use-mount-effect";
 
 type Theme = "dark" | "light" | "system";
 
@@ -19,11 +20,6 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 const STORAGE_KEY = "openchat-theme";
 
-function getSystemTheme(): "dark" | "light" {
-  if (typeof window === "undefined") return "dark";
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
 function getStoredTheme(): Theme {
   if (typeof window === "undefined") return "system";
   const stored = localStorage.getItem(STORAGE_KEY);
@@ -33,42 +29,32 @@ function getStoredTheme(): Theme {
   return "system";
 }
 
-// Get initial resolved theme (matches inline script logic)
-function getInitialResolved(): "dark" | "light" {
+function subscribeSystemTheme(cb: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+}
+
+function getSystemThemeSnapshot(): "dark" | "light" {
   if (typeof window === "undefined") return "dark";
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored === "dark" || stored === "light") return stored;
-  return getSystemTheme();
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(getStoredTheme);
-  const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">(getInitialResolved);
+  const systemTheme = useSyncExternalStore(
+    subscribeSystemTheme,
+    getSystemThemeSnapshot,
+    () => "dark" as const,
+  );
+  const resolvedTheme: "dark" | "light" = theme === "system" ? systemTheme : theme;
 
-  // Update document class when theme changes
-  useEffect(() => {
-    const resolved = theme === "system" ? getSystemTheme() : theme;
-    setResolvedTheme(resolved);
-
+  // Sync resolved theme to document (external DOM; must run after paint).
+  useEffectOnDeps(() => {
     document.documentElement.classList.remove("light", "dark");
-    document.documentElement.classList.add(resolved);
-  }, [theme]);
-
-  // Listen for system theme changes when in system mode
-  useEffect(() => {
-    if (theme !== "system") return;
-
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = (e: MediaQueryListEvent) => {
-      const newTheme = e.matches ? "dark" : "light";
-      setResolvedTheme(newTheme);
-      document.documentElement.classList.remove("light", "dark");
-      document.documentElement.classList.add(newTheme);
-    };
-
-    mediaQuery.addEventListener("change", handler);
-    return () => mediaQuery.removeEventListener("change", handler);
-  }, [theme]);
+    document.documentElement.classList.add(resolvedTheme);
+  }, [resolvedTheme]);
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
