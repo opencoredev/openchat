@@ -265,6 +265,7 @@ describe("initial state shape", () => {
 		expect(typeof result.current.retryMessage).toBe("function");
 		expect(typeof result.current.forkMessage).toBe("function");
 		expect(typeof result.current.stop).toBe("function");
+		expect(typeof result.current.resetChatError).toBe("function");
 	});
 });
 
@@ -410,6 +411,23 @@ describe("error tracking", () => {
 			await result.current.sendMessage({ text: "Second" });
 		});
 		expect(result.current.error).toBeUndefined();
+	});
+
+	it("resetChatError clears error and returns status from error to ready", async () => {
+		mockStartBackgroundStream.mockRejectedValueOnce(new Error("boom"));
+
+		const { result } = renderChat();
+		await act(async () => {
+			await result.current.sendMessage({ text: "Hello" });
+		});
+		expect(result.current.status).toBe("error");
+		expect(result.current.error).toBeTruthy();
+
+		await act(async () => {
+			result.current.resetChatError();
+		});
+		expect(result.current.error).toBeUndefined();
+		expect(result.current.status).toBe("ready");
 	});
 });
 

@@ -83,6 +83,7 @@ export const Conversation = ({ className, children, showScrollButton = false, ..
           ref={scrollRef}
           className="absolute inset-0 overflow-y-auto"
           role="log"
+          aria-label="Chat messages"
         >
           {children}
           {/* Anchor element for scroll-to-bottom */}
@@ -92,10 +93,11 @@ export const Conversation = ({ className, children, showScrollButton = false, ..
         {showScrollButton && !isAtBottom && (
           <button
             type="button"
+            aria-label="Scroll to latest message"
             className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 rounded-full shadow-lg flex size-11 md:size-9 items-center justify-center bg-background border border-border hover:bg-muted active:scale-95 transition-all"
             onClick={scrollToBottom}
           >
-            <ArrowDownIcon className="size-5 md:size-4" />
+            <ArrowDownIcon className="size-5 md:size-4" aria-hidden />
           </button>
         )}
       </div>

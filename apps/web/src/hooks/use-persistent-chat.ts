@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import type { UIMessage } from "ai";
@@ -30,6 +30,8 @@ export interface UsePersistentChatReturn {
 	chatId: string | null;
 	isResuming: boolean;
 	resumedContent: string;
+	/** Clears the last stream/send error and returns status from `error` to `ready` when applicable */
+	resetChatError: () => void;
 }
 
 export function usePersistentChat({
@@ -84,6 +86,11 @@ export function usePersistentChat({
 		streamingRef,
 	});
 
+	const resetChatError = useCallback(() => {
+		setError(undefined);
+		setStatus((prev) => (prev === "error" ? "ready" : prev));
+	}, []);
+
 	const { sendMessage, editMessage, retryMessage, forkMessage } = useChatActions({
 		convexUserId,
 		isUserLoading,
@@ -117,5 +124,6 @@ export function usePersistentChat({
 		chatId: currentChatId,
 		isResuming,
 		resumedContent,
+		resetChatError,
 	};
 }

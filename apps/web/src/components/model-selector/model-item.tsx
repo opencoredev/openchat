@@ -71,6 +71,7 @@ export function ModelItem({
 							: "text-muted-foreground/20 hover:text-amber-400 opacity-0 group-hover:opacity-100",
 					)}
 					title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+					aria-label={isFavorite ? `Remove ${model.name} from favorites` : `Add ${model.name} to favorites`}
 				>
 					<StarIcon filled={isFavorite} className="size-4" />
 				</button>
@@ -117,6 +118,7 @@ export function ModelItem({
 						onInfoHover();
 					}}
 					className="flex size-6 items-center justify-center rounded-md text-muted-foreground/40 transition-all duration-150 hover:text-foreground hover:bg-accent/80"
+					aria-label={`Model details for ${model.name}`}
 				>
 					<InfoIcon className="size-3.5" />
 				</button>

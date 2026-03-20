@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2Icon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useConversationScroll, Conversation, ConversationContent } from "@/components/ai-elements/conversation";
@@ -36,10 +37,16 @@ function AutoScroll({ messageCount }: { messageCount: number }) {
 
 function LoadingIndicator() {
 	return (
-		<div className="flex items-center gap-1.5 py-2">
-			<span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:0ms]" />
-			<span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:150ms]" />
-			<span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:300ms]" />
+		<div
+			className="flex items-center gap-1.5 py-2"
+			role="status"
+			aria-live="polite"
+			aria-busy="true"
+		>
+			<span className="sr-only">Assistant is responding</span>
+			<span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:0ms]" aria-hidden />
+			<span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:150ms]" aria-hidden />
+			<span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:300ms]" aria-hidden />
 		</div>
 	);
 }
@@ -54,6 +61,10 @@ export interface ChatMessageListProps {
 	}>;
 	isLoading: boolean;
 	isNewChat: boolean;
+	/** True while Convex history for an existing chat is still loading */
+	isLoadingHistory?: boolean;
+	streamError?: Error | null;
+	onDismissStreamError?: () => void;
 	onPromptSelect: (prompt: string) => void;
 	onRetryMessage: (messageId: string, modelId?: string) => Promise<void>;
 	onForkMessage: (messageId: string, modelId?: string) => Promise<void>;
@@ -66,6 +77,9 @@ export const ChatMessageList = memo(function ChatMessageList({
 	messages,
 	isLoading,
 	isNewChat,
+	isLoadingHistory = false,
+	streamError = null,
+	onDismissStreamError,
 	onPromptSelect,
 	onRetryMessage,
 	onForkMessage,
@@ -241,9 +255,44 @@ export const ChatMessageList = memo(function ChatMessageList({
 		<Conversation className="flex-1 px-2 md:px-4" showScrollButton>
 			<AutoScroll messageCount={messages.length} />
 			<ConversationContent className="mx-auto max-w-3xl pt-16 md:pt-6 pb-16 px-2 md:px-4">
-				{messages.length === 0 && isNewChat ? (
+				{streamError && (
+					<div
+						role="alert"
+						className="mb-4 flex gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm"
+					>
+						<div className="min-w-0 flex-1">
+							<p className="font-medium text-destructive">Something went wrong</p>
+							<p className="mt-1 text-destructive/80">{streamError.message}</p>
+						</div>
+						{onDismissStreamError ? (
+							<button
+								type="button"
+								onClick={onDismissStreamError}
+								className="shrink-0 rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+								aria-label="Dismiss error"
+							>
+								<XIcon className="size-4" />
+							</button>
+						) : null}
+					</div>
+				)}
+				{isLoadingHistory && messages.length === 0 ? (
+					<div
+						className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground"
+						role="status"
+						aria-live="polite"
+						aria-busy="true"
+					>
+						<Loader2Icon className="size-8 animate-spin" aria-hidden />
+						<span className="sr-only">Loading conversation</span>
+					</div>
+				) : messages.length === 0 && isNewChat ? (
 					<StartScreen onPromptSelect={onPromptSelect} />
-				) : messages.length === 0 ? null : (
+				) : messages.length === 0 ? (
+					<p className="py-12 text-center text-sm text-muted-foreground">
+						No messages in this chat yet. Send a message below to start.
+					</p>
+				) : (
 					<>
 						{processedMessages.map((item, itemIndex) => {
 							if (item.shouldSkip) return null;

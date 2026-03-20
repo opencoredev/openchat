@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/auth-client";
 import { ChatInterface } from "@/components/chat";
 import { Button } from "@/components/ui/button";
 import { convexClient } from "@/lib/convex";
+import { AppLoadingPlaceholder } from "@/components/app-loading-placeholder";
 
 export const Route = createFileRoute("/c/$chatId")({
   head: () => ({
@@ -27,7 +28,7 @@ function ChatPage() {
   const { isAuthenticated, loading } = useAuth();
 
   if (!convexClient || loading) {
-    return <div className="flex h-full bg-background" />;
+    return <AppLoadingPlaceholder message="Loading" />;
   }
 
   if (!isAuthenticated) {
