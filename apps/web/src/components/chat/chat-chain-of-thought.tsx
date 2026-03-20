@@ -1,5 +1,8 @@
+"use client";
+
 import { BrainIcon, SearchIcon } from "lucide-react";
 import { Streamdown } from "streamdown";
+import { useLinkSafetyConfig } from "@/components/ai-elements/streamdown-link-safety";
 import { cn } from "@/lib/utils";
 import {
 	ChainOfThought as AiChainOfThought,
@@ -169,6 +172,7 @@ export function ChainOfThought({
 	open,
 	onOpenChange,
 }: ChainOfThoughtProps) {
+	const linkSafety = useLinkSafetyConfig();
 	const hasToolSteps = steps.some((step) => step.type === "tool");
 	const reasoningText = steps
 		.filter((step) => step.type === "reasoning" && step.content)
@@ -287,7 +291,7 @@ export function ChainOfThought({
 						>
 							{step.type === "reasoning" && step.content && (
 								<div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground">
-									<Streamdown>{step.content}</Streamdown>
+									<Streamdown linkSafety={linkSafety}>{step.content}</Streamdown>
 								</div>
 							)}
 							{step.type === "tool" &&
