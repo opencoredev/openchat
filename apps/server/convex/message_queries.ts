@@ -120,10 +120,9 @@ export const getFirstUserMessage = query({
 
 		const message = await ctx.db
 			.query("messages")
-			.withIndex("by_chat_not_deleted", (q) =>
-				q.eq("chatId", args.chatId).eq("deletedAt", undefined)
+			.withIndex("by_chat_not_deleted_role", (q) =>
+				q.eq("chatId", args.chatId).eq("deletedAt", undefined).eq("role", "user"),
 			)
-			.filter((q) => q.eq(q.field("role"), "user"))
 			.order("asc")
 			.first();
 

@@ -34,30 +34,32 @@ async function validateAttachmentOwnership(
 		);
 	}
 
-	for (const attachment of attachments) {
-		const fileUpload = await ctx.db
-			.query("fileUploads")
-			.withIndex("by_storage", (q) => q.eq("storageId", attachment.storageId))
-			.unique();
+	await Promise.all(
+		attachments.map(async (attachment) => {
+			const fileUpload = await ctx.db
+				.query("fileUploads")
+				.withIndex("by_storage", (q) => q.eq("storageId", attachment.storageId))
+				.unique();
 
-		if (!fileUpload) {
-			throw new Error(
-				"Unauthorized: attachment references a file that does not exist in your uploads.",
-			);
-		}
+			if (!fileUpload) {
+				throw new Error(
+					"Unauthorized: attachment references a file that does not exist in your uploads.",
+				);
+			}
 
-		if (fileUpload.userId !== userId) {
-			throw new Error(
-				"Unauthorized: you do not own the referenced attachment file.",
-			);
-		}
+			if (fileUpload.userId !== userId) {
+				throw new Error(
+					"Unauthorized: you do not own the referenced attachment file.",
+				);
+			}
 
-		if (fileUpload.deletedAt) {
-			throw new Error(
-				"Attachment references a file that has been deleted.",
-			);
-		}
-	}
+			if (fileUpload.deletedAt) {
+				throw new Error(
+					"Attachment references a file that has been deleted.",
+				);
+			}
+		}),
+	);
 }
 
 export async function getVerifiedStorageIds(

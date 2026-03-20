@@ -4,6 +4,8 @@ const STREAM_TTL_SECONDS = 3600;
 const STREAM_ERROR_TTL_SECONDS = 600;
 const TYPING_TTL_SECONDS = 3;
 const PRESENCE_TTL_SECONDS = 60;
+/** Per-user unread hash: refresh on write/read so inactive users do not retain keys forever. */
+const UNREAD_HASH_TTL_SECONDS = 60 * 60 * 24 * 90;
 const ONLINE_WINDOW_MS = 60_000;
 
 const keys = {
@@ -290,23 +292,31 @@ export async function isUserOnline(userId: string): Promise<boolean> {
 export async function incrementUnread(userId: string, chatId: string): Promise<void> {
 	const client = await getConnectedClient();
 	if (!client) return;
-	await client.hincrby(keys.unread(userId), chatId, 1);
+	const key = keys.unread(userId);
+	await client.hincrby(key, chatId, 1);
+	await client.expire(key, UNREAD_HASH_TTL_SECONDS);
 }
 
 export async function clearUnread(userId: string, chatId: string): Promise<void> {
 	const client = await getConnectedClient();
 	if (!client) return;
-	await client.hdel(keys.unread(userId), chatId);
+	const key = keys.unread(userId);
+	await client.hdel(key, chatId);
+	await client.expire(key, UNREAD_HASH_TTL_SECONDS);
 }
 
 export async function getUnreadCounts(userId: string): Promise<Record<string, number>> {
 	const client = await getConnectedClient();
 	if (!client) return {};
 
-	const counts = await client.hgetall<Record<string, string>>(keys.unread(userId));
+	const key = keys.unread(userId);
+	const counts = await client.hgetall<Record<string, string>>(key);
 	const result: Record<string, number> = {};
 	for (const [chatId, count] of Object.entries(counts ?? {})) {
 		result[chatId] = Number.parseInt(count, 10);
+	}
+	if (Object.keys(result).length > 0) {
+		await client.expire(key, UNREAD_HASH_TTL_SECONDS);
 	}
 	return result;
 }

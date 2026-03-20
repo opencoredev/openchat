@@ -268,6 +268,11 @@ function createSlidingWindowRatelimit(
 		return {
 			limit: async (identifier: string) => {
 				const now = Date.now();
+				for (const [key, entry] of memoryRatelimitStore) {
+					if (entry.resetAt <= now) {
+						memoryRatelimitStore.delete(key);
+					}
+				}
 				const key = `${prefix}:${identifier}`;
 				const existing = memoryRatelimitStore.get(key);
 				if (!existing || existing.resetAt <= now) {

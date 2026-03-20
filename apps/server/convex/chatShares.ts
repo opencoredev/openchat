@@ -68,12 +68,13 @@ async function getActiveShareForChat(
 	userId: Id<"users">,
 	chatId: Id<"chats">,
 ) {
-	const shares = await ctx.db
+	return await ctx.db
 		.query("chatShares")
-		.withIndex("by_user_chat_revoked_updated", (q) => q.eq("userId", userId).eq("chatId", chatId))
+		.withIndex("by_user_chat_revoked_updated", (q) =>
+			q.eq("userId", userId).eq("chatId", chatId).eq("revokedAt", undefined),
+		)
 		.order("desc")
-		.collect();
-	return shares.find((share) => !share.revokedAt) ?? null;
+		.first();
 }
 
 function normalizePreviewText(text: string) {
