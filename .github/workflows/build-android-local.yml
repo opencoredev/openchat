@@ -67,7 +67,7 @@ jobs:
           path: |
             ~/.gradle/wrapper
             ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/gradle-wrapper.properties') }}-v5
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/gradle-wrapper.properties') }}-v6
           restore-keys: ${{ runner.os }}-gradle-
 
       - name: Build debug APK
@@ -75,67 +75,71 @@ jobs:
         run: |
           ./gradlew assembleDebug --no-daemon --no-build-cache --stacktrace 2>&1 | tee /tmp/gradle.log | tail -80
 
-      # Copy the APK to the workspace root with a known flat name
-      # This sidesteps any deep-path issues with upload-artifact
-      - name: Copy APK to workspace root
-        id: copy-apk
+      # Full filesystem search for APKs and copy all to /tmp/apks/
+      - name: Collect all produced APKs
+        id: collect
         run: |
-          APK_SRC="apps/native/android/app/build/outputs/apk/debug/app-debug.apk"
-          APK_DEST="openchat-debug.apk"
-          if [ -f "$APK_SRC" ]; then
-            cp "$APK_SRC" "$APK_DEST"
-            SIZE=$(du -h "$APK_DEST" | cut -f1)
-            echo "Copied $APK_SRC -> $APK_DEST ($SIZE)"
-            echo "found=true" >> $GITHUB_OUTPUT
-          else
-            echo "::warning::APK not found at $APK_SRC"
-            echo "All APK files:"
-            find . -name "*.apk" -not -path "*/node_modules/*" 2>/dev/null || echo "(none)"
-            echo "found=false" >> $GITHUB_OUTPUT
-          fi
+          mkdir -p /tmp/apks
+          echo "=== Searching entire workspace for .apk files ==="
+          find . -name "*.apk" 2>/dev/null | tee /tmp/apk-all.txt
+          echo ""
+          echo "=== Searching /tmp for .apk files ==="
+          find /tmp -name "*.apk" 2>/dev/null | tee -a /tmp/apk-all.txt
+          echo ""
+          echo "=== Searching /home for .apk files ==="
+          find /home -name "*.apk" 2>/dev/null | tee -a /tmp/apk-all.txt
+          echo ""
+          echo "=== All build outputs dirs ==="
+          find . -name "*.apk" -o -path "*/build/outputs*" 2>/dev/null | head -40
+          echo ""
+          echo "=== Gradle app build dir ==="
+          ls -lhR apps/native/android/app/build/ 2>/dev/null | head -60 || echo "(not found)"
+          echo ""
+          # Copy all found APKs to flat /tmp/apks/
+          COUNT=0
+          while IFS= read -r apk; do
+            if [ -f "$apk" ]; then
+              DEST="/tmp/apks/$(basename $apk .apk)-$COUNT.apk"
+              cp "$apk" "$DEST"
+              echo "Copied: $apk -> $DEST ($(du -h $DEST | cut -f1))"
+              COUNT=$((COUNT+1))
+            fi
+          done < /tmp/apk-all.txt
+          echo "Total APKs found: $COUNT"
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
 
-      - name: Upload Gradle log
+      - name: Upload Gradle log and APK list
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gradle-log-${{ github.run_number }}
-          path: /tmp/gradle.log
+          name: build-diagnostics-${{ github.run_number }}
+          path: |
+            /tmp/gradle.log
+            /tmp/apk-all.txt
           if-no-files-found: ignore
           retention-days: 7
 
-      # Primary: upload the flat copy from workspace root
-      - name: Upload APK (flat copy)
-        if: steps.copy-apk.outputs.found == 'true'
+      # Upload every APK found (flat copy in /tmp/apks/)
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
           name: openchat-android-debug-run${{ github.run_number }}
-          path: openchat-debug.apk
-          if-no-files-found: error
-          retention-days: 30
-
-      # Fallback: upload entire debug output dir if something different happened
-      - name: Upload APK output dir (fallback)
-        if: steps.copy-apk.outputs.found == 'false'
-        uses: actions/upload-artifact@v4
-        with:
-          name: openchat-android-debug-run${{ github.run_number }}-fallback
-          path: apps/native/android/app/build/outputs/apk/
+          path: /tmp/apks/
           if-no-files-found: warn
           retention-days: 30
 
       - name: Build summary
         if: always()
         run: |
-          FOUND="${{ steps.copy-apk.outputs.found }}"
-          if [ "$FOUND" = "true" ]; then
-            SIZE=$(du -h openchat-debug.apk 2>/dev/null | cut -f1 || echo "unknown")
-            echo "### ✅ Android Debug APK built successfully!" >> $GITHUB_STEP_SUMMARY
+          COUNT="${{ steps.collect.outputs.count }}"
+          if [ "$COUNT" -gt "0" ] 2>/dev/null; then
+            echo "### ✅ Android APK built ($COUNT file(s))" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**File:** openchat-debug.apk ($SIZE)" >> $GITHUB_STEP_SUMMARY
             echo "**Artifact:** \`openchat-android-debug-run${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Install on Pixel 9:** Download zip → unzip → enable Install unknown apps → tap APK" >> $GITHUB_STEP_SUMMARY
+            echo "APKs produced:" >> $GITHUB_STEP_SUMMARY
+            cat /tmp/apk-all.txt | while read l; do echo "- \`$l\`"; done >> $GITHUB_STEP_SUMMARY
           else
-            echo "### ⚠️ APK not found at expected path" >> $GITHUB_STEP_SUMMARY
-            echo "Check the gradle-log artifact for the full build output." >> $GITHUB_STEP_SUMMARY
+            echo "### ❌ No APK found" >> $GITHUB_STEP_SUMMARY
+            echo "Gradle exited successfully but produced no .apk files. Check build-diagnostics artifact." >> $GITHUB_STEP_SUMMARY
           fi
