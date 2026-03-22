@@ -46,58 +46,42 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
-      # Attempt 1: from repo root (matches build-android-local.yml)
-      - name: "[Attempt 1] prebuild from repo root"
-        id: attempt1
-        continue-on-error: true
+      # Run prebuild from apps/native - this is where app.json lives
+      - name: Expo prebuild (from apps/native)
         run: |
-          set +e
-          echo "==== Attempt 1: npx expo prebuild from repo root ===="
-          npx expo prebuild --platform android --clean --no-install
-          RC=$?
-          echo "exit code: $RC"
-          echo "rc=$RC" >> $GITHUB_OUTPUT
-          find . -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null && echo "gradlew FOUND" || echo "gradlew NOT found"
-          exit $RC
-
-      # Attempt 2: from apps/native directory  
-      - name: "[Attempt 2] prebuild from apps/native"
-        if: steps.attempt1.outcome != 'success'
-        id: attempt2
-        continue-on-error: true
-        run: |
-          set +e
-          echo "==== Attempt 2: npx expo prebuild from apps/native ===="
           cd apps/native
-          npx expo prebuild --platform android --clean --no-install
-          RC=$?
-          echo "exit code: $RC"
-          echo "rc=$RC" >> $GITHUB_OUTPUT
-          find /home/runner/work -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null && echo "gradlew FOUND" || echo "gradlew NOT found"
-          exit $RC
-
-      # Attempt 3: with full install from apps/native
-      - name: "[Attempt 3] prebuild from apps/native WITH install"
-        if: steps.attempt1.outcome != 'success' && steps.attempt2.outcome != 'success'
+          echo "CWD: $(pwd)"
+          echo "=== before prebuild ==="
+          ls
+          echo "=== running prebuild ==="
+          npx expo prebuild --platform android --clean --no-install 2>&1
+          echo "=== after prebuild (exit $?) ==="
+          ls
+          echo "=== searching for android dir ==="
+          find . -maxdepth 3 -type d -name "android" 2>/dev/null || echo "no android dir found"
+          find . -name "gradlew" 2>/dev/null || echo "no gradlew found"
         continue-on-error: true
-        run: |
-          set +e
-          echo "==== Attempt 3: expo prebuild with install from apps/native ===="
-          cd apps/native
-          npx expo prebuild --platform android --clean
-          RC=$?
-          echo "exit code: $RC"
-          find /home/runner/work -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null
-          exit $RC
+        env:
+          EXPO_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
+          EXPO_PUBLIC_AUTH_BASE_URL: https://placeholder.convex.site
+          EXPO_NO_TELEMETRY: "1"
 
-      - name: Locate gradlew (any attempt)
+      - name: Full filesystem scan for android artifacts
+        run: |
+          echo "=== All gradlew files on runner ==="
+          find /home/runner/work -name "gradlew" 2>/dev/null || echo "none"
+          find /tmp -name "gradlew" 2>/dev/null || echo "none in /tmp"
+          echo "=== apps/native directory listing ==="
+          ls -la apps/native/
+          echo "=== any android directories ==="
+          find . -type d -name "android" -not -path "*/node_modules/*" 2>/dev/null
+
+      - name: Locate gradlew
         id: find-android
         run: |
           GRADLEW=$(find . -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null | head -1)
           if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew not found after all attempts"
-            echo "Listing apps/native/:"
-            ls -la apps/native/ 2>/dev/null || echo "no apps/native"
+            echo "ERROR: gradlew not found"
             exit 1
           fi
           echo "Found: $GRADLEW"
@@ -115,23 +99,16 @@ jobs:
 
       - name: Build debug APK
         run: |
-          GRADLEW="${{ steps.find-android.outputs.gradlew }}"
-          ANDROID_DIR="${{ steps.find-android.outputs.android_dir }}"
-          chmod +x $GRADLEW
-          cd $ANDROID_DIR
+          chmod +x ${{ steps.find-android.outputs.gradlew }}
+          cd ${{ steps.find-android.outputs.android_dir }}
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Find and upload APK
+      - name: Upload debug APK
         run: |
           APK=$(find . -name "app-debug.apk" -not -path "*/node_modules/*" | head -1)
-          echo "APK location: $APK"
-          if [ -z "$APK" ]; then
-            find . -name "*.apk" -not -path "*/node_modules/*" 2>/dev/null
-            exit 1
-          fi
           echo "apk=$APK" >> $GITHUB_ENV
 
-      - name: Upload debug APK
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: openchat-android-debug
