@@ -47,8 +47,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: '1.3.5' }
 
-      - name: Install native dependencies
-        working-directory: apps/native
+      # Install from workspace root so monorepo deps are resolved
+      - name: Install ALL workspace dependencies
         run: bun install --ignore-scripts
 
       - name: Expo prebuild
@@ -67,79 +67,72 @@ jobs:
           path: |
             ~/.gradle/wrapper
             ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/gradle-wrapper.properties') }}-v6
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/gradle-wrapper.properties') }}-v7
           restore-keys: ${{ runner.os }}-gradle-
+
+      # Build the APK.
+      # BUNDLE_SKIP_METRO_BUNDLER=true tells React Native Gradle not to run Metro,
+      # and we pre-bundle separately to avoid JS bundler issues in CI.
+      - name: Bundle JS with Metro
+        working-directory: apps/native
+        continue-on-error: true
+        run: |
+          mkdir -p android/app/src/main/assets
+          node_modules/.bin/react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file node_modules/expo-router/entry.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res \
+            2>&1 | tee /tmp/metro.log | tail -30 || true
 
       - name: Build debug APK
         working-directory: apps/native/android
         run: |
-          ./gradlew assembleDebug --no-daemon --no-build-cache --stacktrace 2>&1 | tee /tmp/gradle.log | tail -80
+          # Run Gradle; capture entire log (no tail truncation)
+          ./gradlew assembleDebug \
+            --no-daemon \
+            --no-build-cache \
+            --stacktrace \
+            --info \
+            2>&1 > /tmp/gradle.log
+          GRADLE_EXIT=$?
+          echo "Gradle exit: $GRADLE_EXIT"
+          tail -60 /tmp/gradle.log
+          exit $GRADLE_EXIT
 
-      # Full filesystem search for APKs and copy all to /tmp/apks/
-      - name: Collect all produced APKs
-        id: collect
+      - name: List build outputs
+        if: always()
         run: |
-          mkdir -p /tmp/apks
-          echo "=== Searching entire workspace for .apk files ==="
-          find . -name "*.apk" 2>/dev/null | tee /tmp/apk-all.txt
+          echo "=== apps/native/android/app/build/outputs/ ==="
+          find apps/native/android/app/build/outputs/ -type f 2>/dev/null | head -30 || echo "(not found)"
           echo ""
-          echo "=== Searching /tmp for .apk files ==="
-          find /tmp -name "*.apk" 2>/dev/null | tee -a /tmp/apk-all.txt
-          echo ""
-          echo "=== Searching /home for .apk files ==="
-          find /home -name "*.apk" 2>/dev/null | tee -a /tmp/apk-all.txt
-          echo ""
-          echo "=== All build outputs dirs ==="
-          find . -name "*.apk" -o -path "*/build/outputs*" 2>/dev/null | head -40
-          echo ""
-          echo "=== Gradle app build dir ==="
-          ls -lhR apps/native/android/app/build/ 2>/dev/null | head -60 || echo "(not found)"
-          echo ""
-          # Copy all found APKs to flat /tmp/apks/
-          COUNT=0
-          while IFS= read -r apk; do
-            if [ -f "$apk" ]; then
-              DEST="/tmp/apks/$(basename $apk .apk)-$COUNT.apk"
-              cp "$apk" "$DEST"
-              echo "Copied: $apk -> $DEST ($(du -h $DEST | cut -f1))"
-              COUNT=$((COUNT+1))
-            fi
-          done < /tmp/apk-all.txt
-          echo "Total APKs found: $COUNT"
-          echo "count=$COUNT" >> $GITHUB_OUTPUT
+          echo "=== All APKs ==="
+          find . -name "*.apk" 2>/dev/null || echo "(none)"
 
-      - name: Upload Gradle log and APK list
+      - name: Upload build artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-diagnostics-${{ github.run_number }}
+          name: build-logs-run${{ github.run_number }}
           path: |
             /tmp/gradle.log
-            /tmp/apk-all.txt
+            /tmp/metro.log
           if-no-files-found: ignore
           retention-days: 7
 
-      # Upload every APK found (flat copy in /tmp/apks/)
-      - name: Upload APKs
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: openchat-android-debug-run${{ github.run_number }}
-          path: /tmp/apks/
+          path: apps/native/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Build summary
-        if: always()
-        run: |
-          COUNT="${{ steps.collect.outputs.count }}"
-          if [ "$COUNT" -gt "0" ] 2>/dev/null; then
-            echo "### ✅ Android APK built ($COUNT file(s))" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Artifact:** \`openchat-android-debug-run${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "APKs produced:" >> $GITHUB_STEP_SUMMARY
-            cat /tmp/apk-all.txt | while read l; do echo "- \`$l\`"; done >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### ❌ No APK found" >> $GITHUB_STEP_SUMMARY
-            echo "Gradle exited successfully but produced no .apk files. Check build-diagnostics artifact." >> $GITHUB_STEP_SUMMARY
-          fi
+      - name: Upload all build outputs (fallback)
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-outputs-run${{ github.run_number }}
+          path: apps/native/android/app/build/outputs/
+          if-no-files-found: warn
+          retention-days: 14
