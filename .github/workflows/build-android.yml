@@ -39,50 +39,35 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('apps/native/package.json') }}
           restore-keys: ${{ runner.os }}-bun-
 
-      # Install ONLY apps/native deps in isolation (no workspace, no root)
       - name: Install native dependencies (standalone)
         working-directory: apps/native
-        run: |
-          # Force bun to treat this as a standalone project, not a workspace member
-          # by temporarily removing the root package.json reference
-          bun install --ignore-scripts 2>&1
-          echo "bun install exit: $?"
-          ls node_modules/.bin/expo 2>/dev/null && echo "expo found" || echo "expo NOT found"
+        run: bun install --ignore-scripts
 
-      - name: Accept Android SDK licenses
-        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+      # Install required Android SDK components
+      - name: Set up Android SDK components
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;26.1.10909125" 2>&1 | tail -5
 
       - name: Expo prebuild
         working-directory: apps/native
         continue-on-error: true
-        id: prebuild
         run: |
-          set +e
-          echo "Expo version:"
-          node_modules/.bin/expo --version 2>&1
-          echo "Running prebuild..."
-          OUTPUT=$(node_modules/.bin/expo prebuild --platform android --clean --no-install 2>&1)
-          RC=$?
-          echo "$OUTPUT"
-          echo "## Prebuild" >> $GITHUB_STEP_SUMMARY
-          printf '```\n%s\n```\n' "$OUTPUT" >> $GITHUB_STEP_SUMMARY
-          echo "Exit: $RC" >> $GITHUB_STEP_SUMMARY
-          echo "rc=$RC" >> $GITHUB_OUTPUT
-          exit $RC
+          node_modules/.bin/expo prebuild --platform android --clean --no-install 2>&1
+          echo "prebuild exit: $?"
         env:
           EXPO_NO_TELEMETRY: "1"
-
-      - name: Check android dir
-        run: |
-          ls -la apps/native/ | grep android || echo "No android dir"
-          GRADLEW=$(find . -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null | head -1)
-          echo "gradlew: ${GRADLEW:-MISSING}"
 
       - name: Locate gradlew
         id: find-android
         run: |
           GRADLEW=$(find . -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null | head -1)
-          [ -n "$GRADLEW" ] || { echo "No gradlew"; exit 1; }
+          [ -n "$GRADLEW" ] || { echo "No gradlew found"; ls apps/native/; exit 1; }
+          echo "Found: $GRADLEW"
           echo "gradlew=$GRADLEW" >> $GITHUB_OUTPUT
           echo "android_dir=$(dirname $GRADLEW)" >> $GITHUB_OUTPUT
 
@@ -99,11 +84,15 @@ jobs:
         run: |
           chmod +x ${{ steps.find-android.outputs.gradlew }}
           cd ${{ steps.find-android.outputs.android_dir }}
-          ./gradlew assembleDebug --no-daemon
+          echo "=== gradle.properties ==="
+          cat gradle.properties 2>/dev/null || true
+          echo "=== Gradle build ==="
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tail -100
 
-      - name: Upload APK
+      - name: Find APK
         run: |
           APK=$(find . -name "app-debug.apk" -not -path "*/node_modules/*" | head -1)
+          echo "APK: ${APK:-NOT FOUND}"
           echo "apk=$APK" >> $GITHUB_ENV
 
       - uses: actions/upload-artifact@v4
