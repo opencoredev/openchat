@@ -17,7 +17,6 @@ jobs:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -Dorg.gradle.daemon=false -Dkotlin.incremental=false"
-      # Suppress Expo telemetry prompts in CI
       EXPO_NO_TELEMETRY: "1"
       CI: "true"
 
@@ -46,42 +45,39 @@ jobs:
       - name: Install workspace dependencies (root)
         run: bun install
 
-      # Install native app deps separately to ensure local node_modules exists
-      # (some Expo tooling requires node_modules in the project dir itself)
+      # Separate install inside the native app so expo can find its own packages
       - name: Install native app dependencies
         working-directory: apps/native
         run: bun install
 
-      - name: Verify expo CLI is reachable
+      - name: Verify expo CLI version
         working-directory: apps/native
         run: bunx expo --version
 
-      - name: Diagnostics
-        working-directory: apps/native
-        run: |
-          echo "--- Node modules check ---"
-          ls node_modules | head -30 || echo "No node_modules in apps/native"
-          echo "--- Workspace server package ---"
-          ls node_modules/server 2>/dev/null && echo "server found" || echo "server not found (will try root)"
-          ls ../../node_modules/server 2>/dev/null && echo "server found in root" || echo "server not found in root either"
-          echo "--- Android SDK ---"
-          ls $ANDROID_HOME/platforms 2>/dev/null | head -5 || echo "No platforms dir"
-          ls $ANDROID_HOME/build-tools 2>/dev/null | head -5 || echo "No build-tools dir"
-          sdkmanager --list_installed 2>/dev/null | head -20 || echo "sdkmanager not in PATH"
-          echo "--- PATH ---"
-          echo $PATH
-
-      # Ensure Android SDK build-tools are available (ubuntu-latest ships SDK 34)
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
+      # Prebuild with verbose output captured to a file for debugging
       - name: Expo prebuild – Android only
         working-directory: apps/native
-        run: bunx expo prebuild --platform android --clean --no-install
+        run: |
+          bunx expo prebuild --platform android --clean 2>&1 | tee /tmp/prebuild.log
+          EXIT=${PIPESTATUS[0]}
+          echo "=== prebuild exit code: $EXIT ==="
+          if [ $EXIT -ne 0 ]; then
+            echo "--- last 60 lines of prebuild output ---"
+            tail -60 /tmp/prebuild.log
+            exit $EXIT
+          fi
         env:
           EXPO_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
           EXPO_PUBLIC_AUTH_BASE_URL: https://placeholder.convex.site
           EXPO_NO_TELEMETRY: "1"
+
+      - name: Confirm android directory was created
+        run: |
+          ls -la apps/native/android/
+          ls apps/native/android/app/
 
       - name: Cache Gradle wrapper
         uses: actions/cache@v4
@@ -110,3 +106,13 @@ jobs:
           path: apps/native/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      # Always upload the prebuild log so we can debug even on failure
+      - name: Upload prebuild log (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebuild-log
+          path: /tmp/prebuild.log
+          if-no-files-found: ignore
+          retention-days: 7
