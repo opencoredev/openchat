@@ -45,12 +45,9 @@ jobs:
 
       - name: Set up Android SDK components
         run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "ndk;26.1.10909125" 2>&1 | tail -5
+          SDKMANAGER=$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
+          yes | $SDKMANAGER --licenses 2>/dev/null || true
+          $SDKMANAGER "platform-tools" "platforms;android-34" "build-tools;34.0.0" 2>&1 | tail -3
 
       - name: Expo prebuild
         working-directory: apps/native
@@ -64,6 +61,7 @@ jobs:
         run: |
           GRADLEW=$(find . -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null | head -1)
           [ -n "$GRADLEW" ] || { echo "No gradlew found"; exit 1; }
+          echo "Found: $GRADLEW"
           echo "gradlew=$GRADLEW" >> $GITHUB_OUTPUT
           echo "android_dir=$(dirname $GRADLEW)" >> $GITHUB_OUTPUT
 
@@ -77,24 +75,33 @@ jobs:
           restore-keys: ${{ runner.os }}-gradle-
 
       - name: Build debug APK
+        id: gradle-build
         run: |
           chmod +x ${{ steps.find-android.outputs.gradlew }}
           cd ${{ steps.find-android.outputs.android_dir }}
-          ./gradlew assembleDebug --no-daemon
+          echo "=== gradle.properties ==="
+          cat gradle.properties 2>/dev/null | head -20
+          echo "=== Android SDK available ==="
+          ls $ANDROID_HOME/build-tools/ 2>/dev/null || echo "no build-tools"
+          ls $ANDROID_HOME/platforms/ 2>/dev/null || echo "no platforms"
+          echo "=== Running Gradle ==="
+          set +e
+          OUTPUT=$(./gradlew assembleDebug --no-daemon --stacktrace 2>&1)
+          RC=$?
+          echo "$OUTPUT" | tail -80
+          echo "## Gradle Build" >> $GITHUB_STEP_SUMMARY
+          printf '```\n%s\n```\n' "$(echo "$OUTPUT" | tail -60)" >> $GITHUB_STEP_SUMMARY
+          echo "Exit: $RC" >> $GITHUB_STEP_SUMMARY
+          exit $RC
 
-      - name: Verify APK exists
+      - name: Find and verify APK
         run: |
-          echo "=== All APKs ==="
           find . -name "*.apk" -not -path "*/node_modules/*" 2>/dev/null
-          APK=$(find . -name "app-debug.apk" -not -path "*/node_modules/*" | head -1)
-          echo "Target APK: ${APK:-NOT FOUND}"
-          [ -n "$APK" ] && ls -lh "$APK" || echo "APK missing"
 
-      # Use a glob pattern so actions/upload-artifact can find the file
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: openchat-android-debug
-          path: "**/app-debug.apk"
+          path: "apps/native/android/app/build/outputs/apk/debug/app-debug.apk"
           if-no-files-found: error
           retention-days: 30
