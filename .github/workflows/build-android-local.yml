@@ -59,11 +59,7 @@ jobs:
           EXPO_NO_TELEMETRY: "1"
 
       - name: Make gradlew executable
-        run: |
-          GRADLEW=$(find . -name "gradlew" -not -path "*/node_modules/*" | head -1)
-          chmod +x "$GRADLEW"
-          echo "Android dir: $(dirname $GRADLEW)"
-          echo "gradlew=$GRADLEW"
+        run: chmod +x apps/native/android/gradlew
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -71,7 +67,7 @@ jobs:
           path: |
             ~/.gradle/wrapper
             ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/gradle-wrapper.properties') }}-v4
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/gradle-wrapper.properties') }}-v5
           restore-keys: ${{ runner.os }}-gradle-
 
       - name: Build debug APK
@@ -79,39 +75,67 @@ jobs:
         run: |
           ./gradlew assembleDebug --no-daemon --no-build-cache --stacktrace 2>&1 | tee /tmp/gradle.log | tail -80
 
-      - name: List APK output
+      # Copy the APK to the workspace root with a known flat name
+      # This sidesteps any deep-path issues with upload-artifact
+      - name: Copy APK to workspace root
+        id: copy-apk
         run: |
-          echo "=== APK output directory ==="
-          ls -lh apps/native/android/app/build/outputs/apk/debug/ 2>/dev/null || echo "(not found)"
-          echo ""
-          echo "=== All .apk files ==="
-          find . -name "*.apk" -not -path "*/node_modules/*" 2>/dev/null
+          APK_SRC="apps/native/android/app/build/outputs/apk/debug/app-debug.apk"
+          APK_DEST="openchat-debug.apk"
+          if [ -f "$APK_SRC" ]; then
+            cp "$APK_SRC" "$APK_DEST"
+            SIZE=$(du -h "$APK_DEST" | cut -f1)
+            echo "Copied $APK_SRC -> $APK_DEST ($SIZE)"
+            echo "found=true" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::APK not found at $APK_SRC"
+            echo "All APK files:"
+            find . -name "*.apk" -not -path "*/node_modules/*" 2>/dev/null || echo "(none)"
+            echo "found=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Upload Gradle log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gradle-build-log-${{ github.run_number }}
+          name: gradle-log-${{ github.run_number }}
           path: /tmp/gradle.log
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload debug APK
+      # Primary: upload the flat copy from workspace root
+      - name: Upload APK (flat copy)
+        if: steps.copy-apk.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: openchat-android-debug-${{ github.run_number }}
-          path: apps/native/android/app/build/outputs/apk/debug/app-debug.apk
+          name: openchat-android-debug-run${{ github.run_number }}
+          path: openchat-debug.apk
           if-no-files-found: error
           retention-days: 30
 
+      # Fallback: upload entire debug output dir if something different happened
+      - name: Upload APK output dir (fallback)
+        if: steps.copy-apk.outputs.found == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: openchat-android-debug-run${{ github.run_number }}-fallback
+          path: apps/native/android/app/build/outputs/apk/
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Build summary
-        if: success()
+        if: always()
         run: |
-          echo "### ✅ OpenChat Android Debug APK" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Artifact:** \`openchat-android-debug-${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Install on your Pixel 9:**" >> $GITHUB_STEP_SUMMARY
-          echo "1. Scroll to Artifacts at the bottom of this run page" >> $GITHUB_STEP_SUMMARY
-          echo "2. Download the zip, unzip to get app-debug.apk" >> $GITHUB_STEP_SUMMARY
-          echo "3. Transfer to phone, enable Install unknown apps, tap APK" >> $GITHUB_STEP_SUMMARY
+          FOUND="${{ steps.copy-apk.outputs.found }}"
+          if [ "$FOUND" = "true" ]; then
+            SIZE=$(du -h openchat-debug.apk 2>/dev/null | cut -f1 || echo "unknown")
+            echo "### ✅ Android Debug APK built successfully!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**File:** openchat-debug.apk ($SIZE)" >> $GITHUB_STEP_SUMMARY
+            echo "**Artifact:** \`openchat-android-debug-run${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Install on Pixel 9:** Download zip → unzip → enable Install unknown apps → tap APK" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ APK not found at expected path" >> $GITHUB_STEP_SUMMARY
+            echo "Check the gradle-log artifact for the full build output." >> $GITHUB_STEP_SUMMARY
+          fi
