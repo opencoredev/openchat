@@ -50,46 +50,36 @@ jobs:
       - name: Install workspace dependencies
         run: bun install
 
-      - name: Check expo version
-        run: |
-          echo "=== npx expo --version ==="
-          cd apps/native && npx expo --version 2>&1 || true
-          echo "=== bunx expo --version ==="
-          cd apps/native && bunx expo --version 2>&1 || true
-
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
-      # Run prebuild from the REPO ROOT (not apps/native), same as build-android-local.yml
-      # Point it at apps/native by passing --source-dir option.
-      # --no-install: skip re-running package manager (we already ran bun install).
-      - name: Expo prebuild – Android (from repo root)
-        continue-on-error: true
-        id: prebuild
+      # Run prebuild from the repo root – expo locates apps/native via the monorepo config.
+      # --no-install: we already ran bun install.
+      - name: Expo prebuild – Android
         run: |
-          echo "--- trying from repo root ---"
-          npx expo prebuild --platform android --clean --no-install 2>&1 | tail -50
-          echo "Exit: ${PIPESTATUS[0]}"
+          echo "Running: npx expo prebuild --platform android --clean --no-install"
+          npx expo prebuild --platform android --clean --no-install 2>&1
+        env:
+          EXPO_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
+          EXPO_PUBLIC_AUTH_BASE_URL: https://placeholder.convex.site
+          EXPO_NO_TELEMETRY: "1"
 
-      - name: Expo prebuild – Android (from apps/native, with npx)
-        if: steps.prebuild.outcome == 'failure'
-        continue-on-error: true
-        id: prebuild2
+      - name: Locate generated android directory
+        id: find-android
         run: |
-          echo "--- trying npx from apps/native ---"
-          cd apps/native && npx expo prebuild --platform android --clean --no-install 2>&1 | tail -60
-          echo "Exit: ${PIPESTATUS[0]}"
-
-      - name: Expo prebuild – Android (from apps/native, with bunx, with install)
-        if: steps.prebuild2.outcome == 'failure'
-        run: |
-          echo "--- trying bunx from apps/native (with install) ---"
-          cd apps/native && bunx expo prebuild --platform android --clean 2>&1
-
-      - name: List android directory
-        run: |
-          ls -la apps/native/android/ 2>/dev/null || echo "No android dir"
-          ls apps/native/android/app/ 2>/dev/null || echo "No android/app dir"
+          echo "=== Searching for gradlew ==="
+          find . -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null
+          GRADLEW=$(find . -name "gradlew" -not -path "*/node_modules/*" | head -1)
+          echo "Found gradlew: $GRADLEW"
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: gradlew not found! Listing top-level dirs:"
+            ls -la
+            ls -la apps/native/ 2>/dev/null || true
+            exit 1
+          fi
+          ANDROID_DIR=$(dirname $GRADLEW)
+          echo "android_dir=$ANDROID_DIR" >> $GITHUB_OUTPUT
+          echo "gradlew=$GRADLEW" >> $GITHUB_OUTPUT
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -97,20 +87,28 @@ jobs:
           path: |
             ~/.gradle/wrapper
             ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('apps/native/android/**/*.gradle*') }}
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/gradle-wrapper.properties') }}
           restore-keys: ${{ runner.os }}-gradle-
 
       - name: Make Gradle wrapper executable
-        run: chmod +x apps/native/android/gradlew
+        run: chmod +x ${{ steps.find-android.outputs.gradlew }}
 
       - name: Build debug APK
-        working-directory: apps/native/android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: |
+          cd ${{ steps.find-android.outputs.android_dir }}
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Locate APK
+        id: find-apk
+        run: |
+          APK=$(find . -name "*.apk" -not -path "*/node_modules/*" | head -1)
+          echo "APK: $APK"
+          echo "apk=$APK" >> $GITHUB_OUTPUT
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: openchat-android-debug
-          path: apps/native/android/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ steps.find-apk.outputs.apk }}
           if-no-files-found: error
           retention-days: 30
