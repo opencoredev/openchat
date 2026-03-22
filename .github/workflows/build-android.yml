@@ -43,7 +43,6 @@ jobs:
         working-directory: apps/native
         run: bun install --ignore-scripts
 
-      # Install required Android SDK components
       - name: Set up Android SDK components
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
@@ -56,9 +55,7 @@ jobs:
       - name: Expo prebuild
         working-directory: apps/native
         continue-on-error: true
-        run: |
-          node_modules/.bin/expo prebuild --platform android --clean --no-install 2>&1
-          echo "prebuild exit: $?"
+        run: node_modules/.bin/expo prebuild --platform android --clean --no-install 2>&1
         env:
           EXPO_NO_TELEMETRY: "1"
 
@@ -66,8 +63,7 @@ jobs:
         id: find-android
         run: |
           GRADLEW=$(find . -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null | head -1)
-          [ -n "$GRADLEW" ] || { echo "No gradlew found"; ls apps/native/; exit 1; }
-          echo "Found: $GRADLEW"
+          [ -n "$GRADLEW" ] || { echo "No gradlew found"; exit 1; }
           echo "gradlew=$GRADLEW" >> $GITHUB_OUTPUT
           echo "android_dir=$(dirname $GRADLEW)" >> $GITHUB_OUTPUT
 
@@ -84,20 +80,21 @@ jobs:
         run: |
           chmod +x ${{ steps.find-android.outputs.gradlew }}
           cd ${{ steps.find-android.outputs.android_dir }}
-          echo "=== gradle.properties ==="
-          cat gradle.properties 2>/dev/null || true
-          echo "=== Gradle build ==="
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tail -100
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Find APK
+      - name: Verify APK exists
         run: |
+          echo "=== All APKs ==="
+          find . -name "*.apk" -not -path "*/node_modules/*" 2>/dev/null
           APK=$(find . -name "app-debug.apk" -not -path "*/node_modules/*" | head -1)
-          echo "APK: ${APK:-NOT FOUND}"
-          echo "apk=$APK" >> $GITHUB_ENV
+          echo "Target APK: ${APK:-NOT FOUND}"
+          [ -n "$APK" ] && ls -lh "$APK" || echo "APK missing"
 
-      - uses: actions/upload-artifact@v4
+      # Use a glob pattern so actions/upload-artifact can find the file
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
         with:
           name: openchat-android-debug
-          path: ${{ env.apk }}
+          path: "**/app-debug.apk"
           if-no-files-found: error
           retention-days: 30
