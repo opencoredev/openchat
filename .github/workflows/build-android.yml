@@ -30,6 +30,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Set up Bun 1.3.5
         uses: oven-sh/setup-bun@v2
         with:
@@ -42,60 +47,56 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
 
-      - name: Install workspace dependencies (root)
+      - name: Install workspace dependencies
         run: bun install
 
-      - name: Install native app dependencies
-        working-directory: apps/native
-        run: bun install
-
-      - name: Verify expo CLI version
-        working-directory: apps/native
+      - name: Check expo version
         run: |
-          bunx expo --version
-          echo "Node: $(node --version)"
-          echo "Bun: $(bun --version)"
-          echo "Java: $(java -version 2>&1 | head -1)"
+          echo "=== npx expo --version ==="
+          cd apps/native && npx expo --version 2>&1 || true
+          echo "=== bunx expo --version ==="
+          cd apps/native && bunx expo --version 2>&1 || true
 
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
-      # Run prebuild, capture all output, exit code, and show last 80 lines on failure
-      - name: Expo prebuild – Android only
-        working-directory: apps/native
-        shell: bash
+      # Run prebuild from the REPO ROOT (not apps/native), same as build-android-local.yml
+      # Point it at apps/native by passing --source-dir option.
+      # --no-install: skip re-running package manager (we already ran bun install).
+      - name: Expo prebuild – Android (from repo root)
+        continue-on-error: true
+        id: prebuild
         run: |
-          set -o pipefail
-          bunx expo prebuild --platform android --clean 2>&1 | tee /tmp/prebuild.log
-          RC=$?
-          echo "Prebuild exit code: $RC"
-          if [ $RC -ne 0 ]; then
-            echo "====== PREBUILD FAILED - last 80 lines ======"
-            tail -80 /tmp/prebuild.log
-            exit $RC
-          fi
-        env:
-          EXPO_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
-          EXPO_PUBLIC_AUTH_BASE_URL: https://placeholder.convex.site
-          EXPO_NO_TELEMETRY: "1"
+          echo "--- trying from repo root ---"
+          npx expo prebuild --platform android --clean --no-install 2>&1 | tail -50
+          echo "Exit: ${PIPESTATUS[0]}"
 
-      - name: List generated android directory
+      - name: Expo prebuild – Android (from apps/native, with npx)
+        if: steps.prebuild.outcome == 'failure'
+        continue-on-error: true
+        id: prebuild2
         run: |
-          echo "=== apps/native/android/ ==="
-          ls -la apps/native/android/ || echo "android/ not found!"
-          echo "=== apps/native/android/app/ ==="
-          ls -la apps/native/android/app/ || echo "app/ not found!"
+          echo "--- trying npx from apps/native ---"
+          cd apps/native && npx expo prebuild --platform android --clean --no-install 2>&1 | tail -60
+          echo "Exit: ${PIPESTATUS[0]}"
 
-      - name: Cache Gradle wrapper
+      - name: Expo prebuild – Android (from apps/native, with bunx, with install)
+        if: steps.prebuild2.outcome == 'failure'
+        run: |
+          echo "--- trying bunx from apps/native (with install) ---"
+          cd apps/native && bunx expo prebuild --platform android --clean 2>&1
+
+      - name: List android directory
+        run: |
+          ls -la apps/native/android/ 2>/dev/null || echo "No android dir"
+          ls apps/native/android/app/ 2>/dev/null || echo "No android/app dir"
+
+      - name: Cache Gradle
         uses: actions/cache@v4
         with:
-          path: ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('apps/native/android/gradle/wrapper/gradle-wrapper.properties') }}
-
-      - name: Cache Gradle caches
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/caches
+          path: |
+            ~/.gradle/wrapper
+            ~/.gradle/caches
           key: ${{ runner.os }}-gradle-${{ hashFiles('apps/native/android/**/*.gradle*') }}
           restore-keys: ${{ runner.os }}-gradle-
 
@@ -113,12 +114,3 @@ jobs:
           path: apps/native/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
-
-      - name: Upload prebuild log (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: prebuild-log
-          path: /tmp/prebuild.log
-          if-no-files-found: ignore
-          retention-days: 7
