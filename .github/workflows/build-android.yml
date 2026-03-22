@@ -32,58 +32,48 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: '1.3.5' }
 
-      - name: Install workspace deps
+      - name: Cache Bun modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install workspace dependencies
         run: bun install
 
-      - name: Install native app deps
+      - name: Install native app dependencies
         working-directory: apps/native
         run: bun install
 
-      - name: Accept SDK licenses
+      - name: Verify expo
+        working-directory: apps/native
+        run: |
+          echo "Expo location:"
+          ls node_modules/.bin/expo 2>/dev/null && echo "Found in apps/native/node_modules" || echo "Not in apps/native/node_modules"
+          ls ../../node_modules/.bin/expo 2>/dev/null && echo "Found in root/node_modules" || echo "Not in root/node_modules"
+          node node_modules/.bin/expo --version 2>&1 || node ../../node_modules/.bin/expo --version 2>&1 || echo "Expo not runnable"
+
+      - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
-      # Write ALL output (stdout + stderr) to a file so we can read it as artifact
-      - name: Run expo prebuild (output captured)
+      - name: Expo prebuild
         working-directory: apps/native
-        continue-on-error: true
-        id: prebuild
         run: |
-          set +e
-          echo "CWD: $(pwd)" > /tmp/prebuild.txt
-          echo "=== bun/node/expo versions ==" >> /tmp/prebuild.txt
-          node --version >> /tmp/prebuild.txt 2>&1
-          bun --version >> /tmp/prebuild.txt 2>&1
-          ls ../../node_modules/.bin/expo >> /tmp/prebuild.txt 2>&1
-          ls node_modules/.bin/expo >> /tmp/prebuild.txt 2>&1
-          echo "=== Running prebuild ==" >> /tmp/prebuild.txt
-          node ../../node_modules/.bin/expo prebuild --platform android --clean --no-install >> /tmp/prebuild.txt 2>&1
-          RC=$?
-          echo "Exit code: $RC" >> /tmp/prebuild.txt
-          echo "=== ls after prebuild ==" >> /tmp/prebuild.txt
-          ls -la >> /tmp/prebuild.txt 2>&1
-          cat /tmp/prebuild.txt
-          exit $RC
+          EXPO_BIN=$(ls node_modules/.bin/expo 2>/dev/null && echo "node_modules/.bin/expo" || echo "../../node_modules/.bin/expo")
+          echo "Using: $EXPO_BIN"
+          node $EXPO_BIN prebuild --platform android --clean --no-install 2>&1
+          echo "Exit: $?"
+          ls -la android/ 2>/dev/null || echo "No android/ dir"
         env:
-          EXPO_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
-          EXPO_PUBLIC_AUTH_BASE_URL: https://placeholder.convex.site
           EXPO_NO_TELEMETRY: "1"
-
-      # Always upload the prebuild output
-      - name: Upload prebuild log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: prebuild-output
-          path: /tmp/prebuild.txt
-          if-no-files-found: ignore
-          retention-days: 7
 
       - name: Find gradlew
         id: find-android
         run: |
           GRADLEW=$(find . -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null | head -1)
-          if [ -z "$GRADLEW" ]; then echo "ERROR: no gradlew"; exit 1; fi
           echo "Found: $GRADLEW"
+          [ -n "$GRADLEW" ] || (echo "No gradlew"; exit 1)
           echo "gradlew=$GRADLEW" >> $GITHUB_OUTPUT
           echo "android_dir=$(dirname $GRADLEW)" >> $GITHUB_OUTPUT
 
