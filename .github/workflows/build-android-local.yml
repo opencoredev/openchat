@@ -47,7 +47,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: '1.3.5' }
 
-      - name: Install workspace dependencies
+      - name: Install workspace deps
         run: bun install --ignore-scripts
 
       - name: Expo prebuild
@@ -57,19 +57,28 @@ jobs:
         env:
           EXPO_NO_TELEMETRY: "1"
 
-      - name: Write local.properties (sdk.dir)
+      - name: Write local.properties
         run: |
-          # Expo prebuild generates android/ but doesn't always write local.properties
-          # Gradle requires sdk.dir to locate the Android SDK.
           echo "sdk.dir=$ANDROID_HOME" > apps/native/android/local.properties
-          echo "Written local.properties:"
+          echo "ANDROID_HOME: $ANDROID_HOME"
           cat apps/native/android/local.properties
-          echo ""
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          ls -la "$ANDROID_HOME" 2>/dev/null || echo "ANDROID_HOME dir not found"
 
       - name: Make gradlew executable
         run: chmod +x apps/native/android/gradlew
+
+      - name: Inspect android project structure
+        run: |
+          echo "=== apps/native/android/ top-level ==="
+          ls -la apps/native/android/ 2>/dev/null || echo "(not found)"
+          echo ""
+          echo "=== build.gradle (app) ==="
+          cat apps/native/android/app/build.gradle 2>/dev/null | head -60 || echo "(not found)"
+          echo ""
+          echo "=== gradle-wrapper.properties ==="
+          cat apps/native/android/gradle/wrapper/gradle-wrapper.properties 2>/dev/null || echo "(not found)"
+          echo ""
+          echo "=== settings.gradle ==="
+          cat apps/native/android/settings.gradle 2>/dev/null | head -30 || echo "(not found)"
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -77,40 +86,42 @@ jobs:
           path: |
             ~/.gradle/wrapper
             ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('apps/native/android/gradle/wrapper/gradle-wrapper.properties') }}-v8
+          key: ${{ runner.os }}-gradle-${{ hashFiles('apps/native/android/gradle/wrapper/gradle-wrapper.properties') }}-v9
           restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Gradle version
+        working-directory: apps/native/android
+        run: ./gradlew --version
 
       - name: Build debug APK
         working-directory: apps/native/android
         run: |
-          echo "=== Gradle version check ==="
-          ./gradlew --version 2>&1 | head -10
-          echo ""
-          echo "=== Build ==="
-          ./gradlew assembleDebug \
-            --no-daemon \
-            --stacktrace \
-            2>&1 | tee /tmp/gradle.log
+          set -o pipefail
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
           GRADLE_EXIT=${PIPESTATUS[0]}
-          echo "Gradle exit code: $GRADLE_EXIT"
-          echo "=== Last 80 lines ==="
-          tail -80 /tmp/gradle.log
+          echo "=================================================================="
+          echo "Gradle exit: $GRADLE_EXIT"
+          echo "=================================================================="
+          # Print FULL log on failure so it appears in Actions step output
+          if [ $GRADLE_EXIT -ne 0 ]; then
+            echo "FULL GRADLE LOG:"
+            cat /tmp/gradle.log
+          fi
           exit $GRADLE_EXIT
 
-      - name: List build outputs
+      - name: Find APK
         if: always()
         run: |
-          echo "=== build/outputs tree ==="
-          find apps/native/android/app/build/outputs -type f 2>/dev/null | head -30 || echo "(empty)"
-          echo ""
-          echo "=== All APKs ==="
+          echo "=== build outputs ==="
+          find apps/native/android/app/build/outputs -type f 2>/dev/null | head -30 || echo "(none)"
+          echo "=== all apks ==="
           find . -name "*.apk" 2>/dev/null || echo "(none)"
 
-      - name: Upload logs
+      - name: Upload Gradle log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs-run${{ github.run_number }}
+          name: gradle-log-run${{ github.run_number }}
           path: /tmp/gradle.log
           if-no-files-found: ignore
           retention-days: 7
