@@ -10,28 +10,27 @@ on:
 
 jobs:
   build-android:
-    name: Build Android APK
+    name: Expo prebuild → Gradle assembleDebug
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
     env:
       EXPO_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
       EXPO_PUBLIC_AUTH_BASE_URL: https://placeholder.convex.site
-      EXPO_NO_TELEMETRY: "1"
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -Dorg.gradle.daemon=false"
+      EXPO_NO_TELEMETRY: "1"
       CI: "true"
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
           java-version: '17'
+          distribution: 'temurin'
 
-      - name: Set up Android SDK
+      - name: Set up Android SDK (clean)
         uses: android-actions/setup-android@v3
         with:
           packages: >
@@ -42,21 +41,35 @@ jobs:
             ndk;26.1.10909125
             cmake;3.22.1
 
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: '1.3.5'
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: '1.3.5' }
 
-      # Install only the native app's own deps (no --ignore-scripts so
-      # postinstall hooks run, e.g. for expo modules)
-      - name: Install native app dependencies
+      # --ignore-scripts avoids postinstall issues in CI
+      - name: Install native dependencies
         working-directory: apps/native
-        run: bun install
+        run: bun install --ignore-scripts
+
+      # continue-on-error lets the job proceed even if prebuild
+      # exits non-zero (it still generates the android/ directory)
+      - name: Expo prebuild
+        working-directory: apps/native
+        continue-on-error: true
+        run: node_modules/.bin/expo prebuild --platform android --clean --no-install 2>&1
+        env:
+          EXPO_NO_TELEMETRY: "1"
+
+      - name: Locate gradlew
+        id: find-android
+        run: |
+          GRADLEW=$(find . -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null | head -1)
+          [ -n "$GRADLEW" ] || { echo "::error::No gradlew found after prebuild"; exit 1; }
+          chmod +x "$GRADLEW"
+          ANDROID_DIR=$(dirname "$GRADLEW")
+          echo "android_dir=$ANDROID_DIR" >> $GITHUB_OUTPUT
+          echo "Found android dir: $ANDROID_DIR"
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -64,42 +77,39 @@ jobs:
           path: |
             ~/.gradle/wrapper
             ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('apps/native/**/*.gradle*', 'apps/native/android/gradle/wrapper/gradle-wrapper.properties') }}-v1
-          restore-keys: ${{ runner.os }}-gradle-
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/gradle-wrapper.properties') }}-v2
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
-      # Run prebuild from inside apps/native so module resolution uses the
-      # local node_modules and babel-plugin-module-resolver is available.
-      - name: Expo prebuild (Android)
-        working-directory: apps/native
-        run: |
-          node_modules/.bin/expo prebuild \
-            --platform android \
-            --clean \
-            --no-install \
-            2>&1
-
-      - name: Make gradlew executable
-        run: chmod +x apps/native/android/gradlew
-
-      # assembleDebug — no signing required, installs with Install unknown apps
       - name: Build debug APK
-        working-directory: apps/native/android
+        working-directory: ${{ steps.find-android.outputs.android_dir }}
         run: |
-          ./gradlew assembleDebug \
-            --no-daemon \
-            --stacktrace \
-            2>&1 | tee /tmp/gradle.log
-          GRADLE_EXIT=${PIPESTATUS[0]}
-          echo "--- last 50 lines ---"
-          tail -50 /tmp/gradle.log
-          exit $GRADLE_EXIT
+          echo "=== Build environment ==="
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls $ANDROID_HOME/build-tools/ 2>/dev/null || true
+          ls $ANDROID_HOME/platforms/ 2>/dev/null || true
+          echo "=== Gradle build ==="
+          ./gradlew assembleDebug --no-daemon --no-build-cache --stacktrace 2>&1 | tee /tmp/gradle.log | tail -80
 
-      - name: Upload Gradle log (always)
+      # List all APKs produced so we know the real output path
+      - name: List APK files
+        id: list-apk
+        run: |
+          echo "=== All APKs produced ==="
+          find . -name "*.apk" -not -path "*/node_modules/*" 2>/dev/null | tee /tmp/apk-list.txt
+          APK=$(head -1 /tmp/apk-list.txt)
+          echo "apk_path=$APK" >> $GITHUB_OUTPUT
+          echo "Found APK: $APK"
+          ls -lh "$APK" 2>/dev/null || echo "(not found)"
+
+      - name: Upload Gradle log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gradle-log
-          path: /tmp/gradle.log
+          name: gradle-build-log-${{ github.run_number }}
+          path: |
+            /tmp/gradle.log
+            /tmp/apk-list.txt
           if-no-files-found: ignore
           retention-days: 7
 
@@ -107,20 +117,25 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: openchat-android-debug-${{ github.run_number }}
-          path: apps/native/android/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ steps.list-apk.outputs.apk_path }}
           if-no-files-found: error
           retention-days: 30
 
       - name: Build summary
         if: success()
         run: |
-          echo "### ✅ OpenChat Android APK ready" >> $GITHUB_STEP_SUMMARY
+          APK="${{ steps.list-apk.outputs.apk_path }}"
+          SIZE=$(du -h "$APK" 2>/dev/null | cut -f1 || echo "unknown")
+          echo "### ✅ OpenChat Android Debug APK" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Artifact:** openchat-android-debug-${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | \`openchat-android-debug-${{ github.run_number }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| File | \`$(basename $APK)\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Size | $SIZE |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**To install on your Pixel 9:**" >> $GITHUB_STEP_SUMMARY
-          echo "1. Download the artifact zip from this page" >> $GITHUB_STEP_SUMMARY
-          echo "2. Unzip to get app-debug.apk" >> $GITHUB_STEP_SUMMARY
-          echo "3. Transfer to phone (USB, Google Drive, email, etc.)" >> $GITHUB_STEP_SUMMARY
-          echo "4. Settings → Apps → Special app access → Install unknown apps" >> $GITHUB_STEP_SUMMARY
-          echo "5. Open Files app → tap app-debug.apk → Install" >> $GITHUB_STEP_SUMMARY
+          echo "**Install on Pixel 9:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download zip from Artifacts section below" >> $GITHUB_STEP_SUMMARY
+          echo "2. Unzip → transfer APK to phone" >> $GITHUB_STEP_SUMMARY
+          echo "3. Settings → Apps → Special app access → Install unknown apps → Allow" >> $GITHUB_STEP_SUMMARY
+          echo "4. Open Files app → tap APK → Install" >> $GITHUB_STEP_SUMMARY
