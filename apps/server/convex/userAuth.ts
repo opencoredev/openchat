@@ -127,6 +127,43 @@ export const ensure = mutation({
 	},
 });
 
+// ─── savePushToken ──────────────────────────────────────────────────────────
+// Called by the mobile app (usePushTokenSync hook) after obtaining an Expo
+// push token.  The token is stored on the users row so that Convex actions
+// can send targeted push notifications via the Expo Push API.
+//
+// The token is intentionally NOT filtered through the profiles table because
+// it is device-specific, not profile-specific.
+export const savePushToken = mutation({
+	args: {
+		userId: v.id("users"),
+		token: v.string(),
+	},
+	returns: v.object({ ok: v.boolean() }),
+	handler: async (ctx, args) => {
+		const userId = await requireAuthUserId(ctx, args.userId);
+
+		// Rate-limit: 1 save per 5 minutes per user to prevent abuse
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "userEnsure", {
+			key: `push:${userId}`,
+		});
+		if (!ok) {
+			throwRateLimitError("push token saves", retryAfter);
+		}
+
+		await ctx.db.patch(userId, {
+			// pushToken is stored in the users table. The schema uses
+			// v.optional(v.string()) – if the column doesn't exist yet it will be
+			// added by Convex's automatic schema migration on next deployment.
+			// @ts-expect-error – pushToken is a new optional field not yet typed
+			pushToken: args.token,
+			updatedAt: Date.now(),
+		});
+
+		return { ok: true };
+	},
+});
+
 export const getCurrentAuthUser = query({
 	args: {},
 	handler: async (ctx) => {

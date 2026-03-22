@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../../stores/auth";
 import { useConvexUser } from "../../hooks/useConvexUser";
 import { useModelStore } from "../../stores/model";
+import { useThemeStore } from "../../stores/theme";
 import { signOut } from "../../lib/auth";
 
 export default function SettingsScreen() {
@@ -13,6 +14,8 @@ export default function SettingsScreen() {
   const selectedModelName = useModelStore(
     (s) => s.getModelById(s.selectedModelId)?.name ?? s.selectedModelId
   );
+  const themePreference = useThemeStore((s) => s.preference);
+  const themeLabel = { system: "System", dark: "Dark", light: "Light" }[themePreference];
 
   const handleSignOut = async () => {
     if (sessionToken) await signOut(sessionToken);
@@ -21,7 +24,6 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Profile card */}
       {convexUser && (
         <TouchableOpacity style={styles.profileCard} onPress={() => router.push("/settings/account")}>
           {convexUser.avatarUrl ? (
@@ -42,39 +44,27 @@ export default function SettingsScreen() {
       )}
 
       <Text style={styles.sectionHeader}>AI</Text>
-      <SettingsRow
-        icon="sparkles-outline"
-        label="Model"
-        value={selectedModelName}
-        onPress={() => router.push("/new")}
-      />
-      <SettingsRow
-        icon="key-outline"
-        label="OpenRouter Key"
+      <SettingsRow icon="sparkles-outline" label="Model" value={selectedModelName}
+        onPress={() => router.push("/new")} />
+      <SettingsRow icon="key-outline" label="OpenRouter Key"
         value={convexUser?.hasOpenRouterKey ? "Connected" : "Not set"}
         valueColor={convexUser?.hasOpenRouterKey ? "#38C9A8" : undefined}
-        onPress={() => router.push("/settings/byok")}
-      />
+        onPress={() => router.push("/settings/byok")} />
+
+      <Text style={styles.sectionHeader}>Appearance</Text>
+      <SettingsRow icon="color-palette-outline" label="Theme" value={themeLabel}
+        onPress={() => router.push("/settings/appearance")} />
 
       <Text style={styles.sectionHeader}>Account</Text>
-      <SettingsRow
-        icon="person-outline"
-        label="Profile & Account"
-        onPress={() => router.push("/settings/account")}
-      />
+      <SettingsRow icon="person-outline" label="Profile & Account"
+        onPress={() => router.push("/settings/account")} />
 
       <Text style={styles.sectionHeader}>Info</Text>
       <SettingsRow icon="information-circle-outline" label="Version" value="0.1.0" />
-      <SettingsRow
-        icon="globe-outline"
-        label="Privacy Policy"
-        onPress={() => router.push("/legal/privacy")}
-      />
-      <SettingsRow
-        icon="document-text-outline"
-        label="Terms of Service"
-        onPress={() => router.push("/legal/terms")}
-      />
+      <SettingsRow icon="globe-outline" label="Privacy Policy"
+        onPress={() => router.push("/legal/privacy")} />
+      <SettingsRow icon="document-text-outline" label="Terms of Service"
+        onPress={() => router.push("/legal/terms")} />
 
       <TouchableOpacity style={styles.signOutRow} onPress={handleSignOut}>
         <Ionicons name="log-out-outline" size={18} color="#f87171" />
@@ -84,12 +74,10 @@ export default function SettingsScreen() {
   );
 }
 
-function SettingsRow({
-  icon, label, value, valueColor, onPress,
-}: {
+function SettingsRow({ icon, label, value, valueColor, onPress }: {
   icon: string; label: string; value?: string; valueColor?: string; onPress?: () => void;
 }) {
-  const Inner = (
+  const inner = (
     <View style={styles.row}>
       <View style={styles.rowLeft}>
         <Ionicons name={icon as "key-outline"} size={18} color="#71717a" />
@@ -101,8 +89,8 @@ function SettingsRow({
       </View>
     </View>
   );
-  if (!onPress) return Inner;
-  return <TouchableOpacity onPress={onPress} activeOpacity={0.7}>{Inner}</TouchableOpacity>;
+  if (!onPress) return inner;
+  return <TouchableOpacity onPress={onPress} activeOpacity={0.7}>{inner}</TouchableOpacity>;
 }
 
 const styles = StyleSheet.create({
