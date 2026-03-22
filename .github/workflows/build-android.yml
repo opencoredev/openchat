@@ -9,7 +9,7 @@ jobs:
   build-android:
     name: Expo prebuild → Gradle assembleDebug
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     env:
       EXPO_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
@@ -32,27 +32,16 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: '1.3.5' }
 
-      - name: Cache Bun modules
+      - name: Cache Bun
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          key: ${{ runner.os }}-bun-${{ hashFiles('apps/native/package.json') }}
           restore-keys: ${{ runner.os }}-bun-
-
-      - name: Install workspace dependencies
-        run: bun install
 
       - name: Install native app dependencies
         working-directory: apps/native
         run: bun install
-
-      - name: Verify expo
-        working-directory: apps/native
-        run: |
-          echo "Expo location:"
-          ls node_modules/.bin/expo 2>/dev/null && echo "Found in apps/native/node_modules" || echo "Not in apps/native/node_modules"
-          ls ../../node_modules/.bin/expo 2>/dev/null && echo "Found in root/node_modules" || echo "Not in root/node_modules"
-          node node_modules/.bin/expo --version 2>&1 || node ../../node_modules/.bin/expo --version 2>&1 || echo "Expo not runnable"
 
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
@@ -60,11 +49,12 @@ jobs:
       - name: Expo prebuild
         working-directory: apps/native
         run: |
-          EXPO_BIN=$(ls node_modules/.bin/expo 2>/dev/null && echo "node_modules/.bin/expo" || echo "../../node_modules/.bin/expo")
-          echo "Using: $EXPO_BIN"
-          node $EXPO_BIN prebuild --platform android --clean --no-install 2>&1
-          echo "Exit: $?"
-          ls -la android/ 2>/dev/null || echo "No android/ dir"
+          EXPO=$(ls node_modules/.bin/expo 2>/dev/null && echo "node_modules/.bin/expo" || echo "npx expo")
+          echo "Using expo at: $EXPO"
+          node $EXPO --version 2>/dev/null || $EXPO --version
+          echo "Running prebuild..."
+          node $EXPO prebuild --platform android --clean --no-install 2>&1
+          echo "prebuild exit: $?"
         env:
           EXPO_NO_TELEMETRY: "1"
 
@@ -72,8 +62,7 @@ jobs:
         id: find-android
         run: |
           GRADLEW=$(find . -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null | head -1)
-          echo "Found: $GRADLEW"
-          [ -n "$GRADLEW" ] || (echo "No gradlew"; exit 1)
+          [ -n "$GRADLEW" ] || { echo "No gradlew found"; ls apps/native/; exit 1; }
           echo "gradlew=$GRADLEW" >> $GITHUB_OUTPUT
           echo "android_dir=$(dirname $GRADLEW)" >> $GITHUB_OUTPUT
 
