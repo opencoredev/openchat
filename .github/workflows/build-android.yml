@@ -45,39 +45,46 @@ jobs:
       - name: Install workspace dependencies (root)
         run: bun install
 
-      # Separate install inside the native app so expo can find its own packages
       - name: Install native app dependencies
         working-directory: apps/native
         run: bun install
 
       - name: Verify expo CLI version
         working-directory: apps/native
-        run: bunx expo --version
+        run: |
+          bunx expo --version
+          echo "Node: $(node --version)"
+          echo "Bun: $(bun --version)"
+          echo "Java: $(java -version 2>&1 | head -1)"
 
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
-      # Prebuild with verbose output captured to a file for debugging
+      # Run prebuild, capture all output, exit code, and show last 80 lines on failure
       - name: Expo prebuild – Android only
         working-directory: apps/native
+        shell: bash
         run: |
+          set -o pipefail
           bunx expo prebuild --platform android --clean 2>&1 | tee /tmp/prebuild.log
-          EXIT=${PIPESTATUS[0]}
-          echo "=== prebuild exit code: $EXIT ==="
-          if [ $EXIT -ne 0 ]; then
-            echo "--- last 60 lines of prebuild output ---"
-            tail -60 /tmp/prebuild.log
-            exit $EXIT
+          RC=$?
+          echo "Prebuild exit code: $RC"
+          if [ $RC -ne 0 ]; then
+            echo "====== PREBUILD FAILED - last 80 lines ======"
+            tail -80 /tmp/prebuild.log
+            exit $RC
           fi
         env:
           EXPO_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
           EXPO_PUBLIC_AUTH_BASE_URL: https://placeholder.convex.site
           EXPO_NO_TELEMETRY: "1"
 
-      - name: Confirm android directory was created
+      - name: List generated android directory
         run: |
-          ls -la apps/native/android/
-          ls apps/native/android/app/
+          echo "=== apps/native/android/ ==="
+          ls -la apps/native/android/ || echo "android/ not found!"
+          echo "=== apps/native/android/app/ ==="
+          ls -la apps/native/android/app/ || echo "app/ not found!"
 
       - name: Cache Gradle wrapper
         uses: actions/cache@v4
@@ -107,7 +114,6 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # Always upload the prebuild log so we can debug even on failure
       - name: Upload prebuild log (always)
         if: always()
         uses: actions/upload-artifact@v4
