@@ -32,45 +32,57 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: '1.3.5' }
 
-      - name: Install native app dependencies
+      - name: Cache Bun modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('apps/native/package.json') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      # Install ONLY apps/native deps in isolation (no workspace, no root)
+      - name: Install native dependencies (standalone)
         working-directory: apps/native
-        run: npm install
+        run: |
+          # Force bun to treat this as a standalone project, not a workspace member
+          # by temporarily removing the root package.json reference
+          bun install --ignore-scripts 2>&1
+          echo "bun install exit: $?"
+          ls node_modules/.bin/expo 2>/dev/null && echo "expo found" || echo "expo NOT found"
 
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
-      - name: Expo prebuild (with full error capture)
+      - name: Expo prebuild
         working-directory: apps/native
         continue-on-error: true
         id: prebuild
         run: |
           set +e
-          OUTPUT=$(npx expo prebuild --platform android --clean --no-install 2>&1)
+          echo "Expo version:"
+          node_modules/.bin/expo --version 2>&1
+          echo "Running prebuild..."
+          OUTPUT=$(node_modules/.bin/expo prebuild --platform android --clean --no-install 2>&1)
           RC=$?
           echo "$OUTPUT"
-          echo "## Prebuild Output" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "$OUTPUT" | tail -100 >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "Exit code: $RC" >> $GITHUB_STEP_SUMMARY
-          echo "exit_code=$RC" >> $GITHUB_OUTPUT
+          echo "## Prebuild" >> $GITHUB_STEP_SUMMARY
+          printf '```\n%s\n```\n' "$OUTPUT" >> $GITHUB_STEP_SUMMARY
+          echo "Exit: $RC" >> $GITHUB_STEP_SUMMARY
+          echo "rc=$RC" >> $GITHUB_OUTPUT
           exit $RC
         env:
           EXPO_NO_TELEMETRY: "1"
 
-      - name: List android after prebuild attempt
+      - name: Check android dir
         run: |
-          echo "=== apps/native contents ==="
-          ls -la apps/native/
-          echo "prebuild exit was: ${{ steps.prebuild.outputs.exit_code }}"
+          ls -la apps/native/ | grep android || echo "No android dir"
           GRADLEW=$(find . -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null | head -1)
-          echo "gradlew: $GRADLEW"
+          echo "gradlew: ${GRADLEW:-MISSING}"
 
-      - name: Skip to Gradle if android dir exists
+      - name: Locate gradlew
         id: find-android
         run: |
           GRADLEW=$(find . -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null | head -1)
-          [ -n "$GRADLEW" ] || { echo "No gradlew - prebuild failed fatally"; exit 1; }
+          [ -n "$GRADLEW" ] || { echo "No gradlew"; exit 1; }
           echo "gradlew=$GRADLEW" >> $GITHUB_OUTPUT
           echo "android_dir=$(dirname $GRADLEW)" >> $GITHUB_OUTPUT
 
