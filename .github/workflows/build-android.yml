@@ -52,23 +52,17 @@ jobs:
         working-directory: apps/native
         continue-on-error: true
         run: node_modules/.bin/expo prebuild --platform android --clean --no-install 2>&1
-        env:
-          EXPO_NO_TELEMETRY: "1"
 
-      - name: Locate gradlew and APK output dir
+      - name: Locate gradlew
         id: find-android
         run: |
           GRADLEW=$(find . -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null | head -1)
           [ -n "$GRADLEW" ] || { echo "::error::No gradlew found after prebuild"; exit 1; }
           chmod +x "$GRADLEW"
           ANDROID_DIR=$(dirname "$GRADLEW")
-          # Derive the expected APK output path (relative to repo root)
-          APK_DIR="${ANDROID_DIR}/app/build/outputs/apk/debug"
           echo "gradlew=$GRADLEW"         >> $GITHUB_OUTPUT
           echo "android_dir=$ANDROID_DIR" >> $GITHUB_OUTPUT
-          echo "apk_dir=$APK_DIR"         >> $GITHUB_OUTPUT
           echo "Found android dir: $ANDROID_DIR"
-          echo "Expected APK dir:  $APK_DIR"
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -76,68 +70,59 @@ jobs:
           path: |
             ~/.gradle/wrapper
             ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/gradle-wrapper.properties') }}-v3
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/gradle-wrapper.properties') }}-v4
+          restore-keys: ${{ runner.os }}-gradle-
 
       - name: Build debug APK
-        id: gradle-build
         working-directory: ${{ steps.find-android.outputs.android_dir }}
         run: |
-          echo "=== Android SDK info ==="
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          ls "$ANDROID_HOME/build-tools/" 2>/dev/null || true
-          ls "$ANDROID_HOME/platforms/"   2>/dev/null || true
-          echo "=== Gradle build ==="
           ./gradlew assembleDebug \
             --no-daemon \
             --no-build-cache \
             --stacktrace \
             2>&1 | tee /tmp/gradle.log
-          tail -20 /tmp/gradle.log
+          tail -30 /tmp/gradle.log
 
-      - name: Locate built APK
-        id: find-apk
+      # Find ALL .apk files produced anywhere in the workspace and show them
+      - name: Inventory APK files
+        if: always()
         run: |
-          APK=$(find ${{ steps.find-android.outputs.apk_dir }} -name "*.apk" 2>/dev/null | head -1)
-          if [ -z "$APK" ]; then
-            # Fall back to a broader search
-            APK=$(find . -name "app-debug.apk" -not -path "*/node_modules/*" 2>/dev/null | head -1)
-          fi
-          [ -n "$APK" ] || { echo "::error::APK not found after build"; exit 1; }
-          echo "apk_path=$APK" >> $GITHUB_OUTPUT
-          echo "apk_name=openchat-android-debug-$(echo '${{ github.sha }}' | cut -c1-7).apk" >> $GITHUB_OUTPUT
-          echo "Found APK: $APK"
-          ls -lh "$APK"
+          echo "=== All .apk files in workspace ==="
+          find . -name "*.apk" -not -path "*/node_modules/*" 2>/dev/null \
+            | xargs -I{} sh -c 'echo "{}: $(du -h {} | cut -f1)"' || echo "(none found)"
 
-      - name: Upload Gradle log (always)
+      - name: Upload Gradle log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gradle-build-log-${{ github.run_number }}
+          name: gradle-log-run${{ github.run_number }}
           path: /tmp/gradle.log
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload APK artifact
+      # Use a glob pattern across the entire workspace to catch the APK
+      # regardless of what path expo prebuild generated it under
+      - name: Upload all APKs (glob)
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.find-apk.outputs.apk_name }}
-          path: ${{ steps.find-apk.outputs.apk_path }}
+          name: openchat-android-debug-${{ github.run_number }}
+          path: |
+            **/outputs/apk/**/*.apk
+            **/build/outputs/**/*.apk
           if-no-files-found: error
           retention-days: 30
 
-      - name: Summary
+      - name: Build summary
         if: success()
         run: |
-          echo "### ✅ Android Debug APK built successfully" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Android Debug APK" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**File:** \`${{ steps.find-apk.outputs.apk_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Artifact:** \`openchat-android-debug-${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Download:** Go to the Actions run summary page → scroll to **Artifacts** → click the artifact to download a .zip containing the APK." >> $GITHUB_STEP_SUMMARY
+          echo "**Download:** Actions run page → Artifacts section → click to download zip." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Install on Pixel 9:**" >> $GITHUB_STEP_SUMMARY
-          echo "1. Enable ‘Install unknown apps’ in Settings → Apps → Special app access" >> $GITHUB_STEP_SUMMARY
-          echo "2. Transfer the APK to the phone" >> $GITHUB_STEP_SUMMARY
-          echo "3. Tap the APK in the Files app to install" >> $GITHUB_STEP_SUMMARY
-          echo "4. Set EXPO_PUBLIC_CONVEX_URL and EXPO_PUBLIC_AUTH_BASE_URL before launching" >> $GITHUB_STEP_SUMMARY
+          echo "1. Transfer APK to device (USB or share link)" >> $GITHUB_STEP_SUMMARY
+          echo "2. Open Files app, tap the APK" >> $GITHUB_STEP_SUMMARY
+          echo "3. Allow 'Install unknown apps' when prompted" >> $GITHUB_STEP_SUMMARY
+          echo "4. Launch OpenChat, set Convex URL in settings" >> $GITHUB_STEP_SUMMARY
