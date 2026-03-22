@@ -2,14 +2,24 @@ name: Build Android APK (Local)
 
 on:
   push:
-    branches:
-      - feature/mobile-app
+    branches: [feature/mobile-app]
+    paths:
+      - 'apps/native/**'
+      - '.github/workflows/build-android-local.yml'
   workflow_dispatch:
 
 jobs:
   build-android:
     name: Build Android APK
     runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      EXPO_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
+      EXPO_PUBLIC_AUTH_BASE_URL: https://placeholder.convex.site
+      EXPO_NO_TELEMETRY: "1"
+      GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -Dorg.gradle.daemon=false"
+      CI: "true"
 
     steps:
       - name: Checkout repository
@@ -21,7 +31,18 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Node.js
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: >
+            tools
+            platform-tools
+            platforms;android-34
+            build-tools;34.0.0
+            ndk;26.1.10909125
+            cmake;3.22.1
+
+      - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -29,23 +50,77 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: '1.3.5'
 
-      - name: Install dependencies
+      # Install only the native app's own deps (no --ignore-scripts so
+      # postinstall hooks run, e.g. for expo modules)
+      - name: Install native app dependencies
+        working-directory: apps/native
         run: bun install
 
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/wrapper
+            ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-${{ hashFiles('apps/native/**/*.gradle*', 'apps/native/android/gradle/wrapper/gradle-wrapper.properties') }}-v1
+          restore-keys: ${{ runner.os }}-gradle-
+
+      # Run prebuild from inside apps/native so module resolution uses the
+      # local node_modules and babel-plugin-module-resolver is available.
       - name: Expo prebuild (Android)
-        run: npx expo prebuild --platform android --clean --no-install
+        working-directory: apps/native
+        run: |
+          node_modules/.bin/expo prebuild \
+            --platform android \
+            --clean \
+            --no-install \
+            2>&1
 
       - name: Make gradlew executable
         run: chmod +x apps/native/android/gradlew
 
-      - name: Build release APK
-        run: cd apps/native/android && ./gradlew assembleRelease --no-daemon
+      # assembleDebug — no signing required, installs with Install unknown apps
+      - name: Build debug APK
+        working-directory: apps/native/android
+        run: |
+          ./gradlew assembleDebug \
+            --no-daemon \
+            --stacktrace \
+            2>&1 | tee /tmp/gradle.log
+          GRADLE_EXIT=${PIPESTATUS[0]}
+          echo "--- last 50 lines ---"
+          tail -50 /tmp/gradle.log
+          exit $GRADLE_EXIT
 
-      - name: Upload APK artifact
+      - name: Upload Gradle log (always)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: openchat-android-release
-          path: apps/native/android/app/build/outputs/apk/release/
-          retention-days: 14
+          name: gradle-log
+          path: /tmp/gradle.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: openchat-android-debug-${{ github.run_number }}
+          path: apps/native/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build summary
+        if: success()
+        run: |
+          echo "### ✅ OpenChat Android APK ready" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Artifact:** openchat-android-debug-${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**To install on your Pixel 9:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download the artifact zip from this page" >> $GITHUB_STEP_SUMMARY
+          echo "2. Unzip to get app-debug.apk" >> $GITHUB_STEP_SUMMARY
+          echo "3. Transfer to phone (USB, Google Drive, email, etc.)" >> $GITHUB_STEP_SUMMARY
+          echo "4. Settings → Apps → Special app access → Install unknown apps" >> $GITHUB_STEP_SUMMARY
+          echo "5. Open Files app → tap app-debug.apk → Install" >> $GITHUB_STEP_SUMMARY
