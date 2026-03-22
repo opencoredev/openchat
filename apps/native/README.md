@@ -1,80 +1,105 @@
 # OpenChat — Native (Expo)
 
-Mobile app for [OpenChat](https://osschat.dev) built with [Expo](https://expo.dev) and [expo-router](https://expo.github.io/router/).
+Mobile app for [OpenChat](https://osschat.dev) built with [Expo](https://expo.dev) and [expo-router](https://expo.github.io/router/). Targets full feature parity with the web app, optimised for native mobile UX.
 
 ## Stack
 
 | Layer | Technology |
 |-------|------------|
-| Framework | Expo (React Native) |
+| Framework | Expo ~53 (React Native 0.79) |
 | Router | expo-router v4 (file-based) |
 | Backend | Convex (same deployment as the web app) |
 | Auth | Better Auth + Convex integration |
 | Secure storage | expo-secure-store |
+| Markdown | react-native-markdown-display |
+| Syntax highlight | react-native-syntax-highlighter (hljs) |
+| Model cache | @react-native-async-storage/async-storage |
+| Push notifications | expo-notifications + Expo Push API |
+| File uploads | expo-document-picker + expo-image-picker |
+| CI/CD | EAS Build (eas.json) |
 
 ## Getting started
 
 ```bash
-# From the repo root
 bun install
 cd apps/native
 cp .env.example .env
 # Fill in EXPO_PUBLIC_CONVEX_URL and EXPO_PUBLIC_AUTH_BASE_URL
-bun dev          # or: npx expo start
+bun dev
 ```
 
-Or from the repo root:
+Or from the repo root: `bun dev:native`
+
+## EAS Build
 
 ```bash
-bun dev:native
+# Install EAS CLI
+npm install -g eas-cli
+eas login
+
+# One-time project setup
+eas init
+
+# Development client build (for testing with expo-dev-client)
+bun build:ios      # eas build --platform ios
+bun build:android  # eas build --platform android
+
+# Submit to stores
+bun submit:ios
+bun submit:android
 ```
+
+Before submitting, fill in the placeholder values in `eas.json`:
+- `appleId` — your Apple ID
+- `ascAppId` — App Store Connect app ID
+- `appleTeamId` — your Apple Developer team ID
+- `google-services-key.json` — Google Play service account key
+- `extra.eas.projectId` in `app.json` — from `eas init`
 
 ## Environment variables
 
-See `.env.example`. Both variables point at your Convex deployment:
-
 | Variable | Description |
 |----------|-------------|
-| `EXPO_PUBLIC_CONVEX_URL` | WebSocket endpoint for the Convex client (same as `VITE_CONVEX_URL` in the web app) |
-| `EXPO_PUBLIC_AUTH_BASE_URL` | HTTP base URL for Better Auth endpoints (same as `VITE_CONVEX_SITE_URL` in the web app) |
+| `EXPO_PUBLIC_CONVEX_URL` | Convex WebSocket endpoint (= `VITE_CONVEX_URL` in web) |
+| `EXPO_PUBLIC_AUTH_BASE_URL` | Better Auth base URL (= `VITE_CONVEX_SITE_URL` in web) |
 
 ## Auth flow
 
-1. User taps **Sign in with GitHub** on the auth screen.
-2. `expo-web-browser` opens the Better Auth GitHub OAuth URL, passing the app's deep-link URI as `redirect_uri`.
-3. After OAuth completes, Better Auth redirects to `openchat://auth/callback?token=<session_token>`.
-4. The app intercepts the deep link, stores the session token in SecureStore, and redirects to the home screen.
-5. `ConvexAuthProvider` calls `fetchConvexToken` on every Convex request, exchanging the session token for a short-lived Convex JWT via `{AUTH_BASE_URL}/api/auth/convex/token`.
+1. User taps **Continue with GitHub** on the auth screen.
+2. `expo-web-browser` opens the Better Auth GitHub OAuth URL with the app deep-link as `redirect_uri`.
+3. After OAuth, Better Auth redirects to `openchat://auth/callback?token=<session_token>`.
+4. The app intercepts the link, calls `/api/auth/get-session` to hydrate user profile, stores the session to SecureStore.
+5. `ConvexAuthProvider` exchanges the session token for a short-lived Convex JWT via `/api/auth/convex/token` on every Convex request.
+6. `useConvexUser` calls `api.users.ensure` to create/update the user record in Convex.
+7. `usePushTokenSync` saves the Expo push token to `api.users.savePushToken` once authenticated.
 
-## Project structure
+## Push notifications
 
-```
-apps/native/
-├── app/                  # expo-router screens (file-based routing)
-│   ├── _layout.tsx       # Root layout — initialises auth, wraps in ConvexAuthProvider
-│   ├── auth.tsx          # Sign-in screen (GitHub OAuth)
-│   ├── +not-found.tsx
-│   └── (tabs)/
-│       ├── _layout.tsx   # Tab bar (redirects to /auth if unauthenticated)
-│       ├── index.tsx     # Chat list screen (real-time via Convex)
-│       └── settings.tsx  # Settings / sign-out
-├── lib/
-│   ├── convex.ts         # Singleton ConvexReactClient
-│   └── auth.ts           # SecureStore helpers + fetchConvexToken
-├── providers/
-│   └── ConvexAuthProvider.tsx  # ConvexProviderWithAuth bridge
-├── stores/
-│   └── auth.ts           # Zustand auth state store
-├── app.json
-├── babel.config.js
-├── package.json
-└── tsconfig.json
-```
+The `usePushTokenSync` hook saves the device push token to the Convex `users` table.
+The Convex backend can then use the Expo Push API to send targeted notifications when a stream completes.
 
-## TODO / next steps
+A corresponding `savePushToken` mutation must be added to `apps/server/convex/userAuth.ts` (see TODO below).
 
-- [ ] Add individual chat screen (`app/chat/[id].tsx`) with streaming message rendering
-- [ ] Add new-chat screen (`app/chat/new.tsx`) with model selector
-- [ ] Wire up OpenRouter BYOK settings in the settings screen
-- [ ] Add push notifications for background stream completion
-- [ ] EAS Build configuration for TestFlight / Play Store
+## Feature parity with web app
+
+| Web route | Mobile screen | Status |
+|-----------|--------------|--------|
+| `/` (chat list) | `(tabs)/index.tsx` | ✅ |
+| `/c/$chatId` | `chat/[id].tsx` | ✅ |
+| `/settings` | `(tabs)/settings.tsx` | ✅ |
+| `/settings` → Providers / BYOK | `settings/byok.tsx` | ✅ |
+| `/settings` → Account | `settings/account.tsx` | ✅ |
+| `/share/$shareId` | `share/[shareId].tsx` | ✅ |
+| `/privacy` | `legal/privacy.tsx` | ✅ |
+| `/terms` | `legal/terms.tsx` | ✅ |
+| Model picker | `new.tsx` | ✅ |
+| Auth / sign-in | `auth.tsx` | ✅ |
+
+## TODO
+
+- [ ] Add `savePushToken` mutation to `apps/server/convex/userAuth.ts`
+- [ ] Chat export (JSON / Markdown) — share sheet integration
+- [ ] Web search toggle in input bar
+- [ ] Reasoning effort selector in model picker
+- [ ] Multi-modal image previews in message bubbles
+- [ ] Dark/light theme preference (currently always dark)
