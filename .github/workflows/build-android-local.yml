@@ -30,7 +30,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Set up Android SDK (clean)
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
           packages: >
@@ -47,8 +47,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: '1.3.5' }
 
-      # Install from workspace root so monorepo deps are resolved
-      - name: Install ALL workspace dependencies
+      - name: Install workspace dependencies
         run: bun install --ignore-scripts
 
       - name: Expo prebuild
@@ -57,6 +56,17 @@ jobs:
         run: node_modules/.bin/expo prebuild --platform android --clean --no-install 2>&1
         env:
           EXPO_NO_TELEMETRY: "1"
+
+      - name: Write local.properties (sdk.dir)
+        run: |
+          # Expo prebuild generates android/ but doesn't always write local.properties
+          # Gradle requires sdk.dir to locate the Android SDK.
+          echo "sdk.dir=$ANDROID_HOME" > apps/native/android/local.properties
+          echo "Written local.properties:"
+          cat apps/native/android/local.properties
+          echo ""
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls -la "$ANDROID_HOME" 2>/dev/null || echo "ANDROID_HOME dir not found"
 
       - name: Make gradlew executable
         run: chmod +x apps/native/android/gradlew
@@ -67,57 +77,41 @@ jobs:
           path: |
             ~/.gradle/wrapper
             ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/gradle-wrapper.properties') }}-v7
+          key: ${{ runner.os }}-gradle-${{ hashFiles('apps/native/android/gradle/wrapper/gradle-wrapper.properties') }}-v8
           restore-keys: ${{ runner.os }}-gradle-
-
-      # Build the APK.
-      # BUNDLE_SKIP_METRO_BUNDLER=true tells React Native Gradle not to run Metro,
-      # and we pre-bundle separately to avoid JS bundler issues in CI.
-      - name: Bundle JS with Metro
-        working-directory: apps/native
-        continue-on-error: true
-        run: |
-          mkdir -p android/app/src/main/assets
-          node_modules/.bin/react-native bundle \
-            --platform android \
-            --dev false \
-            --entry-file node_modules/expo-router/entry.js \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res \
-            2>&1 | tee /tmp/metro.log | tail -30 || true
 
       - name: Build debug APK
         working-directory: apps/native/android
         run: |
-          # Run Gradle; capture entire log (no tail truncation)
+          echo "=== Gradle version check ==="
+          ./gradlew --version 2>&1 | head -10
+          echo ""
+          echo "=== Build ==="
           ./gradlew assembleDebug \
             --no-daemon \
-            --no-build-cache \
             --stacktrace \
-            --info \
-            2>&1 > /tmp/gradle.log
-          GRADLE_EXIT=$?
-          echo "Gradle exit: $GRADLE_EXIT"
-          tail -60 /tmp/gradle.log
+            2>&1 | tee /tmp/gradle.log
+          GRADLE_EXIT=${PIPESTATUS[0]}
+          echo "Gradle exit code: $GRADLE_EXIT"
+          echo "=== Last 80 lines ==="
+          tail -80 /tmp/gradle.log
           exit $GRADLE_EXIT
 
       - name: List build outputs
         if: always()
         run: |
-          echo "=== apps/native/android/app/build/outputs/ ==="
-          find apps/native/android/app/build/outputs/ -type f 2>/dev/null | head -30 || echo "(not found)"
+          echo "=== build/outputs tree ==="
+          find apps/native/android/app/build/outputs -type f 2>/dev/null | head -30 || echo "(empty)"
           echo ""
           echo "=== All APKs ==="
           find . -name "*.apk" 2>/dev/null || echo "(none)"
 
-      - name: Upload build artifacts
+      - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-logs-run${{ github.run_number }}
-          path: |
-            /tmp/gradle.log
-            /tmp/metro.log
+          path: /tmp/gradle.log
           if-no-files-found: ignore
           retention-days: 7
 
@@ -128,11 +122,3 @@ jobs:
           path: apps/native/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: warn
           retention-days: 30
-
-      - name: Upload all build outputs (fallback)
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-build-outputs-run${{ github.run_number }}
-          path: apps/native/android/app/build/outputs/
-          if-no-files-found: warn
-          retention-days: 14
