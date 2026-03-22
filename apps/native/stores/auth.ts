@@ -1,45 +1,59 @@
 import { create } from "zustand";
-import { getStoredToken, storeToken, clearToken } from "../lib/auth";
+import * as SecureStore from "expo-secure-store";
+
+const SESSION_KEY = "openchat_session_data";
+
+export interface SessionData {
+  /** Better Auth session token */
+  token: string;
+  /** Better Auth user ID (used as externalId in Convex) */
+  userId: string;
+  email?: string;
+  name?: string;
+  image?: string;
+}
 
 interface AuthState {
   sessionToken: string | null;
+  sessionData: SessionData | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 
   /** Called once on app start to rehydrate any persisted session. */
   initialize: () => Promise<void>;
-  /** Called after a successful OAuth sign-in to persist the session token. */
-  setSession: (token: string) => Promise<void>;
-  /** Clears the local session (sign-out). */
+  /** Called after a successful OAuth sign-in. */
+  setSession: (data: SessionData) => Promise<void>;
+  /** Clears the local session. */
   clearSession: () => Promise<void>;
 }
 
-/**
- * Lightweight auth state store.
- * Uses expo-secure-store (via lib/auth.ts helpers) for persistence.
- * Import `useAuthStore` anywhere in the app to read/update auth state.
- */
 export const useAuthStore = create<AuthState>((set) => ({
   sessionToken: null,
+  sessionData: null,
   isAuthenticated: false,
   isLoading: true,
 
   initialize: async () => {
-    const token = await getStoredToken();
-    set({
-      sessionToken: token,
-      isAuthenticated: !!token,
-      isLoading: false,
-    });
+    try {
+      const raw = await SecureStore.getItemAsync(SESSION_KEY);
+      if (raw) {
+        const data: SessionData = JSON.parse(raw);
+        set({ sessionToken: data.token, sessionData: data, isAuthenticated: true, isLoading: false });
+      } else {
+        set({ isLoading: false });
+      }
+    } catch {
+      set({ isLoading: false });
+    }
   },
 
-  setSession: async (token) => {
-    await storeToken(token);
-    set({ sessionToken: token, isAuthenticated: true, isLoading: false });
+  setSession: async (data) => {
+    await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(data));
+    set({ sessionToken: data.token, sessionData: data, isAuthenticated: true, isLoading: false });
   },
 
   clearSession: async () => {
-    await clearToken();
-    set({ sessionToken: null, isAuthenticated: false, isLoading: false });
+    await SecureStore.deleteItemAsync(SESSION_KEY);
+    set({ sessionToken: null, sessionData: null, isAuthenticated: false, isLoading: false });
   },
 }));

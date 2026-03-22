@@ -1,13 +1,12 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuthStore } from "../../stores/auth";
 import { Redirect } from "expo-router";
+import { useAuthStore } from "../../stores/auth";
 
 export default function TabsLayout() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   if (!isAuthenticated) {
-    // Not signed in — redirect to the auth screen
     return <Redirect href="/auth" />;
   }
 
@@ -15,9 +14,14 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: "#38C9A8",
+        tabBarInactiveTintColor: "#52525b",
         headerStyle: { backgroundColor: "#09090b" },
         headerTintColor: "#fff",
-        tabBarStyle: { backgroundColor: "#09090b", borderTopColor: "#27272a" },
+        tabBarStyle: {
+          backgroundColor: "#09090b",
+          borderTopColor: "#18181b",
+          borderTopWidth: 1,
+        },
       }}
     >
       <Tabs.Screen

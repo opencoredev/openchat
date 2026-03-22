@@ -4,15 +4,9 @@ import { convexClient } from "../lib/convex";
 import { useAuthStore } from "../stores/auth";
 import { fetchConvexToken } from "../lib/auth";
 
-/**
- * Bridges our local auth store with ConvexProviderWithAuth.
- *
- * ConvexProviderWithAuth calls `fetchAccessToken` whenever it needs a fresh JWT
- * to authenticate Convex queries/mutations/subscriptions.  We retrieve the
- * stored Better Auth session token, exchange it for a Convex JWT, and return it.
- */
 function useConvexAuth() {
-  const { sessionToken, isAuthenticated } = useAuthStore();
+  const sessionToken = useAuthStore((s) => s.sessionToken);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const fetchAccessToken = useCallback(async () => {
     if (!isAuthenticated || !sessionToken) return null;
