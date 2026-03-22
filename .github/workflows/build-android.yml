@@ -40,51 +40,67 @@ jobs:
         with:
           bun-version: '1.3.5'
 
-      - name: Install workspace dependencies
+      - name: Install workspace dependencies (root)
         run: bun install
+
+      - name: Install native dependencies (apps/native)
+        working-directory: apps/native
+        run: bun install
+
+      - name: Expo version and path check
+        working-directory: apps/native
+        run: |
+          echo "=== Which expo? ==="
+          which expo 2>/dev/null || echo "expo not in PATH"
+          which npx && npx --version
+          echo "=== node_modules/.bin/expo? ==="
+          ls node_modules/.bin/expo 2>/dev/null || echo "not in apps/native/node_modules/.bin"
+          ls ../../node_modules/.bin/expo 2>/dev/null || echo "not in root node_modules/.bin"
+          echo "=== expo package? ==="
+          ls node_modules/expo 2>/dev/null || echo "no expo in apps/native/node_modules"
+          ls ../../node_modules/expo 2>/dev/null | head -5 || echo "no expo in root/node_modules"
+          echo "=== expo --version ==="
+          node_modules/.bin/expo --version 2>/dev/null || ../../node_modules/.bin/expo --version 2>/dev/null || npx expo --version 2>&1 || echo "CANNOT RUN EXPO"
 
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
-      # Run prebuild from apps/native - this is where app.json lives
-      - name: Expo prebuild (from apps/native)
+      # Use the expo binary directly from node_modules to avoid npx cache issues
+      - name: Run expo prebuild
+        working-directory: apps/native
         run: |
-          cd apps/native
-          echo "CWD: $(pwd)"
-          echo "=== before prebuild ==="
-          ls
-          echo "=== running prebuild ==="
-          npx expo prebuild --platform android --clean --no-install 2>&1
-          echo "=== after prebuild (exit $?) ==="
-          ls
-          echo "=== searching for android dir ==="
-          find . -maxdepth 3 -type d -name "android" 2>/dev/null || echo "no android dir found"
-          find . -name "gradlew" 2>/dev/null || echo "no gradlew found"
-        continue-on-error: true
+          EXPO_BIN=$(ls node_modules/.bin/expo 2>/dev/null || ls ../../node_modules/.bin/expo 2>/dev/null || echo "")
+          if [ -z "$EXPO_BIN" ]; then
+            echo "No expo binary found, trying npx"
+            EXPO_CMD="npx expo"
+          else
+            echo "Using expo at: $EXPO_BIN"
+            EXPO_CMD="$EXPO_BIN"
+          fi
+          echo "Running: $EXPO_CMD prebuild --platform android --clean --no-install"
+          $EXPO_CMD prebuild --platform android --clean --no-install 2>&1
+          EXIT=$?
+          echo "Exit code: $EXIT"
+          echo "=== Contents of apps/native/ after prebuild ==="
+          ls -la
         env:
           EXPO_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
           EXPO_PUBLIC_AUTH_BASE_URL: https://placeholder.convex.site
           EXPO_NO_TELEMETRY: "1"
 
-      - name: Full filesystem scan for android artifacts
-        run: |
-          echo "=== All gradlew files on runner ==="
-          find /home/runner/work -name "gradlew" 2>/dev/null || echo "none"
-          find /tmp -name "gradlew" 2>/dev/null || echo "none in /tmp"
-          echo "=== apps/native directory listing ==="
-          ls -la apps/native/
-          echo "=== any android directories ==="
-          find . -type d -name "android" -not -path "*/node_modules/*" 2>/dev/null
-
-      - name: Locate gradlew
+      - name: Locate gradlew after prebuild
         id: find-android
         run: |
+          echo "=== Finding gradlew ==="
+          find . -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null
           GRADLEW=$(find . -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null | head -1)
           if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew not found"
+            echo "ERROR: No gradlew found"
+            echo "Apps/native contents:"
+            ls -la apps/native/ 2>/dev/null
             exit 1
           fi
-          echo "Found: $GRADLEW"
+          echo "Found at: $GRADLEW"
           echo "gradlew=$GRADLEW" >> $GITHUB_OUTPUT
           echo "android_dir=$(dirname $GRADLEW)" >> $GITHUB_OUTPUT
 
@@ -105,10 +121,10 @@ jobs:
 
       - name: Upload debug APK
         run: |
-          APK=$(find . -name "app-debug.apk" -not -path "*/node_modules/*" | head -1)
+          APK=$(find . -name "app-debug.apk" -not -path "*/node_modules/*" 2>/dev/null | head -1)
           echo "apk=$APK" >> $GITHUB_ENV
 
-      - name: Upload
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: openchat-android-debug
