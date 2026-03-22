@@ -32,22 +32,15 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: '1.3.5' }
 
-      - name: Cache Bun modules
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('apps/native/package.json') }}
-          restore-keys: ${{ runner.os }}-bun-
-
-      - name: Install native dependencies (standalone)
+      - name: Install native dependencies
         working-directory: apps/native
         run: bun install --ignore-scripts
 
-      - name: Set up Android SDK components
+      - name: Set up Android SDK
         run: |
-          SDKMANAGER=$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
-          yes | $SDKMANAGER --licenses 2>/dev/null || true
-          $SDKMANAGER "platform-tools" "platforms;android-34" "build-tools;34.0.0" 2>&1 | tail -3
+          SDKM=$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
+          yes | $SDKM --licenses 2>/dev/null || true
+          $SDKM "platform-tools" "platforms;android-34" "build-tools;34.0.0" 2>&1 | tail -3
 
       - name: Expo prebuild
         working-directory: apps/native
@@ -60,8 +53,7 @@ jobs:
         id: find-android
         run: |
           GRADLEW=$(find . -name "gradlew" -not -path "*/node_modules/*" 2>/dev/null | head -1)
-          [ -n "$GRADLEW" ] || { echo "No gradlew found"; exit 1; }
-          echo "Found: $GRADLEW"
+          [ -n "$GRADLEW" ] || { echo "No gradlew"; exit 1; }
           echo "gradlew=$GRADLEW" >> $GITHUB_OUTPUT
           echo "android_dir=$(dirname $GRADLEW)" >> $GITHUB_OUTPUT
 
@@ -74,34 +66,39 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/gradle-wrapper.properties') }}
           restore-keys: ${{ runner.os }}-gradle-
 
-      - name: Build debug APK
-        id: gradle-build
+      - name: Build debug APK (output to file)
+        id: gradle
         run: |
           chmod +x ${{ steps.find-android.outputs.gradlew }}
           cd ${{ steps.find-android.outputs.android_dir }}
-          echo "=== gradle.properties ==="
-          cat gradle.properties 2>/dev/null | head -20
-          echo "=== Android SDK available ==="
-          ls $ANDROID_HOME/build-tools/ 2>/dev/null || echo "no build-tools"
-          ls $ANDROID_HOME/platforms/ 2>/dev/null || echo "no platforms"
-          echo "=== Running Gradle ==="
-          set +e
-          OUTPUT=$(./gradlew assembleDebug --no-daemon --stacktrace 2>&1)
+          echo "=== gradle.properties ==" >> /tmp/gradle.log
+          cat gradle.properties >> /tmp/gradle.log 2>&1
+          echo "" >> /tmp/gradle.log
+          echo "=== build-tools ==" >> /tmp/gradle.log
+          ls $ANDROID_HOME/build-tools/ >> /tmp/gradle.log 2>&1
+          echo "=== platforms ==" >> /tmp/gradle.log  
+          ls $ANDROID_HOME/platforms/ >> /tmp/gradle.log 2>&1
+          echo "" >> /tmp/gradle.log
+          echo "=== Gradle build ==" >> /tmp/gradle.log
+          ./gradlew assembleDebug --no-daemon --stacktrace >> /tmp/gradle.log 2>&1
           RC=$?
-          echo "$OUTPUT" | tail -80
-          echo "## Gradle Build" >> $GITHUB_STEP_SUMMARY
-          printf '```\n%s\n```\n' "$(echo "$OUTPUT" | tail -60)" >> $GITHUB_STEP_SUMMARY
-          echo "Exit: $RC" >> $GITHUB_STEP_SUMMARY
+          tail -100 /tmp/gradle.log
+          echo "exit=$RC" >> $GITHUB_OUTPUT
           exit $RC
 
-      - name: Find and verify APK
-        run: |
-          find . -name "*.apk" -not -path "*/node_modules/*" 2>/dev/null
+      - name: Upload Gradle log (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: /tmp/gradle.log
+          if-no-files-found: ignore
+          retention-days: 7
 
-      - name: Upload debug APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: openchat-android-debug
-          path: "apps/native/android/app/build/outputs/apk/debug/app-debug.apk"
+          path: apps/native/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
